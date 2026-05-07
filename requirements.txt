@@ -1,0 +1,23 @@
+# 競馬AI — 依存パッケージ
+# 再現手順: python -m venv .venv && .venv\Scripts\activate && pip install -r requirements.txt
+
+# コア
+pandas==2.2.3
+numpy==2.2.1
+scikit-learn==1.8.0
+
+# モデル
+lightgbm==4.6.0
+
+# データ処理
+pyarrow==23.0.1      # parquet読み書き（all_venues_features.parquet）
+openpyxl==3.1.5      # xlsx読み書き
+joblib==1.5.3        # モデルのpickle補助
+scipy==1.17.1        # 統計処理
+
+# ユーティリティ
+tqdm==4.67.3         # 進捗バー
+
+# レポート生成（06_predict_from_card.py）
+python-pptx==1.0.2   # PowerPoint出力
+pywin32==311         # Windows COM（JRA-VANアプリ連携）

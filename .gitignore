@@ -1,0 +1,44 @@
+# 仮想環境
+.venv/
+.venv_new/
+
+# 大容量データ（再生成可能）
+data/raw/master/
+data/raw/cards/
+data/raw/results/
+data/raw/cache/
+data/raw/card_extra.csv
+data/processed/
+
+# 馬券データ（個人情報）
+data/tohyo/
+
+# 学習済みモデル（再学習可能）
+models/
+
+# 予測出力
+docs/*.html
+docs/*.pdf
+d_core/output/
+
+# Python キャッシュ
+__pycache__/
+*.pyc
+*.pyo
+
+# Claude Code
+.claude/
+
+# Google Drive 一時ファイル
+.tmp.driveupload/
+.tmp.drivedownload/
+
+# ログ・一時ファイル
+*.log
+tmp_*.txt
+tmp_*.py
+tmp_*.csv
+
+# OS
+Thumbs.db
+.DS_Store
