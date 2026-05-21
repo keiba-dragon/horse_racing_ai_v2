@@ -254,6 +254,37 @@ def predict_date(base_dir, target_date_num, card_df=None):
         print("エラー: モデルが見つかりません。")
         return None
 
+    # ── clogit (final_model) 読み込み ──────────────────────────────────────
+    _clogit_pkg       = None
+    _clogit_prepare   = None
+    _clogit_softmax   = None
+    _clogit_newfeats  = None
+    _clogit_pacefeats = None
+    _clogit_path = os.path.join(base_dir, 'models', 'final_model.pkl')
+    if os.path.exists(_clogit_path):
+        try:
+            import sys as _sys
+            _sys.path.insert(0, os.path.join(base_dir, 'src'))
+            # save_conditional_logit はモジュールレベルで sys.stdout を書き換えるので退避・復元する
+            _saved_out = _sys.stdout
+            _saved_err = _sys.stderr
+            from save_conditional_logit import add_new_features as _anf, segment_softmax as _ss, prepare as _prep
+            from save_lambdarank_pace import add_pace_features as _apf
+            _sys.stdout = _saved_out
+            _sys.stderr = _saved_err
+            with open(_clogit_path, 'rb') as f:
+                _clogit_pkg = pickle.load(f)
+            _clogit_prepare   = _prep
+            _clogit_softmax   = _ss
+            _clogit_newfeats  = _anf
+            _clogit_pacefeats = _apf
+            print(f'clogitモデル読み込み完了 (OOS ROI={_clogit_pkg.get("total_oos_roi", "?"):.3f})')
+        except Exception as _e:
+            try:
+                print(f'clogit読み込み失敗: {_e}')
+            except Exception:
+                pass
+
     # ── 特徴量データを読み込む（Parquet優先 / なければCSV）─────────────
     feat_csv = os.path.join(base_dir, 'data', 'processed', 'all_venues_features.csv')
     feat_pq  = os.path.join(base_dir, 'data', 'processed', 'all_venues_features.parquet')
@@ -264,7 +295,9 @@ def predict_date(base_dir, target_date_num, card_df=None):
                       '単勝オッズ', '馬体重', '馬体重増減', '前距離', '間隔', '性別_num',
                       # N走前シフト補正のために必要な基底列
                       '着順_num', '頭数', '斤量', '4角', '前走着差タイム',
-                      'タイム指数', '走破タイム_sec', '上り3F', '上り3F_指数', 'PCI', 'RPCI', '馬番']
+                      'タイム指数', '走破タイム_sec', '上り3F', '上り3F_指数', 'PCI', 'RPCI', '馬番',
+                      # add_new_features の中間計算に必要な列
+                      '前走斤量', '距離変化_前走']
         _feat_cols = list(set((sub_features or []) + (cur_features or [])))
         _need = set(_essential + _feat_cols)
         try:
@@ -390,20 +423,33 @@ def predict_date(base_dir, target_date_num, card_df=None):
         n_kan = day['間隔'].notna().sum() if '間隔' in day.columns else 0
         print(f"フォールバック構築: {len(day)}頭 / 前距離{n_mae}頭 / 間隔{n_kan}頭")
 
-    # 馬体重パッチ: card_dfに馬体重があれば上書き
+    # 馬体重・斤量パッチ: card_dfにあれば上書き
     if card_df is not None:
-        _weight_cols = [c for c in ['馬体重', '馬体重増減'] if c in card_df.columns]
+        _weight_cols = [c for c in ['馬体重', '馬体重増減', '斤量'] if c in card_df.columns]
         if _weight_cols:
             _w = card_df[['馬名S'] + _weight_cols].copy()
             for c in _weight_cols:
-                _w[c] = pd.to_numeric(_w[c], errors='coerce')
+                _w[c] = pd.to_numeric(
+                    _w[c].astype(str).str.replace(r'[^\d.]', '', regex=True),
+                    errors='coerce'
+                )
             _w = _w.dropna(subset=_weight_cols, how='all')
             if not _w.empty:
                 for c in _weight_cols:
                     if c in day.columns:
                         day = day.drop(columns=[c])
                 day = day.merge(_w.drop_duplicates('馬名S'), on='馬名S', how='left')
-                print(f"馬体重パッチ適用: {day[_weight_cols[0]].notna().sum()}頭")
+                filled = {c: day[c].notna().sum() for c in _weight_cols if c in day.columns}
+                print(f"馬体重・斤量パッチ適用: {filled}")
+
+    # 開催列がNaNの場合、card_dfの「場 R」列でパッチ
+    if '開催' not in day.columns or day['開催'].isna().all():
+        if card_df is not None and '場 R' in card_df.columns:
+            _kaikai = card_df[['馬名S', '場 R']].drop_duplicates('馬名S').rename(columns={'場 R': '_kaikai_tmp'})
+            day = day.merge(_kaikai, on='馬名S', how='left')
+            day['開催'] = day['_kaikai_tmp'].fillna(day.get('開催', ''))
+            day = day.drop(columns=['_kaikai_tmp'])
+            print(f"開催列パッチ: {day['開催'].notna().sum()}頭")
 
     # ── モデルキー計算 ──
     day['会場']       = day['開催'].apply(extract_venue)
@@ -467,9 +513,9 @@ def predict_date(base_dir, target_date_num, card_df=None):
     if 'Ｒ' in day.columns:
         day['Ｒ'] = pd.to_numeric(day['Ｒ'], errors='coerce')
         race_keys.append('Ｒ')
-    if 'レース名' in day.columns:
+    if 'レース名' in day.columns and day['レース名'].notna().any():
         race_keys.append('レース名')
-    races = day.groupby(race_keys, sort=True).groups
+    races = day.groupby(race_keys, sort=True, dropna=False).groups
 
     all_rows = []
     for group_key, idx in races.items():
@@ -527,9 +573,86 @@ def predict_date(base_dir, target_date_num, card_df=None):
             sub['cur_レース内偏差値'] = 50 + 10 * (sub['cur_prob_win'] - r_m) / (r_s if r_s > 0 else 1)
             sub['cur_偏差値の差']     = sub['cur_レース内偏差値'] - sub['cur_コース偏差値']
             if cur_key in cur_ranker_cache:
-                scores = cur_ranker_cache[cur_key].predict(sub[cur_features])
-                sub['cur_ランカー順位'] = pd.Series(scores, index=sub.index).rank(
-                    ascending=False, method='min').astype(int)
+                try:
+                    scores = cur_ranker_cache[cur_key].predict(sub[cur_features])
+                    sub['cur_ランカー順位'] = pd.Series(scores, index=sub.index).rank(
+                        ascending=False, method='min').astype(int)
+                except Exception:
+                    pass
+
+        # ── clogit 予測 ────────────────────────────────────────────────────
+        sub['clogit_score']  = np.nan
+        sub['clogit_rank']   = np.nan
+        sub['clogit_calib']  = np.nan  # 生のisotonic確率（オッズ補正前）
+        sub['clogit_factor'] = np.nan  # 市場補正係数（再計算用）
+        if _clogit_pkg is not None:
+            try:
+                _orig_index = sub.index.tolist()
+                _s = sub.reset_index(drop=True).copy()
+                _s['race_id'] = 'tmp'
+                if '着順_num' not in _s.columns:
+                    _s['着順_num'] = 0
+                # 展開予想特徴量を追加（pace feats はrace_id単位で集計）
+                if _clogit_pacefeats is not None:
+                    _s = _clogit_pacefeats(_s)
+                # 派生特徴量を追加（休養日数・斤量変化・距離変化・クラス変化・近走トレンド）
+                _s = _clogit_newfeats(_s)
+                # 列名エイリアス補完（training列名 → prediction列名のマッピング）
+                if '前走走破タイム_sec' not in _s.columns and '1走前_走破タイム_sec' in _s.columns:
+                    _s['前走走破タイム_sec'] = _s['1走前_走破タイム_sec']
+                if '今回_surface' not in _s.columns:
+                    _s['今回_surface'] = pd.to_numeric(_s.get('_surface', pd.Series(dtype=str)).map({'芝': 0, 'ダ': 1}), errors='coerce')
+                if '今回_距離_m' not in _s.columns:
+                    _s['今回_距離_m'] = _s['距離'].astype(str).str.extract(r'(\d+)')[0].astype(float) if '距離' in _s.columns else np.nan
+                # 休養日数: 前走日付なければ 間隔(週) × 7 で近似（間隔=当日基準の週数）
+                if _s['休養日数'].isna().all() and '間隔' in _s.columns:
+                    _s['休養日数'] = (pd.to_numeric(_s['間隔'], errors='coerce') * 7).clip(0, 365)
+                # 距離変化_m: 1走前_距離なければ距離変化_前走を使用
+                if _s['距離変化_m'].isna().all() and '距離変化_前走' in _s.columns:
+                    _s['距離変化_m'] = pd.to_numeric(_s['距離変化_前走'], errors='coerce')
+                _surf = str(_s['距離'].iloc[0]).strip()[:1] if '距離' in _s.columns else None
+                if _surf not in ('芝', 'ダ'):
+                    _sd = _s['芝・ダ'].iloc[0] if '芝・ダ' in _s.columns else ''
+                    _surf = '芝' if str(_sd).strip() in ('芝',) else 'ダ'
+                if _surf in _clogit_pkg['artifacts']:
+                    _art = _clogit_pkg['artifacts'][_surf]
+                    # feat_cols の欠損列を NaN で補完
+                    for _fc in _art['feat_cols']:
+                        if _fc not in _s.columns:
+                            _s[_fc] = np.nan
+                    # NaN特徴量カウント＋項目名（impute前に計測）
+                    _feat_arr = _art['feat_cols']
+                    _total_feats = len(_feat_arr)
+                    _nan_mask = _s[_feat_arr].isna()
+                    _nan_counts = _nan_mask.sum(axis=1).values
+                    _nan_names = [
+                        ','.join(_feat_arr[j] for j in range(_total_feats) if _nan_mask.iloc[i, j])
+                        for i in range(len(_s))
+                    ]
+                    for _i, _oi in enumerate(_orig_index):
+                        sub.loc[_oi, '_nan_count']    = int(_nan_counts[_i])
+                        sub.loc[_oi, '_nan_total']    = _total_feats
+                        sub.loc[_oi, '_nan_features'] = _nan_names[_i]
+                    _X, _, _gs, _n, *_ = _clogit_prepare(
+                        _s, _art['feat_cols'],
+                        scaler=_art['scaler'], poly2=_art['poly2'],
+                        inter_scaler2=_art['inter_scaler2'], top_idx=_art['top_idx'],
+                        poly3=None, inter_scaler3=None, top_idx3=None, fit=False)
+                    _raw   = _clogit_softmax(_X @ _art['coef'], _gs, _n)
+                    _calib = _art['isotonic'].predict(_raw)
+                    _odds  = pd.to_numeric(_s['単勝オッズ'], errors='coerce').values if '単勝オッズ' in _s.columns else np.full(len(_s), np.nan)
+                    _mprob = 1.0 / np.clip(_odds, 1.0, None)  # NaN when odds unavailable
+                    _cls   = pd.to_numeric(_s.get('クラス_rank', pd.Series([0]*len(_s))), errors='coerce').fillna(0).values
+                    _factor = np.where(_cls == 2, _clogit_pkg['factor_maiden'], _clogit_pkg['factor_other'])
+                    # オッズ未確定時は calib_prob のみでランキング（市場補正なし）
+                    _score = np.where(np.isnan(_mprob), _calib, _calib - _factor * _mprob)
+                    for _i, _oi in enumerate(_orig_index):
+                        sub.loc[_oi, 'clogit_score']  = _score[_i]
+                        sub.loc[_oi, 'clogit_calib']  = _calib[_i]   # 生確率を保存
+                        sub.loc[_oi, 'clogit_factor'] = _factor[_i]  # 補正係数を保存
+                    sub['clogit_rank'] = sub['clogit_score'].rank(ascending=False, method='first')
+            except Exception as _ce:
+                pass  # clogit失敗時は既存モデルのみ表示
 
         # ── combo_gap 計算（1位と2位のスコア差）──
         for score_col, gap_col in [('cur_コース偏差値', 'cur_gap'), ('sub_コース偏差値', 'sub_gap')]:
@@ -549,6 +672,7 @@ def predict_date(base_dir, target_date_num, card_df=None):
         disp['現行_ランカー'] = sub['cur_ランカー順位'].map(lambda x: f'{int(x)}位' if pd.notna(x) else '-')
         disp['sub_差']       = sub['sub_偏差値の差'].map(lambda x: f'{x:+.1f}' if pd.notna(x) else 'モデルなし')
         disp['sub_ランカー']  = sub['sub_ランカー順位'].map(lambda x: f'{int(x)}位' if pd.notna(x) else '-')
+        disp['clogit']       = sub['clogit_rank'].map(lambda x: f'★{int(x)}位' if pd.notna(x) and x == 1 else (f'{int(x)}位' if pd.notna(x) else '-'))
         if '単勝オッズ' in sub.columns:
             disp['オッズ'] = sub['単勝オッズ'].map(lambda x: f'{x:.1f}' if pd.notna(x) else '-')
         print(disp.to_string(index=False))
