@@ -67,7 +67,12 @@ def prepare(df: pd.DataFrame, odds_dict: dict) -> pd.DataFrame:
     df['_dist_m']  = df['_dist_raw'].str.extract(r'(\d+)')[0].astype(float)
 
     race_col = next((c for c in df.columns if c in ('場 R', '場R')), None)
-    df['_race'] = df[race_col].astype(str) if race_col else ''
+    if race_col:
+        df['_race'] = df[race_col].astype(str)
+    elif '開催' in df.columns:
+        df['_race'] = df['開催'].astype(str)
+    else:
+        df['_race'] = ''
     df['_venue'] = df['_race'].apply(lambda x: re.match(r'^([^\d]+)', x).group(1) if re.match(r'^([^\d]+)', x) else '')
     df['_R']    = pd.to_numeric(df['Ｒ'], errors='coerce') if 'Ｒ' in df.columns else np.nan
 
