@@ -202,7 +202,7 @@ def render_race(race_key: str, grp: pd.DataFrame, target_date: str = '', race_id
     # netkeiba レースURL（race_id_mapで個別レースに、なければ日付一覧にフォールバック）
     rid = race_id_map.get((venue, r_num)) if isinstance(r_num, int) else None
     if rid:
-        race_url = f"https://race.netkeiba.com/race/result.html?race_id={rid}"
+        race_url = f"https://race.netkeiba.com/race/newspaper.html?race_id={rid}&rf=shutuba_submenu"
     elif target_date:
         race_url = f"https://race.netkeiba.com/top/race_list.html?kaisai_date={target_date}"
     else:
