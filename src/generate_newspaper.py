@@ -173,11 +173,9 @@ def render_race(race_key: str, grp: pd.DataFrame, target_date: str = '') -> str:
     n       = len(grp)
     emo     = SURFACE_EMO.get(surf, '')
 
-    # netkeiba レースURL
-    venue_code = VENUE_TO_CODE.get(venue, '00')
-    r_str = f"{r_num:02d}" if isinstance(r_num, int) else '00'
-    race_url = (f"https://race.netkeiba.com/race/result.html"
-                f"?race_id={target_date}{venue_code}{r_str}") if target_date else ''
+    # netkeiba レース一覧URL（race_idは年+会場+回次+日次形式で日付から直接導出不可のため日付単位で）
+    race_url = (f"https://race.netkeiba.com/top/race_list.html"
+                f"?kaisai_date={target_date}") if target_date else ''
 
     top1 = grp[grp['_rank'] == 1].iloc[0] if (grp['_rank'] == 1).any() else None
     top1_ev  = top1['_ev']  if top1 is not None else np.nan
