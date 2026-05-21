@@ -17,8 +17,6 @@ data/tohyo/
 models/
 
 # 予測出力
-docs/*.html
-docs/*.pdf
 d_core/output/
 
 # Python キャッシュ
