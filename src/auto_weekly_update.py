@@ -21,12 +21,15 @@ UM_REC_LEN     = 1609  # bytes per UM record in TARGET Frontier local DB
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
 sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
-BASE_DIR        = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-RESULTS_DIR     = os.path.join(BASE_DIR, 'data', 'raw', 'results')
-SUPPLEMENT_PATH = os.path.join(BASE_DIR, 'data', 'raw', 'master', 'results_supplement.csv')
-PARQUET_PATH    = os.path.join(BASE_DIR, 'data', 'processed', 'all_venues_features.parquet')
-MAKE_FEATURES   = os.path.join(BASE_DIR, 'src', '01_make_features.py')
-FETCH_SCRIPT    = os.path.join(BASE_DIR, 'src', 'fetch.py')
+BASE_DIR         = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+RESULTS_DIR      = os.path.join(BASE_DIR, 'data', 'raw', 'results')
+OVERSEAS_DIR     = os.path.join(BASE_DIR, 'data', 'raw', 'overseas')
+SUPPLEMENT_PATH  = os.path.join(BASE_DIR, 'data', 'raw', 'master', 'results_supplement.csv')
+OVERSEAS_SUPP    = os.path.join(BASE_DIR, 'data', 'raw', 'master', 'overseas_supplement.csv')
+PARQUET_PATH     = os.path.join(BASE_DIR, 'data', 'processed', 'all_venues_features.parquet')
+MAKE_FEATURES    = os.path.join(BASE_DIR, 'src', '01_make_features.py')
+FETCH_SCRIPT     = os.path.join(BASE_DIR, 'src', 'fetch.py')
+FETCH_OVERSEAS   = os.path.join(BASE_DIR, 'src', 'fetch_overseas.py')
 
 
 def sec_to_jravan(t):
@@ -172,6 +175,85 @@ def run_fetch():
     return r.returncode == 0
 
 
+def run_fetch_overseas():
+    """fetch_overseas.py --incremental を実行してdata/raw/overseas/に保存。"""
+    print(f'  fetch_overseas.py --incremental を実行中...')
+    r = subprocess.run(
+        [sys.executable, FETCH_OVERSEAS, '--incremental'],
+        cwd=BASE_DIR
+    )
+    if r.returncode != 0:
+        print('  海外競走フェッチ失敗（未購読の場合は正常）。スキップします。')
+        return False
+    return True
+
+
+def convert_overseas():
+    """data/raw/overseas/YYYYMMDD.csv → overseas_supplement.csv に変換・追記。"""
+    existing_max = 0
+    if os.path.exists(OVERSEAS_SUPP):
+        try:
+            df_ex = pd.read_csv(OVERSEAS_SUPP, usecols=['日付'], low_memory=False)
+            v = pd.to_numeric(df_ex['日付'], errors='coerce').max()
+            if pd.notna(v):
+                existing_max = int(v)
+        except Exception:
+            pass
+    if existing_max:
+        print(f'  既存overseas_supplement 最終日付: {existing_max}')
+
+    if not os.path.isdir(OVERSEAS_DIR):
+        print('  overseas/ ディレクトリなし。スキップ。')
+        return 0
+
+    result_files = sorted(_glob.glob(os.path.join(OVERSEAS_DIR, '????????.csv')))
+    new_frames = []
+
+    for fp in result_files:
+        stem = os.path.basename(fp).replace('.csv', '')
+        if len(stem) != 8 or not stem.isdigit():
+            continue
+        year, mmdd = int(stem[:4]), int(stem[4:])
+        date_num = (year - 2000) * 10000 + mmdd
+
+        if date_num <= existing_max:
+            continue
+
+        try:
+            df = pd.read_csv(fp, encoding='utf-8', low_memory=False)
+        except Exception:
+            continue
+
+        if df.empty:
+            continue
+
+        df = df.rename(columns={
+            '馬名':    '馬名S',
+            'レースNo': 'Ｒ',
+        })
+        df['日付'] = date_num
+        df['_overseas'] = 1
+
+        if '距離' in df.columns and '芝ダ' in df.columns:
+            _surf = df['芝ダ'].astype(str).str.strip()
+            _dist = df['距離'].astype(str).str.strip()
+            df['距離'] = _surf + _dist
+
+        new_frames.append(df)
+        print(f'  overseas {stem}: {len(df)}行')
+
+    if not new_frames:
+        print('  海外新規データなし')
+        return 0
+
+    df_new = pd.concat(new_frames, ignore_index=True)
+    mode   = 'a' if existing_max > 0 and os.path.exists(OVERSEAS_SUPP) else 'w'
+    header = (mode == 'w')
+    df_new.to_csv(OVERSEAS_SUPP, mode=mode, header=header, index=False, encoding='utf-8')
+    print(f'  overseas_supplement 更新: +{len(df_new):,}行 (mode={mode})')
+    return len(df_new)
+
+
 def convert_results():
     """data/raw/results/YYYYMMDD.csv → results_supplement.csv に変換・追記。"""
     existing_max = 0
@@ -288,12 +370,16 @@ def main():
         if not run_fetch():
             print('  ERROR: fetch失敗。ターゲットFrontierが起動しているか確認してください。')
             sys.exit(1)
+        print('\n[1b/4] 海外競走データを取得...')
+        run_fetch_overseas()  # 失敗しても続行
     else:
         print('\n[1/4] fetch スキップ')
 
     # Step 2: 変換
     print('\n[2/4] results → supplement 変換...')
     n = convert_results()
+    print('\n[2b/4] overseas → overseas_supplement 変換...')
+    n_overseas = convert_overseas()
 
     # Step 2.5: master_horse 更新（新馬の種牡馬/母父馬を UM_DATA から追記）
     print('\n[2.5/4] master_horse 新馬追記...')

@@ -202,11 +202,27 @@ def main():
                 if '距離' in extra.columns and '芝・ダ' in extra.columns:
                     extra = extra.copy()
                     extra['距離'] = extra.apply(
-                        lambda r: str(r['芝・ダ']).strip() + str(int(r['距離'])) if pd.notna(r.get('距離')) and pd.notna(r.get('芝・ダ')) else r.get('距離'), axis=1
+                        lambda r: str(r['芝・ダ']).strip() + re.sub(r'\D', '', str(r['距離'])) if pd.notna(r.get('距離')) and pd.notna(r.get('芝・ダ')) and re.sub(r'\D', '', str(r['距離'])) else r.get('距離'), axis=1
                     )
                 common_cols = [c for c in df_race.columns if c in extra.columns]
                 df_race = pd.concat([df_race, extra[common_cols]], ignore_index=True)
                 print(f"  全て.csv から追加: {len(extra):,}行（{int(last_date)+1}以降）")
+        # results_supplement.csv（auto_weekly_update.py が自動生成）があれば追加
+        file_results_supp = os.path.join(master_dir, 'results_supplement.csv')
+        if os.path.exists(file_results_supp):
+            df_supp = read_csv(file_results_supp)
+            df_supp['_d'] = pd.to_numeric(df_supp['日付'], errors='coerce')
+            last_supp = pd.to_numeric(df_race['日付'], errors='coerce').max()
+            extra_supp = df_supp[df_supp['_d'] > last_supp].drop(columns=['_d'])
+            if len(extra_supp) > 0:
+                # ペース指標列を df_race に追加（NaN）して supplement の値を保持
+                for _pace_col in ['Ave-3F', 'PCI', 'RPCI', '平均速度', '-3F平均速度', '上り3F平均速度']:
+                    if _pace_col in extra_supp.columns and _pace_col not in df_race.columns:
+                        df_race[_pace_col] = float('nan')
+                common_supp = [c for c in df_race.columns if c in extra_supp.columns]
+                df_race = pd.concat([df_race, extra_supp[common_supp]], ignore_index=True)
+                print(f"  results_supplement.csv から追加: {len(extra_supp):,}行")
+
         # card_extra.csv（出馬表形式から変換済み）があれば追加
         if os.path.exists(file_card):
             df_card = read_csv(file_card)
@@ -297,7 +313,35 @@ def main():
         if time_extra:
             df_t = df_time[['日付', '馬名S'] + time_extra].copy()
             df = pd.merge(df, df_t, on=['日付', '馬名S'], how='left')
+            # _x/_y suffix collision を解消（master_time 優先、supplement フォールバック）
+            for _col in time_extra:
+                if _col+'_x' in df.columns and _col+'_y' in df.columns:
+                    df[_col] = df[_col+'_y'].fillna(df[_col+'_x'])
+                    df = df.drop(columns=[_col+'_x', _col+'_y'])
             print(f"タイム追加列: {time_extra}")
+
+    # results_supplement.csv から Ave-3F 等を補完（master_time 範囲外をカバー）
+    _file_supp = os.path.join(master_dir, 'results_supplement.csv')
+    if use_new and os.path.exists(_file_supp):
+        _df_supp = read_csv(_file_supp)
+        if '馬名' in _df_supp.columns and '馬名S' not in _df_supp.columns:
+            _df_supp = _df_supp.rename(columns={'馬名': '馬名S'})
+        _supp_fill = ['Ave-3F', 'PCI', 'RPCI', '平均速度', '-3F平均速度', '上り3F平均速度']
+        _supp_fill = [c for c in _supp_fill if c in _df_supp.columns]
+        if _supp_fill:
+            _df_supp['_dn'] = pd.to_numeric(_df_supp['日付'], errors='coerce')
+            _df_sf = _df_supp[['_dn', '馬名S'] + _supp_fill].copy()
+            df['_dn'] = pd.to_numeric(df['日付'], errors='coerce')
+            df = df.merge(_df_sf, on=['_dn', '馬名S'], how='left', suffixes=('', '_supp'))
+            for _c in _supp_fill:
+                if _c+'_supp' in df.columns:
+                    if _c in df.columns:
+                        df[_c] = df[_c].fillna(df[_c+'_supp'])
+                    else:
+                        df[_c] = df[_c+'_supp']
+                    df = df.drop(columns=[_c+'_supp'])
+            df = df.drop(columns=['_dn'])
+            print(f"supplement Ave-3F 補完完了")
 
     # 3. 日付・馬名でソート
     df['日付_num'] = pd.to_numeric(df['日付'], errors='coerce')
@@ -591,6 +635,37 @@ def main():
     # 7. クラスランク
     df['クラス_rank'] = encode_class(df['レース名'])
 
+    # 7.5. 海外レース行を数珠繋ぎチェーン用に挿入
+    # overseas_supplement.csv の行を shift 前に追加し、shift 後に除去する。
+    # これにより海外帰り馬の間隔・前走着順が正しく計算される。
+    _overseas_path = os.path.join(master_dir, 'overseas_supplement.csv')
+    _overseas_mask = pd.Series(False, index=df.index)  # 海外行フラグ（後で除去）
+    if os.path.exists(_overseas_path):
+        try:
+            df_ov = read_csv(_overseas_path)
+            if '馬名S' not in df_ov.columns and '馬名' in df_ov.columns:
+                df_ov = df_ov.rename(columns={'馬名': '馬名S'})
+            df_ov['_overseas'] = 1
+            df_ov['日付_num'] = pd.to_numeric(df_ov['日付'], errors='coerce')
+            # 着順_num を数値化
+            df_ov['着順_num'] = clean_finish(df_ov['着順']) if '着順' in df_ov.columns else np.nan
+            # クラス_rank: overseas_supplement の 'クラス推定' 列を使用
+            if 'クラス推定' in df_ov.columns:
+                df_ov['クラス_rank'] = pd.to_numeric(df_ov['クラス推定'], errors='coerce')
+            # 既存 df に無い列を NaN で追加
+            for _c in df.columns:
+                if _c not in df_ov.columns:
+                    df_ov[_c] = np.nan
+            _common_ov = [c for c in df.columns if c in df_ov.columns]
+            df_ov_trimmed = df_ov[_common_ov].copy()
+            df_ov_trimmed['_overseas'] = 1
+            df = pd.concat([df, df_ov_trimmed], ignore_index=True)
+            df = df.sort_values(by=['馬名S', '日付_num']).reset_index(drop=True)
+            _overseas_mask = df['_overseas'].fillna(0).astype(bool)
+            print(f"  overseas_supplement: {len(df_ov_trimmed):,}行を数珠繋ぎチェーンに追加")
+        except Exception as _e:
+            print(f"  overseas_supplement 読み込みスキップ: {_e}")
+
     # 8. 過去10走のシフト生成
     print("過去10走の履歴データを生成しています...")
     cols_to_shift = [
@@ -611,6 +686,13 @@ def main():
         for col in existing_cols:
             shift_data[f'{i}走前_{col}'] = df.groupby('馬名S')[col].shift(i)
     df = pd.concat([df, pd.DataFrame(shift_data, index=df.index)], axis=1)
+
+    # 海外行を除去（予測・訓練対象でないため）
+    if _overseas_mask.any():
+        df = df[~_overseas_mask].reset_index(drop=True)
+        print(f"  海外行 {_overseas_mask.sum():,}行を除去")
+    if '_overseas' in df.columns:
+        df = df.drop(columns=['_overseas'])
 
     # 9. 近走サマリー
     print("近走成績サマリーを計算しています...")

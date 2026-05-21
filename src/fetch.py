@@ -54,21 +54,20 @@ SE_POS_VERIFIED = {
     'tan_odds':    (237, 241), # 4桁整数 ÷10 = 倍率
 }
 
-# ★ 未確認: --probe-race で実測して更新すること
-# JRA-VAN SE7 仕様書 V-19 推定値 (0ベース)
+# ★ 2026-05-19 --probe-race で実測して確認済み
 SE_POS_UNVERIFIED = {
-    'waku_ban':    (27, 28),   # 枠番 (1桁)
-    'jinryo':      (58, 61),   # 斤量 3桁整数 ÷10 = kg (例: "570" = 57.0)
-    'jockey_cd':   (61, 66),   # 騎手コード 5桁
-    'jockey_name': (66, 80),   # 騎手名 全角7文字 = 14バイト
-    'bataiju':     (96, 99),   # 馬体重 3桁 kg
-    'bataiju_diff':(99, 102),  # 馬体重変化 符号付3桁
-    'soha_time':   (178, 184), # 走破タイム 6桁整数 (1/10秒単位 or 秒×10)
-    'last3f':      (184, 187), # 上り3F 3桁整数 ÷10 = 秒
-    'corner1':     (188, 190), # 1角通過順 2桁
-    'corner2':     (190, 192), # 2角通過順 2桁
-    'corner3':     (192, 194), # 3角通過順 2桁
-    'corner4':     (194, 196), # 4角通過順 2桁
+    'waku_ban':       (27, 28),   # 枠番 (1桁)
+    'jinryo':         (174, 177), # 斤量 3桁整数 ÷10 = kg (例: "570" = 57.0) ★確認済
+    'chokyoshi_name': (72, 76),   # 調教師名 4全角chars (例: "矢作芳人") ★確認済
+    'jockey_name':    (192, 196), # 騎手名 4全角chars (例: "武豊　　") ★確認済
+    'bataiju':        (202, 205), # 馬体重 3桁 kg ★確認済
+    'bataiju_diff':   (205, 209), # 馬体重変化 符号付4桁 (例: "+004") ★確認済
+    'soha_time':      (216, 220), # 走破タイム JRA-VAN整数形式 (例: "1458"=1:45.8) ★確認済
+    'last3f':         (268, 271), # 上り3F JRA-VAN整数形式 ÷10 = 秒 (例: "331"=33.1) ★確認済
+    'corner1':        (183, 184), # 1角通過順 1桁 ★要確認 (0=不明/不適用)
+    'corner2':        (184, 185), # 2角通過順 1桁 ★要確認
+    'corner3':        (185, 186), # 3角通過順 1桁 ★要確認
+    'corner4':        (210, 212), # 4角通過順 2桁 ★確認済（着順と一致多い）
 }
 
 # RA7 フィールド位置（確認済み）
@@ -88,7 +87,7 @@ RA_POS = {
 CSV_FIELDS = [
     '日付', '会場コード', '会場', 'レースNo', '距離', '芝ダ', '馬場状態',
     '頭数', '馬番', '馬名', '着順', '単勝オッズ',
-    '斤量', '騎手名', '馬体重', '馬体重変化',
+    '斤量', '騎手名', '調教師', '馬体重', '馬体重変化',
     '走破タイム', '上り3F', '1角', '2角', '3角', '4角',
 ]
 
@@ -142,7 +141,7 @@ def parse_ra(rec):
 
 def _safe_int_div(s, divisor):
     s = s.strip() if isinstance(s, str) else ''
-    if s.lstrip('-').isdigit():
+    if s.lstrip('+-').isdigit():
         return int(s) / divisor
     return ''
 
@@ -179,21 +178,22 @@ def parse_se(rec, include_unverified=True):
             'chakujun':    chakujun,
             'tan_odds':    tan_odds,
             # unverified fields default empty
-            'jinryo': '', 'jockey_name': '',
+            'jinryo': '', 'jockey_name': '', 'chokyoshi_name': '',
             'bataiju': '', 'bataiju_diff': '',
             'soha_time': '', 'last3f': '',
             'corner1': '', 'corner2': '', 'corner3': '', 'corner4': '',
         }
 
-        if include_unverified and len(rec) >= 200:
+        if include_unverified and len(rec) >= 225:
             pu = SE_POS_UNVERIFIED
-            row['jinryo']      = _safe_int_div(rec[pu['jinryo'][0]:pu['jinryo'][1]], 10)
-            row['jockey_name'] = _safe_strip(rec[pu['jockey_name'][0]:pu['jockey_name'][1]])
-            bataiju_raw        = rec[pu['bataiju'][0]:pu['bataiju'][1]].strip()
-            row['bataiju']     = int(bataiju_raw) if bataiju_raw.isdigit() else ''
-            row['bataiju_diff']= _safe_int_div(rec[pu['bataiju_diff'][0]:pu['bataiju_diff'][1]], 1)
-            row['soha_time']   = _safe_int_div(rec[pu['soha_time'][0]:pu['soha_time'][1]], 10)
-            row['last3f']      = _safe_int_div(rec[pu['last3f'][0]:pu['last3f'][1]], 10)
+            row['jinryo']          = _safe_int_div(rec[pu['jinryo'][0]:pu['jinryo'][1]], 10)
+            row['jockey_name']     = _safe_strip(rec[pu['jockey_name'][0]:pu['jockey_name'][1]])
+            row['chokyoshi_name']  = _safe_strip(rec[pu['chokyoshi_name'][0]:pu['chokyoshi_name'][1]])
+            bataiju_raw            = rec[pu['bataiju'][0]:pu['bataiju'][1]].strip()
+            row['bataiju']         = int(bataiju_raw) if bataiju_raw.isdigit() else ''
+            row['bataiju_diff']    = _safe_int_div(rec[pu['bataiju_diff'][0]:pu['bataiju_diff'][1]], 1)
+            row['soha_time']       = _safe_int_div(rec[pu['soha_time'][0]:pu['soha_time'][1]], 1)
+            row['last3f']          = _safe_int_div(rec[pu['last3f'][0]:pu['last3f'][1]], 10)
             for c, k in [('corner1','1角'),('corner2','2角'),('corner3','3角'),('corner4','4角')]:
                 row[c] = _safe_strip(rec[pu[c][0]:pu[c][1]])
 
@@ -245,22 +245,25 @@ def probe_records(jv, n_se=3, n_ra=2, target_venue=None, target_race=None):
             print(f"{'='*70}")
             print(f"{'オフセット':>10}  値")
             # 主要範囲を詳細表示
-            ranges = [(0, 70, "ヘッダ～馬名"), (58, 130, "馬名後～馬体重推定域"),
-                      (170, 250, "タイム・コーナー・着順推定域"), (230, 260, "オッズ周辺")]
+            ranges = [(0, 60, "ヘッダ～馬名", 10),
+                      (58, 175, "馬名後〜斤量前（騎手/調教師/馬主）", 5),
+                      (170, 280, "タイム・コーナー・着順推定域", 10),
+                      (275, 500, "レコード後半", 10)]
             shown = set()
-            for start, end, label in ranges:
+            for entry in ranges:
+                start, end, label, step = entry
                 end = min(end, ret)
                 if start >= end: continue
                 print(f"\n  --- {label} [{start}:{end}] ---")
-                for i in range(start, end, 10):
-                    chunk = data[i:min(i+10, end)]
+                for i in range(start, end, step):
+                    chunk = data[i:min(i+step, end)]
                     if i in shown: continue
-                    shown.update(range(i, i+10))
+                    shown.update(range(i, i+step))
                     try:
                         encoded = chunk.encode('cp932', errors='replace').hex()
                     except Exception:
                         encoded = '?'
-                    print(f"  [{i:03d}:{min(i+10,end):03d}]  {repr(chunk):<35} hex={encoded}")
+                    print(f"  [{i:03d}:{min(i+step,end):03d}]  {repr(chunk):<35} hex={encoded}")
             se_n += 1
 
         elif rt == "RA" and ra_n < needed_ra:
@@ -290,18 +293,23 @@ def probe_records(jv, n_se=3, n_ra=2, target_venue=None, target_race=None):
 # ─────────────────────────────────────────────────────────
 # メイン取得ロジック
 # ─────────────────────────────────────────────────────────
-def fetch_range(jv, from_date, to_date, skip_dates=None):
+def fetch_range(jv, from_date, to_date, skip_dates=None, setup_mode=1):
     """JVOpen(RACE) → SE/RA 読み取り → {日付: [rows]} を返す。"""
     from_dt = from_date + "000000"
-    rc, readcnt, dldcnt, lts = jv.JVOpen("RACE", from_dt, 1, 0, 0, "")
-    print(f"JVOpen(RACE): rc={rc} readcnt={readcnt} dldcnt={dldcnt}")
+    rc, readcnt, dldcnt, lts = jv.JVOpen("RACE", from_dt, setup_mode, 0, 0, "")
+    print(f"JVOpen(RACE): rc={rc} readcnt={readcnt} dldcnt={dldcnt} mode={setup_mode}")
     if rc < 0:
         if rc == -1:
             from_dt_prev = (from_date[:6] + "01" + "000000")
             print(f"  rc=-1: 開始日を {from_date[:6]}01 に変更してリトライ")
             jv.JVClose()
-            rc, readcnt, dldcnt, lts = jv.JVOpen("RACE", from_dt_prev, 1, 0, 0, "")
+            rc, readcnt, dldcnt, lts = jv.JVOpen("RACE", from_dt_prev, setup_mode, 0, 0, "")
             print(f"  JVOpen retry: rc={rc} readcnt={readcnt}")
+        if rc == -202 and setup_mode == 1:
+            print(f"  rc=-202: SetupMode=2 (全件) でリトライ")
+            jv.JVClose()
+            rc, readcnt, dldcnt, lts = jv.JVOpen("RACE", from_dt, 2, 0, 0, "")
+            print(f"  JVOpen mode=2 retry: rc={rc} readcnt={readcnt}")
         if rc < 0:
             raise RuntimeError(f"JVOpen失敗 rc={rc}")
 
@@ -326,6 +334,10 @@ def fetch_range(jv, from_date, to_date, skip_dates=None):
             continue
         if ret == -3:
             time.sleep(0.05)
+            continue
+        if ret == -203:
+            # SetupMode=2 でダウンロード中の場合はリトライ
+            time.sleep(2)
             continue
         if ret < 0:
             print(f"JVRead error {ret}")
@@ -368,6 +380,7 @@ def fetch_range(jv, from_date, to_date, skip_dates=None):
                 '単勝オッズ':  se['tan_odds'],
                 '斤量':        se['jinryo'],
                 '騎手名':      se['jockey_name'],
+                '調教師':      se['chokyoshi_name'],
                 '馬体重':      se['bataiju'],
                 '馬体重変化':  se['bataiju_diff'],
                 '走破タイム':  se['soha_time'],
@@ -421,6 +434,8 @@ def main():
     ap.add_argument('--to',          dest='to_date',    default='20991231')
     ap.add_argument('--incremental', action='store_true',
                     help='すでに存在する日付をスキップ')
+    ap.add_argument('--full-setup', action='store_true',
+                    help='JVOpen SetupMode=2 (全件) で強制再取得')
     ap.add_argument('--probe',       action='store_true',
                     help='SE/RAレコード生データを表示して終了')
     ap.add_argument('--probe-race',  nargs=3,
@@ -463,7 +478,8 @@ def main():
         skip_dates = {os.path.basename(f).replace('.csv', '') for f in existing}
         print(f"既存: {len(skip_dates)}日をスキップ")
 
-    daily = fetch_range(jv, args.from_date, args.to_date, skip_dates)
+    setup_mode = 2 if args.full_setup else 1
+    daily = fetch_range(jv, args.from_date, args.to_date, skip_dates, setup_mode)
 
     if not daily:
         print("データが取れませんでした。")
@@ -476,7 +492,7 @@ def main():
     print(f"\nサンプル ({first_date}) 先頭5行:")
     for r in daily[first_date][:5]:
         print(f"  {r['会場']}{r['レースNo']}R  馬番{r['馬番']}  {r['馬名']}  "
-              f"着={r['着順']}  オッズ={r['単勝オッズ']}  "
+              f"着={r['着順']}  騎手={r['騎手名']}  調教師={r['調教師']}  "
               f"距離={r['距離']}{r['芝ダ']}  斤量={r['斤量']}  "
               f"馬体重={r['馬体重']}  走破={r['走破タイム']}  上り={r['上り3F']}")
 
