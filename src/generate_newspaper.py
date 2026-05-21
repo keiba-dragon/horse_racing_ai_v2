@@ -8,7 +8,7 @@ clogit 競馬新聞 HTML ジェネレータ
 出力:
   data/html/newspaper_YYYYMMDD.html
 """
-import sys, io, os, json, pickle, argparse, re, unicodedata
+import sys, io, os, json, pickle, argparse, re, unicodedata, urllib.request
 from datetime import datetime
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
@@ -36,6 +36,32 @@ VENUE_TO_CODE = {
     '東': '05', '中': '06', '中京': '07', '京': '08', '阪': '09',
     '新': '04', '福': '03', '函': '02', '札': '01', '小': '10',
 }
+
+
+VENUE_FULL_TO_SHORT = {
+    '東京': '東', '中山': '中', '中京': '中京', '京都': '京', '阪神': '阪',
+    '新潟': '新', '福島': '福', '函館': '函', '札幌': '札', '小倉': '小',
+}
+
+def fetch_race_id_map(target_date: str) -> dict:
+    """netkeiba race_list_sub から {(venue_short, r_num): race_id} を返す。失敗時は空dict。"""
+    url = f'https://race.netkeiba.com/top/race_list_sub.html?kaisai_date={target_date}'
+    try:
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, timeout=5) as res:
+            html = res.read().decode('utf-8', errors='replace')
+        race_map = {}
+        for m in re.finditer(r'race_id=(\d{12})', html):
+            rid = m.group(1)
+            venue_code = rid[4:6]   # 2桁会場コード
+            r_num = int(rid[10:12]) # 2桁レース番号
+            # 会場コード → 短縮名
+            short = next((s for s, c in VENUE_TO_CODE.items() if c == venue_code), None)
+            if short:
+                race_map[(short, r_num)] = rid
+        return race_map
+    except Exception:
+        return {}
 
 
 def load_data(target_date: str):
@@ -163,7 +189,7 @@ def ev_label(ev: float) -> str:
     return f'<span class="ev-neg">EV{ev:+.2f}</span>'
 
 
-def render_race(race_key: str, grp: pd.DataFrame, target_date: str = '') -> str:
+def render_race(race_key: str, grp: pd.DataFrame, target_date: str = '', race_id_map: dict = {}) -> str:
     grp = grp.sort_values('_rank')
     first = grp.iloc[0]
     venue   = first['_venue']
@@ -173,9 +199,14 @@ def render_race(race_key: str, grp: pd.DataFrame, target_date: str = '') -> str:
     n       = len(grp)
     emo     = SURFACE_EMO.get(surf, '')
 
-    # netkeiba レース一覧URL（race_idは年+会場+回次+日次形式で日付から直接導出不可のため日付単位で）
-    race_url = (f"https://race.netkeiba.com/top/race_list.html"
-                f"?kaisai_date={target_date}") if target_date else ''
+    # netkeiba レースURL（race_id_mapで個別レースに、なければ日付一覧にフォールバック）
+    rid = race_id_map.get((venue, r_num)) if isinstance(r_num, int) else None
+    if rid:
+        race_url = f"https://race.netkeiba.com/race/result.html?race_id={rid}"
+    elif target_date:
+        race_url = f"https://race.netkeiba.com/top/race_list.html?kaisai_date={target_date}"
+    else:
+        race_url = ''
 
     top1 = grp[grp['_rank'] == 1].iloc[0] if (grp['_rank'] == 1).any() else None
     top1_ev  = top1['_ev']  if top1 is not None else np.nan
@@ -290,11 +321,14 @@ def generate_html(df: pd.DataFrame, target_date: str) -> str:
 
     top1 = df[df['_rank'] == 1]
 
+    race_id_map = fetch_race_id_map(target_date)
+    print(f'race_id_map: {len(race_id_map)}件取得')
+
     venue_cols = []
     for venue in venue_order:
         vdf = df[df['_venue'] == venue].copy()
         races = sorted(vdf['_race'].unique(), key=lambda x: int(re.search(r'\d+', x).group()))
-        cards = ''.join(render_race(r, vdf[vdf['_race'] == r], target_date) for r in races)
+        cards = ''.join(render_race(r, vdf[vdf['_race'] == r], target_date, race_id_map) for r in races)
         venue_full = VENUE_FULL.get(venue, venue)
         venue_cols.append(f"""
     <div class="venue-col">
