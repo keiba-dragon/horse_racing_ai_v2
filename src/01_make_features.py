@@ -126,7 +126,7 @@ def main():
 
     print("--- 競馬AI データ加工処理を開始します（v3 新データ対応）---")
 
-    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) if 'src' in os.path.abspath(__file__) else '.'
+    base_dir = os.environ.get('KEIBAI_BASE_DIR') or (os.path.dirname(os.path.dirname(os.path.abspath(__file__))) if 'src' in os.path.abspath(__file__) else '.')
     raw_dir  = os.path.join(base_dir, 'data', 'raw')
     output_file = os.path.join(base_dir, 'data', 'processed', 'all_venues_features.csv')
 

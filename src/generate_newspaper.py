@@ -16,7 +16,7 @@ sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 import numpy as np
 import pandas as pd
 
-BASE_DIR  = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BASE_DIR  = os.environ.get('KEIBAI_BASE_DIR') or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CACHE_DIR = os.path.join(BASE_DIR, 'data', 'raw', 'cache')
 OUT_DIR   = os.path.join(BASE_DIR, 'data', 'html')
 

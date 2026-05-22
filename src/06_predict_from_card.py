@@ -300,6 +300,11 @@ def predict_date(base_dir, target_date_num, card_df=None):
                       '前走斤量', '距離変化_前走']
         _feat_cols = list(set((sub_features or []) + (cur_features or [])))
         _need = set(_essential + _feat_cols)
+        # clogit の特徴量列と中間計算列も読み込む（NaN削減）
+        if _clogit_pkg is not None:
+            for _a in _clogit_pkg['artifacts'].values():
+                _need.update(_a['feat_cols'])
+            _need.add('前走日付')  # 休養日数計算用
         try:
             import pyarrow.parquet as _pq_mod
             _avail = set(_pq_mod.read_schema(feat_pq).names)
@@ -372,15 +377,23 @@ def predict_date(base_dir, target_date_num, card_df=None):
             '前走単勝オッズ':     '単勝オッズ',
             '前走PCI':            'PCI',
             '前走RPCI':           'RPCI',
+            # 追加: 休養日数・距離変化 の計算に必要
+            '前走日付':           '日付',
+            '前走_距離_m':        '今回_距離_m',
+            '前走_surface':       '今回_surface',
         }
         for _m_col, _b_col in _mae_base_map.items():
             if _m_col in df_latest.columns and _b_col in df_latest.columns:
                 df_latest[_m_col] = df_latest[_b_col]
         day = card_df.drop_duplicates('馬名S').copy()
-        all_feats_now = list(set((sub_features or []) + (cur_features or [])))
-        pq_cols = (['馬名S', '日付', '距離'] +
+        _clogit_feats_fb = set()
+        if _clogit_pkg is not None:
+            for _a in _clogit_pkg['artifacts'].values():
+                _clogit_feats_fb.update(_a['feat_cols'])
+        all_feats_now = list(set((sub_features or []) + (cur_features or []) + list(_clogit_feats_fb)))
+        pq_cols = (['馬名S', '日付', '距離', '前走日付'] +
                    [c for c in df_latest.columns
-                    if c not in ('馬名S',) and c in all_feats_now])
+                    if c not in ('馬名S', '日付', '距離', '前走日付') and c in all_feats_now])
         day = day.merge(
             df_latest[list(dict.fromkeys(pq_cols))],
             on='馬名S', how='left', suffixes=('', '_pq'))
@@ -422,6 +435,21 @@ def predict_date(base_dir, target_date_num, card_df=None):
         n_mae = day['前距離'].notna().sum() if '前距離' in day.columns else 0
         n_kan = day['間隔'].notna().sum() if '間隔' in day.columns else 0
         print(f"フォールバック構築: {len(day)}頭 / 前距離{n_mae}頭 / 間隔{n_kan}頭")
+        # _pq 列のNaNフォールバック（card_dfが欠損 → df_latest値で補完）
+        for _pq_col in [c for c in day.columns if c.endswith('_pq')]:
+            _base_col = _pq_col[:-3]
+            if _base_col in day.columns:
+                day[_base_col] = day[_base_col].fillna(day[_pq_col])
+            day = day.drop(columns=[_pq_col])
+
+    # 今回_surface / 今回_距離_m をカード情報から直接補完（フォールバック共通）
+    if '今回_surface' not in day.columns or day['今回_surface'].isna().all():
+        _surf_col = '芝・ダ' if '芝・ダ' in day.columns else ('芝ダ' if '芝ダ' in day.columns else None)
+        if _surf_col:
+            day['今回_surface'] = day[_surf_col].astype(str).str.strip().map({'芝': 1.0, 'ダ': 0.0, '障': 2.0})
+    if '今回_距離_m' not in day.columns or day['今回_距離_m'].isna().all():
+        day['今回_距離_m'] = pd.to_numeric(
+            day['距離'].astype(str).str.extract(r'(\d+)')[0], errors='coerce')
 
     # 馬体重・斤量パッチ: card_dfにあれば上書き
     if card_df is not None:
@@ -598,10 +626,11 @@ def predict_date(base_dir, target_date_num, card_df=None):
                 # 派生特徴量を追加（休養日数・斤量変化・距離変化・クラス変化・近走トレンド）
                 _s = _clogit_newfeats(_s)
                 # 列名エイリアス補完（training列名 → prediction列名のマッピング）
-                if '前走走破タイム_sec' not in _s.columns and '1走前_走破タイム_sec' in _s.columns:
+                if ('前走走破タイム_sec' not in _s.columns or _s['前走走破タイム_sec'].isna().all()) and '1走前_走破タイム_sec' in _s.columns:
                     _s['前走走破タイム_sec'] = _s['1走前_走破タイム_sec']
-                if '今回_surface' not in _s.columns:
-                    _s['今回_surface'] = pd.to_numeric(_s.get('_surface', pd.Series(dtype=str)).map({'芝': 0, 'ダ': 1}), errors='coerce')
+                if '今回_surface' not in _s.columns or _s['今回_surface'].isna().all():
+                    _surf_src = _s.get('_surface', _s.get('芝・ダ', pd.Series(dtype=str)))
+                    _s['今回_surface'] = pd.to_numeric(_surf_src.astype(str).str.strip().map({'芝': 1.0, 'ダ': 0.0, '障': 2.0}), errors='coerce')
                 if '今回_距離_m' not in _s.columns:
                     _s['今回_距離_m'] = _s['距離'].astype(str).str.extract(r'(\d+)')[0].astype(float) if '距離' in _s.columns else np.nan
                 # 休養日数: 前走日付なければ 間隔(週) × 7 で近似（間隔=当日基準の週数）
@@ -1489,7 +1518,7 @@ def main():
     parser.add_argument('--no-results', action='store_true', help='data/raw/results/の結果ファイル自動読み込みをスキップ')
     args = parser.parse_args()
 
-    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) if 'src' in os.path.abspath(__file__) else '.'
+    base_dir = os.environ.get('KEIBAI_BASE_DIR') or (os.path.dirname(os.path.dirname(os.path.abspath(__file__))) if 'src' in os.path.abspath(__file__) else '.')
 
     print(f"=== 競馬AI 出馬表予測 ===")
     print(f"入力: {args.card_file}")
