@@ -25,7 +25,8 @@ sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 BASE_DIR    = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 VENV_PYTHON = os.path.join(BASE_DIR, '.venv_new', 'Scripts', 'python.exe')
 PYTHON      = VENV_PYTHON if os.path.exists(VENV_PYTHON) else sys.executable
-SCRIPT      = os.path.join(BASE_DIR, 'src', 'auto_pipeline.py')
+SCRIPT         = os.path.join(BASE_DIR, 'src', 'auto_pipeline.py')
+UPDATE_SCRIPT  = os.path.join(BASE_DIR, 'src', 'auto_weekly_update.py')
 LOG_DIR     = os.path.join(BASE_DIR, 'logs')
 
 TASKS = [
@@ -66,6 +67,17 @@ TASKS = [
     },
 ]
 
+# 月曜 週次更新タスク（別スクリプト・別定義）
+UPDATE_TASKS = [
+    {'name': 'KeibAI-Update-Mon', 'desc': '競馬AI 週次自動更新（月曜 JV-Link結果取得）', 'day': 'MON', 'time': '06:00'},
+]
+
+# Discord通知デーモン用タスク（別スクリプト・別定義）
+NOTIFY_TASKS = [
+    {'name': 'KeibAI-Notify-Sat', 'desc': '競馬AI Discord通知 土曜', 'day': 'SAT', 'time': '09:00'},
+    {'name': 'KeibAI-Notify-Sun', 'desc': '競馬AI Discord通知 日曜', 'day': 'SUN', 'time': '09:00'},
+]
+
 
 DAY_MAP = {'MON': 'Monday', 'TUE': 'Tuesday', 'WED': 'Wednesday',
            'THU': 'Thursday', 'FRI': 'Friday', 'SAT': 'Saturday', 'SUN': 'Sunday'}
@@ -84,10 +96,14 @@ def ps_run(script: str) -> tuple[int, str]:
     return r.returncode, r.stdout.strip()
 
 
+NOTIFY_SCRIPT = os.path.join(BASE_DIR, 'src', 'discord_notify.py')
+
+
 def register():
     print("=== タスクスケジューラ 登録 ===\n")
     os.makedirs(LOG_DIR, exist_ok=True)
 
+    # 既存パイプラインタスク
     for t in TASKS:
         log_path  = os.path.join(LOG_DIR, f'{t["name"]}.log').replace('\\', '\\\\')
         py_path   = PYTHON.replace('\\', '\\\\')
@@ -111,10 +127,53 @@ Write-Output "OK: {t['name']}"
         rc, out = ps_run(ps)
         print(f"  {'✓ 登録完了' if rc == 0 else '✗ 登録失敗'}\n")
 
+    # 月曜 週次更新タスク
+    upd_scr = UPDATE_SCRIPT.replace('\\', '\\\\')
+    for t in UPDATE_TASKS:
+        py_path   = PYTHON.replace('\\', '\\\\')
+        base_path = BASE_DIR.replace('\\', '\\\\')
+        day_full  = DAY_MAP[t['day']]
+        ps = f"""
+$a = New-ScheduledTaskAction `
+    -Execute '{py_path}' `
+    -Argument '"{upd_scr}"' `
+    -WorkingDirectory '{base_path}'
+$t = New-ScheduledTaskTrigger -Weekly -DaysOfWeek {day_full} -At '{t["time"]}'
+$s = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Hours 2) -StartWhenAvailable
+Register-ScheduledTask -TaskName '{t["name"]}' -Description '{t["desc"]}' `
+    -Action $a -Trigger $t -Settings $s -Force | Out-Null
+Write-Output "OK: {t['name']}"
+"""
+        print(f"登録: {t['name']}  ({t['day']} {t['time']})")
+        rc, out = ps_run(ps)
+        print(f"  {'✓ 登録完了' if rc == 0 else '✗ 登録失敗'}\n")
+
+    # Discord通知デーモンタスク
+    notify_scr = NOTIFY_SCRIPT.replace('\\', '\\\\')
+    for t in NOTIFY_TASKS:
+        log_path  = os.path.join(LOG_DIR, f'{t["name"]}.log').replace('\\', '\\\\')
+        py_path   = PYTHON.replace('\\', '\\\\')
+        base_path = BASE_DIR.replace('\\', '\\\\')
+        day_full  = DAY_MAP[t['day']]
+        ps = f"""
+$a = New-ScheduledTaskAction `
+    -Execute '{py_path}' `
+    -Argument '"{notify_scr}"' `
+    -WorkingDirectory '{base_path}'
+$t = New-ScheduledTaskTrigger -Weekly -DaysOfWeek {day_full} -At '{t["time"]}'
+$s = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Hours 9) -StartWhenAvailable
+Register-ScheduledTask -TaskName '{t["name"]}' -Description '{t["desc"]}' `
+    -Action $a -Trigger $t -Settings $s -Force | Out-Null
+Write-Output "OK: {t['name']}"
+"""
+        print(f"登録: {t['name']}  ({t['day']} {t['time']})")
+        rc, out = ps_run(ps)
+        print(f"  {'✓ 登録完了' if rc == 0 else '✗ 登録失敗'}\n")
+
 
 def delete():
     print("=== タスクスケジューラ 削除 ===\n")
-    for t in TASKS:
+    for t in TASKS + UPDATE_TASKS + NOTIFY_TASKS:
         print(f"削除: {t['name']}")
         ps_run(f"Unregister-ScheduledTask -TaskName '{t['name']}' -Confirm:$false -ErrorAction SilentlyContinue")
         print()
@@ -122,7 +181,7 @@ def delete():
 
 def status():
     print("=== タスクスケジューラ 確認 ===\n")
-    for t in TASKS:
+    for t in TASKS + UPDATE_TASKS + NOTIFY_TASKS:
         print(f"── {t['name']} ──")
         rc, out = ps_run(
             f"Get-ScheduledTask -TaskName '{t['name']}' -ErrorAction SilentlyContinue "
