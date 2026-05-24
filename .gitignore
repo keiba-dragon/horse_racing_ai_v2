@@ -37,6 +37,9 @@ tmp_*.txt
 tmp_*.py
 tmp_*.csv
 
+# シークレット（Webhook URL等）
+config/discord_config.json
+
 # OS
 Thumbs.db
 .DS_Store
