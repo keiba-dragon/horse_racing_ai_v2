@@ -675,10 +675,16 @@ def predict_date(base_dir, target_date_num, card_df=None):
                     _factor = np.where(_cls == 2, _clogit_pkg['factor_maiden'], _clogit_pkg['factor_other'])
                     # オッズ未確定時は calib_prob のみでランキング（市場補正なし）
                     _score = np.where(np.isnan(_mprob), _calib, _calib - _factor * _mprob)
+                    _high_nan = np.array(_nan_counts) / _total_feats >= 0.5
                     for _i, _oi in enumerate(_orig_index):
-                        sub.loc[_oi, 'clogit_score']  = _score[_i]
-                        sub.loc[_oi, 'clogit_calib']  = _calib[_i]   # 生確率を保存
-                        sub.loc[_oi, 'clogit_factor'] = _factor[_i]  # 補正係数を保存
+                        if _high_nan[_i]:
+                            sub.loc[_oi, 'clogit_score']  = np.nan
+                            sub.loc[_oi, 'clogit_calib']  = np.nan
+                            sub.loc[_oi, 'clogit_factor'] = np.nan
+                        else:
+                            sub.loc[_oi, 'clogit_score']  = _score[_i]
+                            sub.loc[_oi, 'clogit_calib']  = _calib[_i]
+                            sub.loc[_oi, 'clogit_factor'] = _factor[_i]
                     sub['clogit_rank'] = sub['clogit_score'].rank(ascending=False, method='first')
             except Exception as _ce:
                 pass  # clogit失敗時は既存モデルのみ表示
