@@ -446,6 +446,33 @@ def predict_date(base_dir, target_date_num, card_df=None):
                 day[_base_col] = day[_base_col].fillna(day[_pq_col])
             day = day.drop(columns=[_pq_col])
 
+        # 今日のレースのクラス_rank をカードデータから補正（fallback時バグ修正）
+        # parquetの直近過去レースのクラスが残るため、今日の出走クラスで上書きする
+        if 'クラス' in day.columns:
+            _cls_map_fb = {
+                '新馬': 1, '未勝利': 2,
+                '１勝': 3, '1勝': 3,
+                '２勝': 4, '2勝': 4,
+                '３勝': 5, '3勝': 5,
+                'OP': 6, 'オープン': 6, 'L': 6,
+                'G3': 7, 'G2': 8, 'G1': 9,
+            }
+            def _cls_to_rank_fb(val):
+                import unicodedata as _ud
+                s = _ud.normalize('NFKC', str(val))  # 全角→半角（Ｇ１→G1 等）
+                for k, v in _cls_map_fb.items():
+                    if k in s:
+                        return v
+                return np.nan
+            _today_cls_rank = day['クラス'].map(_cls_to_rank_fb)
+            if _today_cls_rank.notna().any():
+                _prev_cls_rank = (day['クラス_rank'].copy()
+                                  if 'クラス_rank' in day.columns
+                                  else pd.Series(np.nan, index=day.index))
+                day['クラス_rank'] = _today_cls_rank
+                if 'クラス変化' in day.columns:
+                    day['クラス変化'] = _today_cls_rank - _prev_cls_rank
+
     # 今回_surface / 今回_距離_m をカード情報から直接補完（フォールバック共通）
     if '今回_surface' not in day.columns or day['今回_surface'].isna().all():
         _surf_col = '芝・ダ' if '芝・ダ' in day.columns else ('芝ダ' if '芝ダ' in day.columns else None)
@@ -671,7 +698,11 @@ def predict_date(base_dir, target_date_num, card_df=None):
                         scaler=_art['scaler'], poly2=_art['poly2'],
                         inter_scaler2=_art['inter_scaler2'], top_idx=_art['top_idx'],
                         poly3=None, inter_scaler3=None, top_idx3=None, fit=False)
-                    _raw   = _clogit_softmax(_X @ _art['coef'], _gs, _n)
+                    # NaN率が高い馬は線形スコアを0（中立）にしてsoftmaxに含める
+                    _high_nan = np.array(_nan_counts) / _total_feats >= 0.5
+                    _lin = _X @ _art['coef']
+                    _lin[_high_nan] = 0.0
+                    _raw   = _clogit_softmax(_lin, _gs, _n)
                     _calib = _art['isotonic'].predict(_raw)
                     _odds  = pd.to_numeric(_s['単勝オッズ'], errors='coerce').values if '単勝オッズ' in _s.columns else np.full(len(_s), np.nan)
                     _mprob = 1.0 / np.clip(_odds, 1.0, None)  # NaN when odds unavailable
@@ -679,16 +710,10 @@ def predict_date(base_dir, target_date_num, card_df=None):
                     _factor = np.where(_cls == 2, _clogit_pkg['factor_maiden'], _clogit_pkg['factor_other'])
                     # オッズ未確定時は calib_prob のみでランキング（市場補正なし）
                     _score = np.where(np.isnan(_mprob), _calib, _calib - _factor * _mprob)
-                    _high_nan = np.array(_nan_counts) / _total_feats >= 0.5
                     for _i, _oi in enumerate(_orig_index):
-                        if _high_nan[_i]:
-                            sub.loc[_oi, 'clogit_score']  = np.nan
-                            sub.loc[_oi, 'clogit_calib']  = np.nan
-                            sub.loc[_oi, 'clogit_factor'] = np.nan
-                        else:
-                            sub.loc[_oi, 'clogit_score']  = _score[_i]
-                            sub.loc[_oi, 'clogit_calib']  = _calib[_i]
-                            sub.loc[_oi, 'clogit_factor'] = _factor[_i]
+                        sub.loc[_oi, 'clogit_score']  = _score[_i]
+                        sub.loc[_oi, 'clogit_calib']  = _calib[_i]
+                        sub.loc[_oi, 'clogit_factor'] = _factor[_i]
                     sub['clogit_rank'] = sub['clogit_score'].rank(ascending=False, method='first')
             except Exception as _ce:
                 pass  # clogit失敗時は既存モデルのみ表示
