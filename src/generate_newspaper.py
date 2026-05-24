@@ -113,14 +113,17 @@ def prepare(df: pd.DataFrame, odds_dict: dict) -> pd.DataFrame:
             df.loc[has_odds, 'clogit_calib'] - factor[has_odds] * df.loc[has_odds, '_mprob']
         )
         df['clogit_rank'] = df.groupby('_race')['clogit_score'].rank(ascending=False, method='first')
+        # 表示・並び順は勝率(clogit_calib)ベースのランク
+        df['_calib_rank'] = df.groupby('_race')['clogit_calib'].rank(ascending=False, method='first', na_option='bottom')
         df['_ev'] = df['clogit_calib'] - df['_mprob'] * 0.80
     else:
+        df['_calib_rank'] = df.groupby('_race')['clogit_score'].rank(ascending=False, method='first', na_option='bottom')
         df['_ev'] = df['clogit_score'] - df['_mprob'] * 0.80
 
     # レース内オッズ人気
     df['_pop'] = df.groupby('_race')['_yahoo_odds'].rank(method='first', ascending=True)
 
-    # 印
+    # 印（★マークはEV調整後スコアのランク1位）
     df['_rank'] = df['clogit_rank'].fillna(99).astype(int)
     df['_mark'] = df['_rank'].map(lambda r: MARKS.get(r, ''))
 
@@ -190,7 +193,7 @@ def ev_label(ev: float) -> str:
 
 
 def render_race(race_key: str, grp: pd.DataFrame, target_date: str = '', race_id_map: dict = {}) -> str:
-    grp = grp.sort_values('_rank')
+    grp = grp.sort_values('_calib_rank')
     first = grp.iloc[0]
     venue   = first['_venue']
     r_num   = int(first['_R']) if pd.notna(first['_R']) else '?'
