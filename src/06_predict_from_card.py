@@ -193,10 +193,14 @@ def run_feature_engineering(base_dir, extra_df):
 
     script = os.path.join(base_dir, 'src', '01_make_features.py')
     print("特徴量生成中（数分かかります）...")
+    import os as _os
+    _env = _os.environ.copy()
+    _env['KEIBAI_BASE_DIR'] = base_dir
     result = subprocess.run(
         [sys.executable, script],
         cwd=base_dir,
-        capture_output=True, text=True, encoding='utf-8'
+        capture_output=True, text=True, encoding='utf-8',
+        env=_env
     )
     if result.returncode != 0:
         print("エラー:", result.stderr[-500:] if result.stderr else "不明")
