@@ -12,14 +12,11 @@ JVLink RT の代替（サブスクリプション不要）。
   data/raw/cache/YYYYMMDD.odds.json  {horse_name: odds_float}
   CHANGED=1 / CHANGED=0 をprint
 """
-import sys, io, os, json, re, argparse, pickle, time, glob
-import urllib3
+import sys, io, os, json, re, argparse, pickle, time, glob, ssl, gzip
+import urllib.request
 from datetime import datetime
 
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
 try:
-    import requests
     from bs4 import BeautifulSoup
 except ImportError as e:
     print(f'[ERROR] 必要パッケージ未インストール: {e}', file=sys.stderr)
@@ -28,8 +25,17 @@ except ImportError as e:
 BASE_DIR  = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CACHE_DIR = os.path.join(BASE_DIR, 'data', 'raw', 'cache')
 
-HEADERS = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-TIMEOUT = 6
+HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    'Accept-Language': 'ja,en-US;q=0.7,en;q=0.3',
+    'Accept-Encoding': 'gzip, deflate, br',
+    'Referer': 'https://sports.yahoo.co.jp/keiba/',
+}
+TIMEOUT = 8
+_SSL_CTX = ssl.create_default_context()
+_SSL_CTX.check_hostname = False
+_SSL_CTX.verify_mode = ssl.CERT_NONE
 
 NAME_TO_CODE = {
     '中京': '07',
@@ -40,9 +46,15 @@ NAME_TO_CODE = {
 
 def _get(url: str) -> str | None:
     try:
-        r = requests.get(url, headers=HEADERS, timeout=TIMEOUT, verify=False)
-        if r.status_code == 200 and len(r.text) > 5000:
-            return r.text
+        req = urllib.request.Request(url, headers=HEADERS)
+        with urllib.request.urlopen(req, timeout=TIMEOUT, context=_SSL_CTX) as res:
+            raw = res.read()
+        try:
+            html = gzip.decompress(raw).decode('utf-8', errors='replace')
+        except Exception:
+            html = raw.decode('utf-8', errors='replace')
+        if len(html) > 5000:
+            return html
     except Exception as e:
         print(f'  [WARN] fetch失敗: {url}: {e}', file=sys.stderr)
     return None
@@ -94,7 +106,7 @@ def find_venue_key(venue_code: str, venue_horses: set, year2: str) -> tuple | No
     # R1は障害レースの場合があるので R5 と R1 の両方で試す
     probe_races = ['05', '02', '06', '01']
     for kai in range(1, 7):
-        for nichi in range(1, 9):
+        for nichi in range(1, 13):
             matched = False
             for probe in probe_races:
                 key = f'{year2}{venue_code}{kai:02d}{nichi:02d}{probe}'
