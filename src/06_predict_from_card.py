@@ -703,10 +703,7 @@ def predict_date(base_dir, target_date_num, card_df=None):
                         scaler=_art['scaler'], poly2=_art['poly2'],
                         inter_scaler2=_art['inter_scaler2'], top_idx=_art['top_idx'],
                         poly3=None, inter_scaler3=None, top_idx3=None, fit=False)
-                    # NaN率が高い馬は線形スコアを0（中立）にしてsoftmaxに含める
-                    _high_nan = np.array(_nan_counts) / _total_feats >= 0.5
                     _lin = _X @ _art['coef']
-                    _lin[_high_nan] = 0.0
                     _raw   = _clogit_softmax(_lin, _gs, _n)
                     _calib = _art['isotonic'].predict(_raw)
                     _odds  = pd.to_numeric(_s['単勝オッズ'], errors='coerce').values if '単勝オッズ' in _s.columns else np.full(len(_s), np.nan)
