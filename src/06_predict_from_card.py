@@ -877,7 +877,9 @@ def generate_html(result, card_df, target_date_num, out_path):
     both_r1   = cur_r1 & sub_r1
     star      = (cur_r <= 3) & (sub_r <= 3) & ~both_r1  # 片方が2か3
     # オッズ（あれば使う、なければフィルターなし）
-    _odds = pd.to_numeric(df.get('dc_単勝オッズ'), errors='coerce')
+    _odds = (pd.to_numeric(df['dc_単勝オッズ'], errors='coerce')
+             if 'dc_単勝オッズ' in df.columns
+             else pd.Series(np.nan, index=df.index, dtype=float))
     if _odds.isna().all() and '単勝オッズ' in df.columns:
         _odds = pd.to_numeric(df['単勝オッズ'], errors='coerce')
     odds_ok3  = _odds.isna() | (_odds >= 3)   # NaN = フィルターなし扱い
