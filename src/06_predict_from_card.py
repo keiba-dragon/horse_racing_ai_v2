@@ -289,6 +289,20 @@ def predict_date(base_dir, target_date_num, card_df=None):
             except Exception:
                 pass
 
+    # ── placing model (final_model_placing.pkl) 読み込み ──────────────────
+    _placing_pkg  = None
+    _placing_path = os.path.join(base_dir, 'models', 'final_model_placing.pkl')
+    if os.path.exists(_placing_path):
+        try:
+            with open(_placing_path, 'rb') as f:
+                _placing_pkg = pickle.load(f)
+            print('placingモデル読み込み完了')
+        except Exception as _e:
+            try:
+                print(f'placing読み込み失敗: {_e}')
+            except Exception:
+                pass
+
     # ── 特徴量データを読み込む（Parquet優先 / なければCSV）─────────────
     feat_csv = os.path.join(base_dir, 'data', 'processed', 'all_venues_features.csv')
     feat_pq  = os.path.join(base_dir, 'data', 'processed', 'all_venues_features.parquet')
@@ -719,6 +733,54 @@ def predict_date(base_dir, target_date_num, card_df=None):
                     sub['clogit_rank'] = sub['clogit_score'].rank(ascending=False, method='first')
             except Exception as _ce:
                 pass  # clogit失敗時は既存モデルのみ表示
+
+        # ── placing 予測 (2着内・3着内確率) ──────────────────────────────────
+        sub['clogit_calib_top2'] = np.nan
+        sub['clogit_calib_top3'] = np.nan
+        if _placing_pkg is not None and _clogit_prepare is not None:
+            try:
+                _ps = sub.reset_index(drop=True).copy()
+                _ps['race_id'] = 'tmp'
+                if '着順_num' not in _ps.columns:
+                    _ps['着順_num'] = 0
+                if _clogit_pacefeats is not None:
+                    _ps = _clogit_pacefeats(_ps)
+                _ps = _clogit_newfeats(_ps)
+                if ('前走走破タイム_sec' not in _ps.columns or _ps['前走走破タイム_sec'].isna().all()) and '1走前_走破タイム_sec' in _ps.columns:
+                    _ps['前走走破タイム_sec'] = _ps['1走前_走破タイム_sec']
+                if '今回_surface' not in _ps.columns or _ps['今回_surface'].isna().all():
+                    _surf_src2 = _ps.get('_surface', _ps.get('芝・ダ', pd.Series(dtype=str)))
+                    _ps['今回_surface'] = pd.to_numeric(_surf_src2.astype(str).str.strip().map({'芝': 1.0, 'ダ': 0.0, '障': 2.0}), errors='coerce')
+                if '今回_距離_m' not in _ps.columns:
+                    _ps['今回_距離_m'] = _ps['距離'].astype(str).str.extract(r'(\d+)')[0].astype(float) if '距離' in _ps.columns else np.nan
+                if '間隔' in _ps.columns:
+                    _ps['間隔'] = pd.to_numeric(_ps['間隔'], errors='coerce').clip(upper=104)
+                if _ps['休養日数'].isna().all() and '間隔' in _ps.columns:
+                    _ps['休養日数'] = (pd.to_numeric(_ps['間隔'], errors='coerce') * 7).clip(0, 365)
+                if _ps['距離変化_m'].isna().all() and '距離変化_前走' in _ps.columns:
+                    _ps['距離変化_m'] = pd.to_numeric(_ps['距離変化_前走'], errors='coerce')
+                _psurf = str(_ps['距離'].iloc[0]).strip()[:1] if '距離' in _ps.columns else None
+                if _psurf not in ('芝', 'ダ'):
+                    _psd = _ps['芝・ダ'].iloc[0] if '芝・ダ' in _ps.columns else ''
+                    _psurf = '芝' if str(_psd).strip() in ('芝',) else 'ダ'
+                if _psurf in _placing_pkg['artifacts']:
+                    _part = _placing_pkg['artifacts'][_psurf]
+                    for _fc in _placing_pkg['feat_cols']:
+                        if _fc not in _ps.columns:
+                            _ps[_fc] = np.nan
+                    _pX, _, _pgs, _pn, *_ = _clogit_prepare(
+                        _ps, _placing_pkg['feat_cols'],
+                        scaler=_part['scaler'], poly2=_part.get('poly2'),
+                        inter_scaler2=_part.get('inter_scaler2'), top_idx=_part.get('top_idx'),
+                        poly3=None, inter_scaler3=None, top_idx3=None, fit=False)
+                    _praw  = _clogit_softmax(_pX @ _part['coef'], _pgs, _pn)
+                    _ptop2 = _part['isotonic_top2'].predict(_praw)
+                    _ptop3 = _part['isotonic_top3'].predict(_praw)
+                    for _i, _oi in enumerate(sub.index.tolist()):
+                        sub.loc[_oi, 'clogit_calib_top2'] = _ptop2[_i]
+                        sub.loc[_oi, 'clogit_calib_top3'] = _ptop3[_i]
+            except Exception as _pe:
+                pass  # placing失敗時は無視
 
         # ── combo_gap 計算（1位と2位のスコア差）──
         for score_col, gap_col in [('cur_コース偏差値', 'cur_gap'), ('sub_コース偏差値', 'sub_gap')]:

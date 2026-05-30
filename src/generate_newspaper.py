@@ -236,11 +236,15 @@ def render_race(race_key: str, grp: pd.DataFrame, target_date: str = '', race_id
         odds   = r['_yahoo_odds']
         pop    = int(r['_pop']) if pd.notna(r['_pop']) else '-'
         ev     = r['_ev']
-        calib  = r['clogit_calib'] if 'clogit_calib' in r.index else np.nan
+        calib  = r['clogit_calib']      if 'clogit_calib'      in r.index else np.nan
+        top2   = r['clogit_calib_top2'] if 'clogit_calib_top2' in r.index else np.nan
+        top3   = r['clogit_calib_top3'] if 'clogit_calib_top3' in r.index else np.nan
         buy    = bool(r['_buy'])
 
         odds_s  = f"{odds:.1f}" if pd.notna(odds) else '-'
         calib_s = f"{calib*100:.1f}%" if pd.notna(calib) else '-'
+        top2_s  = f"{top2*100:.1f}%" if pd.notna(top2) else '-'
+        top3_s  = f"{top3*100:.1f}%" if pd.notna(top3) else '-'
         ev_s    = ev_label(ev)
 
         if buy:
@@ -286,6 +290,8 @@ def render_race(race_key: str, grp: pd.DataFrame, target_date: str = '', race_id
           <td class="pop">{pop}</td>
           <td class="odds">{odds_s}</td>
           <td class="calib">{calib_s}</td>
+          <td class="calib">{top2_s}</td>
+          <td class="calib">{top3_s}</td>
           <td class="ev-col">{ev_s}</td>
         </tr>""")
 
@@ -304,7 +310,7 @@ def render_race(race_key: str, grp: pd.DataFrame, target_date: str = '', race_id
       <thead>
         <tr>
           <th>印</th><th>馬番</th><th>馬名</th>
-          <th>人気</th><th>オッズ</th><th>勝率</th><th>EV</th>
+          <th>人気</th><th>オッズ</th><th>勝率</th><th>2着内</th><th>3着内</th><th>EV</th>
         </tr>
       </thead>
       <tbody>{''.join(rows_html)}
