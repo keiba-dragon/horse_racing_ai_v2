@@ -723,7 +723,7 @@ def predict_date(base_dir, target_date_num, card_df=None):
                     _raw   = _clogit_softmax(_lin, _gs, _n)
                     _clogit_raw_saved  = _raw        # placing予測で再利用
                     _clogit_surf_saved = _surf
-                    _calib = np.maximum(_art['isotonic'].predict(_raw), 1e-3)  # 0.1%フロア: isotonic の out_of_bounds clip で 0 になるのを防ぐ
+                    _calib = _art['isotonic'].predict(_raw)
                     _odds  = pd.to_numeric(_s['単勝オッズ'], errors='coerce').values if '単勝オッズ' in _s.columns else np.full(len(_s), np.nan)
                     _mprob = 1.0 / np.clip(_odds, 1.0, None)  # NaN when odds unavailable
                     _cls   = pd.to_numeric(_s.get('クラス_rank', pd.Series([0]*len(_s))), errors='coerce').fillna(0).values
@@ -746,8 +746,8 @@ def predict_date(base_dir, target_date_num, card_df=None):
                 and _clogit_surf_saved in _placing_pkg.get('artifacts', {})):
             try:
                 _part = _placing_pkg['artifacts'][_clogit_surf_saved]
-                _ptop2 = np.maximum(_part['isotonic_top2'].predict(_clogit_raw_saved), 2e-3)  # 0.2%フロア
-                _ptop3 = np.maximum(_part['isotonic_top3'].predict(_clogit_raw_saved), 3e-3)  # 0.3%フロア
+                _ptop2 = _part['isotonic_top2'].predict(_clogit_raw_saved)
+                _ptop3 = _part['isotonic_top3'].predict(_clogit_raw_saved)
                 for _i, _oi in enumerate(_orig_index):
                     sub.loc[_oi, 'clogit_calib_top2'] = _ptop2[_i]
                     sub.loc[_oi, 'clogit_calib_top3'] = _ptop3[_i]
