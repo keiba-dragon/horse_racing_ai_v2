@@ -417,6 +417,8 @@ def predict_date(base_dir, target_date_num, card_df=None):
         if '日付_pq' in day.columns:
             day['間隔'] = day['日付_pq'].apply(_to_ts).apply(
                 lambda ts: round((target_ts - ts).days / 7) if pd.notna(ts) else np.nan)
+            # 104週超（≈2年）は同名別馬の誤マッチの可能性が高いため上限クリップ
+            day['間隔'] = pd.to_numeric(day['間隔'], errors='coerce').clip(upper=104)
             day = day.drop(columns=['日付_pq'])
         # card_dfの距離（数値）を "ダ1800" 形式に変換（後続のモデルキー計算と互換）
         surf_col = ('芝・ダ' if '芝・ダ' in day.columns
@@ -664,6 +666,9 @@ def predict_date(base_dir, target_date_num, card_df=None):
                     _s['今回_surface'] = pd.to_numeric(_surf_src.astype(str).str.strip().map({'芝': 1.0, 'ダ': 0.0, '障': 2.0}), errors='coerce')
                 if '今回_距離_m' not in _s.columns:
                     _s['今回_距離_m'] = _s['距離'].astype(str).str.extract(r'(\d+)')[0].astype(float) if '距離' in _s.columns else np.nan
+                # 間隔の異常値防止（同名別馬誤マッチで100週超が発生しうる）
+                if '間隔' in _s.columns:
+                    _s['間隔'] = pd.to_numeric(_s['間隔'], errors='coerce').clip(upper=104)
                 # 休養日数: 前走日付なければ 間隔(週) × 7 で近似（間隔=当日基準の週数）
                 if _s['休養日数'].isna().all() and '間隔' in _s.columns:
                     _s['休養日数'] = (pd.to_numeric(_s['間隔'], errors='coerce') * 7).clip(0, 365)
