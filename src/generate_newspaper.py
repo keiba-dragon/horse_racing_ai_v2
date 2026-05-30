@@ -86,6 +86,9 @@ def prepare(df: pd.DataFrame, odds_dict: dict) -> pd.DataFrame:
     col_dist = next((c for c in df.columns if c == '距離'), None)
 
     df = df.copy()
+    # 障害レースを除外（モデル対象外）
+    if col_surf:
+        df = df[~df[col_surf].astype(str).str.strip().str.startswith('障')].copy()
     df['_horse']   = df['馬名S'].astype(str).str.strip() if '馬名S' in df.columns else ''
     df['_umaban']  = pd.to_numeric(df.get('馬番', pd.Series(dtype=float)), errors='coerce')
     df['_surface'] = df[col_surf].astype(str).str.strip() if col_surf else ''
