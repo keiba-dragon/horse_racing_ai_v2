@@ -395,6 +395,9 @@ def predict_date(base_dir, target_date_num, card_df=None):
             '前走単勝オッズ':     '単勝オッズ',
             '前走PCI':            'PCI',
             '前走RPCI':           'RPCI',
+            '前走頭数':           '頭数',
+            '前走斤量':           '斤量',
+            '前走馬番':           '馬番',
             # 追加: 休養日数・距離変化 の計算に必要
             '前走日付':           '日付',
             '前走_距離_m':        '今回_距離_m',
@@ -403,6 +406,12 @@ def predict_date(base_dir, target_date_num, card_df=None):
         for _m_col, _b_col in _mae_base_map.items():
             if _m_col in df_latest.columns and _b_col in df_latest.columns:
                 df_latest[_m_col] = df_latest[_b_col]
+        # 前走着差タイム: 着差列(テキスト)をsecに変換してセット
+        if '前走着差タイム' in df_latest.columns and '着差' in df_latest.columns:
+            _chakusa_sec = (df_latest['着差'].astype(str)
+                            .str.replace('----', 'NaN')
+                            .pipe(pd.to_numeric, errors='coerce'))
+            df_latest['前走着差タイム'] = df_latest['前走着差タイム'].fillna(_chakusa_sec)
         day = card_df.drop_duplicates('馬名S').copy()
         _clogit_feats_fb = set()
         if _clogit_pkg is not None:

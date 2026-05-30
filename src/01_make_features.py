@@ -40,6 +40,23 @@ def calc_rolling_stats_combo(df, group_cols, dnum_col, window, min_periods, pref
     df_s.drop(columns=['_win_tmp', '_plc_tmp'], inplace=True)
     return df_s.sort_index()[[w_col, p_col]]
 
+def calc_expanding_stats(df, group_col, dnum_col, min_periods, prefix):
+    """Point-in-time 展開ウィンドウでの勝率/複勝率（shift(1)でリークなし）。
+    各行の時点より前のデータのみを使って統計を計算する。"""
+    df_s = df.sort_values(dnum_col).copy()
+    valid = df_s['着順_num'].notna() & (df_s['着順_num'] < 99)
+    df_s['_win_tmp'] = (df_s['着順_num'] == 1).astype(float).where(valid)
+    df_s['_plc_tmp'] = (df_s['着順_num'] <= 3).astype(float).where(valid)
+    grp = group_col if isinstance(group_col, list) else [group_col]
+    w_col = f'{prefix}_勝率'
+    p_col = f'{prefix}_複勝率'
+    df_s[w_col] = (df_s.groupby(grp)['_win_tmp']
+                   .transform(lambda x: x.shift(1).expanding(min_periods=min_periods).mean()))
+    df_s[p_col] = (df_s.groupby(grp)['_plc_tmp']
+                   .transform(lambda x: x.shift(1).expanding(min_periods=min_periods).mean()))
+    df_s.drop(columns=['_win_tmp', '_plc_tmp'], inplace=True)
+    return df_s.sort_index()[[w_col, p_col]]
+
 def clean_finish(series):
     """全角数字・異常着順を数値化（全角→半角変換対応）"""
     def _to_num(x):
@@ -107,28 +124,48 @@ def encode_baba(s):
     s = str(s).strip()
     return BABA_MAP.get(s, BABA_MAP.get(s[:1], np.nan))
 
-def deviation_score_group(series, group_keys, df):
-    """グループ内での偏差値を計算（速い=高いに変換済み）"""
+def deviation_score_group(series, group_keys, df, train_mask=None):
+    """グループ内での偏差値を計算（速い=高いに変換済み）
+    train_mask: Trueの行だけで平均・stdを計算し、全行に適用（リークなし）
+                Noneの場合は全行で計算（後方互換）
+    """
     result = pd.Series(np.nan, index=df.index)
-    for _, grp_idx in df.groupby(group_keys).groups.items():
-        vals = series.loc[grp_idx]
-        mean = vals.mean()
-        std  = vals.std()
-        if std > 0:
-            result.loc[grp_idx] = 50 + 10 * (mean - vals) / std  # タイムは小さい方が良いので反転
+    ref_df = df[train_mask] if train_mask is not None else df
+    stats = {}
+    for key, grp_idx in ref_df.groupby(group_keys).groups.items():
+        vals = series.loc[grp_idx].dropna()
+        if len(vals) >= 5:
+            stats[key] = (vals.mean(), vals.std())
+    for key, grp_idx in df.groupby(group_keys).groups.items():
+        if key in stats:
+            mean, std = stats[key]
+            if std > 0:
+                vals = series.loc[grp_idx]
+                result.loc[grp_idx] = 50 + 10 * (mean - vals) / std
     return result
 
 def main():
     import argparse
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument('--test2012', action='store_true', help='2012年ホールドアウトテスト用')
+    parser.add_argument('--out-file', default=None,
+                        help='出力CSVパスの上書き（実験用。未指定なら通常パス）')
+    parser.add_argument('--no-expanding-blood', action='store_true',
+                        help='血統・産地・馬距離統計を固定ウィンドウ(2013-2020)に戻す（デバッグ用）')
     args, _ = parser.parse_known_args()
 
     print("--- 競馬AI データ加工処理を開始します（v3 新データ対応）---")
 
     base_dir = os.environ.get('KEIBAI_BASE_DIR') or (os.path.dirname(os.path.dirname(os.path.abspath(__file__))) if 'src' in os.path.abspath(__file__) else '.')
     raw_dir  = os.path.join(base_dir, 'data', 'raw')
-    output_file = os.path.join(base_dir, 'data', 'processed', 'all_venues_features.csv')
+    output_file = args.out_file if args.out_file else os.path.join(base_dir, 'data', 'processed', 'all_venues_features.csv')
+    if args.out_file:
+        print(f'[実験モード] 出力先: {output_file}')
+    args.expanding_blood = not args.no_expanding_blood
+    if args.expanding_blood:
+        print('血統統計: point-in-time 展開ウィンドウ（デフォルト）')
+    else:
+        print('[デバッグ] 血統統計: 固定ウィンドウ(2013-2020)')
 
     # ── ファイルパスの定義 ────────────────────────────────
     master_dir   = os.path.join(raw_dir, 'master')
@@ -436,13 +473,16 @@ def main():
     df['月']  = (df['日付_num'] // 100 % 100).astype(float)
     df['季節'] = df['月'].map(lambda m: 2 if m in [3,4,5] else 3 if m in [6,7,8] else 4 if m in [9,10,11] else 1)
 
-    # 5.7. タイム指数（コース×馬場内での偏差値、速い=高い）【NEW】
+    # 5.7. タイム指数（コース×馬場内での偏差値、速い=高い）
+    # 学習期間（2013-2020）の統計のみで正規化 → val/OOS へのリークなし
     print("タイム指数を計算しています...")
     if '走破タイム_sec' in df.columns:
+        _train_mask = (df['日付_num'] >= 130101) & (df['日付_num'] <= 201231) & df['着順_num'].notna() & (df['着順_num'] < 99)
         df['タイム指数'] = deviation_score_group(
             df['走破タイム_sec'],
             ['今回_会場', '今回_surface', '今回_距離_m', '今回_馬場_num'],
-            df
+            df,
+            train_mask=_train_mask
         )
 
     # 上り3F指数（レース内での上がりの速さ、速い=高い）
@@ -461,9 +501,14 @@ def main():
         df['前走上り3F'] = pd.to_numeric(df['前走上り3F'], errors='coerce')
 
     # 6. 騎手統計（ローリング200走・グローバル統計は中間値のみ使用し最終列から除去）
+    # グローバル統計は2013-2020の訓練期間のみで計算（val/OOSへのリークを防ぐ）
+    df['_stat_mask'] = (
+        (df['日付_num'] >= 130101) & (df['日付_num'] <= 201231) &
+        df['着順_num'].notna() & (df['着順_num'] < 99)
+    )
     print("騎手・調教師・血統の成績をエンコードしています...")
     if '騎手' in df.columns and '着順_num' in df.columns:
-        jockey_stats = df.groupby('騎手')['着順_num'].agg(
+        jockey_stats = df[df['_stat_mask']].groupby('騎手')['着順_num'].agg(
             騎手_勝率   = lambda x: (x == 1).mean(),
             騎手_複勝率  = lambda x: (x <= 3).mean(),
             騎手_平均着順 = lambda x: x[x < 99].mean()
@@ -476,7 +521,7 @@ def main():
 
     # 6.5. 調教師統計（ローリング200走・グローバル除去）
     if '調教師' in df.columns and '着順_num' in df.columns:
-        trainer_stats = df.groupby('調教師')['着順_num'].agg(
+        trainer_stats = df[df['_stat_mask']].groupby('調教師')['着順_num'].agg(
             調教師_勝率  = lambda x: (x == 1).mean(),
             調教師_複勝率 = lambda x: (x <= 3).mean(),
         ).reset_index()
@@ -488,7 +533,7 @@ def main():
 
     # 6.7. 騎手×コース種別（ローリング100走・グローバル除去）
     if '騎手' in df.columns and '今回_コース種別' in df.columns:
-        jc_stats = df.groupby(['騎手', '今回_コース種別'])['着順_num'].agg(
+        jc_stats = df[df['_stat_mask']].groupby(['騎手', '今回_コース種別'])['着順_num'].agg(
             騎手コース_勝率  = lambda x: (x == 1).mean() if len(x) >= 10 else np.nan,
             騎手コース_複勝率 = lambda x: (x <= 3).mean() if len(x) >= 10 else np.nan,
         ).reset_index()
@@ -502,7 +547,7 @@ def main():
 
     # 6.8. 調教師×コース別統計（ローリング100走・グローバル除去）
     if '調教師' in df.columns and '今回_コース種別' in df.columns and '着順_num' in df.columns:
-        tc_stats = df.groupby(['調教師', '今回_コース種別'])['着順_num'].agg(
+        tc_stats = df[df['_stat_mask']].groupby(['調教師', '今回_コース種別'])['着順_num'].agg(
             調教師コース_勝率  = lambda x: (x == 1).mean() if len(x) >= 10 else np.nan,
             調教師コース_複勝率 = lambda x: (x <= 3).mean() if len(x) >= 10 else np.nan,
         ).reset_index()
@@ -516,7 +561,7 @@ def main():
 
     # 6.85. 騎手×馬場別統計（ローリング100走・グローバル除去）
     if '騎手' in df.columns and '今回_馬場_num' in df.columns and '着順_num' in df.columns:
-        jb_stats = df.groupby(['騎手', '今回_馬場_num'])['着順_num'].agg(
+        jb_stats = df[df['_stat_mask']].groupby(['騎手', '今回_馬場_num'])['着順_num'].agg(
             騎手馬場_勝率  = lambda x: (x == 1).mean() if len(x) >= 10 else np.nan,
             騎手馬場_複勝率 = lambda x: (x <= 3).mean() if len(x) >= 10 else np.nan,
         ).reset_index()
@@ -530,7 +575,7 @@ def main():
 
     # 6.87. 騎手×会場別統計（ローリング100走・グローバル除去）
     if '騎手' in df.columns and '会場' in df.columns and '着順_num' in df.columns:
-        jv_stats = df.groupby(['騎手', '会場'])['着順_num'].agg(
+        jv_stats = df[df['_stat_mask']].groupby(['騎手', '会場'])['着順_num'].agg(
             騎手会場_勝率  = lambda x: (x == 1).mean() if len(x) >= 10 else np.nan,
             騎手会場_複勝率 = lambda x: (x <= 3).mean() if len(x) >= 10 else np.nan,
         ).reset_index()
@@ -553,7 +598,7 @@ def main():
                 else: return '長'
             except: return None
         df['_dist_band'] = df['距離'].apply(_dist_band)
-        jd_stats = df.groupby(['騎手', '_dist_band'])['着順_num'].agg(
+        jd_stats = df[df['_stat_mask']].groupby(['騎手', '_dist_band'])['着順_num'].agg(
             騎手距離_勝率  = lambda x: (x == 1).mean() if len(x) >= 10 else np.nan,
             騎手距離_複勝率 = lambda x: (x <= 3).mean() if len(x) >= 10 else np.nan,
         ).reset_index()
@@ -566,40 +611,65 @@ def main():
         df.drop(columns=['_dist_band', '騎手距離_勝率', '騎手距離_複勝率'], inplace=True)
 
     # 6.9. 血統統計
-    overall_win   = (df['着順_num'] == 1).mean()
-    overall_place = (df['着順_num'] <= 3).mean()
-    for stallion_col, prefix in [('種牡馬', '種牡馬'), ('母父馬', '母父馬')]:
-        if stallion_col in df.columns:
-            stats = df.groupby(stallion_col)['着順_num'].agg(
-                **{f'{prefix}_勝率':  lambda x: (x == 1).mean() if len(x) >= 30 else np.nan},
-                **{f'{prefix}_複勝率': lambda x: (x <= 3).mean() if len(x) >= 30 else np.nan},
-            ).reset_index()
-            df = df.merge(stats, on=stallion_col, how='left')
-            df[f'{prefix}_勝率']  = df[f'{prefix}_勝率'].fillna(overall_win)
-            df[f'{prefix}_複勝率'] = df[f'{prefix}_複勝率'].fillna(overall_place)
+    _sm = df['_stat_mask']
+    overall_win   = (df.loc[_sm, '着順_num'] == 1).mean()
+    overall_place = (df.loc[_sm, '着順_num'] <= 3).mean()
+    if args.expanding_blood:
+        # Point-in-time: 各レース日より前のデータのみで集計（リークなし）
+        for stallion_col, prefix in [('種牡馬', '種牡馬'), ('母父馬', '母父馬')]:
+            if stallion_col in df.columns:
+                exp = calc_expanding_stats(df, stallion_col, '日付_num', 30, prefix)
+                df[f'{prefix}_勝率']  = exp[f'{prefix}_勝率'].fillna(overall_win)
+                df[f'{prefix}_複勝率'] = exp[f'{prefix}_複勝率'].fillna(overall_place)
 
-    # 6.93. 種牡馬×芝ダ別統計
-    if '種牡馬' in df.columns and '今回_surface' in df.columns:
-        for surf_val, surf_name in [(0, '芝'), (1, 'ダ')]:
-            sub = df[df['今回_surface'] == surf_val]
-            stats = sub.groupby('種牡馬')['着順_num'].agg(
-                **{f'種牡馬_{surf_name}_勝率':  lambda x: (x == 1).mean() if len(x) >= 20 else np.nan},
-                **{f'種牡馬_{surf_name}_複勝率': lambda x: (x <= 3).mean() if len(x) >= 20 else np.nan},
-            ).reset_index()
-            df = df.merge(stats, on='種牡馬', how='left')
-            df[f'種牡馬_{surf_name}_勝率']  = df[f'種牡馬_{surf_name}_勝率'].fillna(overall_win)
-            df[f'種牡馬_{surf_name}_複勝率'] = df[f'種牡馬_{surf_name}_複勝率'].fillna(overall_place)
+        # 6.93. 種牡馬×芝ダ別統計
+        if '種牡馬' in df.columns and '今回_surface' in df.columns:
+            for surf_val, surf_name in [(0, '芝'), (1, 'ダ')]:
+                exp = calc_expanding_stats(df[df['今回_surface'] == surf_val].copy(),
+                                           '種牡馬', '日付_num', 20, f'種牡馬_{surf_name}')
+                df[f'種牡馬_{surf_name}_勝率']  = exp[f'種牡馬_{surf_name}_勝率'].reindex(df.index).fillna(overall_win)
+                df[f'種牡馬_{surf_name}_複勝率'] = exp[f'種牡馬_{surf_name}_複勝率'].reindex(df.index).fillna(overall_place)
 
-    # 6.95. 産地・生産者統計（min_count=50）
-    for grp_col, prefix, min_cnt in [('産地', '産地', 50), ('生産者', '生産者', 30)]:
-        if grp_col in df.columns:
-            stats = df.groupby(grp_col)['着順_num'].agg(
-                **{f'{prefix}_勝率':  lambda x: (x == 1).mean() if len(x) >= min_cnt else np.nan},
-                **{f'{prefix}_複勝率': lambda x: (x <= 3).mean() if len(x) >= min_cnt else np.nan},
-            ).reset_index()
-            df = df.merge(stats, on=grp_col, how='left')
-            df[f'{prefix}_勝率']  = df[f'{prefix}_勝率'].fillna(overall_win)
-            df[f'{prefix}_複勝率'] = df[f'{prefix}_複勝率'].fillna(overall_place)
+        # 6.95. 産地・生産者統計
+        for grp_col, prefix, min_cnt in [('産地', '産地', 50), ('生産者', '生産者', 30)]:
+            if grp_col in df.columns:
+                exp = calc_expanding_stats(df, grp_col, '日付_num', min_cnt, prefix)
+                df[f'{prefix}_勝率']  = exp[f'{prefix}_勝率'].fillna(overall_win)
+                df[f'{prefix}_複勝率'] = exp[f'{prefix}_複勝率'].fillna(overall_place)
+    else:
+        # 固定ウィンドウ（2013-2020 訓練期間のみ）
+        for stallion_col, prefix in [('種牡馬', '種牡馬'), ('母父馬', '母父馬')]:
+            if stallion_col in df.columns:
+                stats = df[_sm].groupby(stallion_col)['着順_num'].agg(
+                    **{f'{prefix}_勝率':  lambda x: (x == 1).mean() if len(x) >= 30 else np.nan},
+                    **{f'{prefix}_複勝率': lambda x: (x <= 3).mean() if len(x) >= 30 else np.nan},
+                ).reset_index()
+                df = df.merge(stats, on=stallion_col, how='left')
+                df[f'{prefix}_勝率']  = df[f'{prefix}_勝率'].fillna(overall_win)
+                df[f'{prefix}_複勝率'] = df[f'{prefix}_複勝率'].fillna(overall_place)
+
+        # 6.93. 種牡馬×芝ダ別統計
+        if '種牡馬' in df.columns and '今回_surface' in df.columns:
+            for surf_val, surf_name in [(0, '芝'), (1, 'ダ')]:
+                sub = df[_sm & (df['今回_surface'] == surf_val)]
+                stats = sub.groupby('種牡馬')['着順_num'].agg(
+                    **{f'種牡馬_{surf_name}_勝率':  lambda x: (x == 1).mean() if len(x) >= 20 else np.nan},
+                    **{f'種牡馬_{surf_name}_複勝率': lambda x: (x <= 3).mean() if len(x) >= 20 else np.nan},
+                ).reset_index()
+                df = df.merge(stats, on='種牡馬', how='left')
+                df[f'種牡馬_{surf_name}_勝率']  = df[f'種牡馬_{surf_name}_勝率'].fillna(overall_win)
+                df[f'種牡馬_{surf_name}_複勝率'] = df[f'種牡馬_{surf_name}_複勝率'].fillna(overall_place)
+
+        # 6.95. 産地・生産者統計（min_count=50）
+        for grp_col, prefix, min_cnt in [('産地', '産地', 50), ('生産者', '生産者', 30)]:
+            if grp_col in df.columns:
+                stats = df[_sm].groupby(grp_col)['着順_num'].agg(
+                    **{f'{prefix}_勝率':  lambda x: (x == 1).mean() if len(x) >= min_cnt else np.nan},
+                    **{f'{prefix}_複勝率': lambda x: (x <= 3).mean() if len(x) >= min_cnt else np.nan},
+                ).reset_index()
+                df = df.merge(stats, on=grp_col, how='left')
+                df[f'{prefix}_勝率']  = df[f'{prefix}_勝率'].fillna(overall_win)
+                df[f'{prefix}_複勝率'] = df[f'{prefix}_複勝率'].fillna(overall_place)
 
     # 6.97. 個馬×コース適性（馬名S基準）
     if '馬名S' in df.columns and '着順_num' in df.columns:
@@ -623,13 +693,19 @@ def main():
                 except Exception:
                     return None
             df['_hband'] = df['距離'].apply(_hband)
-            hd_stats = df.groupby(['馬名S', '_hband'])['着順_num'].agg(
-                **{'馬距離_勝率':  lambda x: (x == 1).mean() if len(x) >= 3 else np.nan},
-                **{'馬距離_複勝率': lambda x: (x <= 3).mean() if len(x) >= 3 else np.nan},
-            ).reset_index()
-            df = df.merge(hd_stats, on=['馬名S', '_hband'], how='left')
-            df['馬距離_勝率']  = df['馬距離_勝率'].fillna(df['馬_r20_勝率'])
-            df['馬距離_複勝率'] = df['馬距離_複勝率'].fillna(df['馬_r20_複勝率'])
+            if args.expanding_blood:
+                # Point-in-time: 各レース日より前のデータのみで集計
+                exp_hd = calc_expanding_stats(df, ['馬名S', '_hband'], '日付_num', 3, '馬距離')
+                df['馬距離_勝率']  = exp_hd['馬距離_勝率'].fillna(df['馬_r20_勝率'])
+                df['馬距離_複勝率'] = exp_hd['馬距離_複勝率'].fillna(df['馬_r20_複勝率'])
+            else:
+                hd_stats = df[df['_stat_mask']].groupby(['馬名S', '_hband'])['着順_num'].agg(
+                    **{'馬距離_勝率':  lambda x: (x == 1).mean() if len(x) >= 3 else np.nan},
+                    **{'馬距離_複勝率': lambda x: (x <= 3).mean() if len(x) >= 3 else np.nan},
+                ).reset_index()
+                df = df.merge(hd_stats, on=['馬名S', '_hband'], how='left')
+                df['馬距離_勝率']  = df['馬距離_勝率'].fillna(df['馬_r20_勝率'])
+                df['馬距離_複勝率'] = df['馬距離_複勝率'].fillna(df['馬_r20_複勝率'])
             df.drop(columns=['_hband'], inplace=True)
 
     # 7. クラスランク
@@ -687,6 +763,43 @@ def main():
             shift_data[f'{i}走前_{col}'] = df.groupby('馬名S')[col].shift(i)
     df = pd.concat([df, pd.DataFrame(shift_data, index=df.index)], axis=1)
 
+    # 8.5. 種類1（JRA-VAN前走列）をshift列で補完
+    # master_kihon.csv 未更新期間（260302以降）のNaNを自動補完 → 完全自動化
+    _fillna_map = {
+        '前走着順_num':      '1走前_着順_num',
+        '前走走破タイム_sec': '1走前_走破タイム_sec',
+        '前走上り3F':        '1走前_上り3F',
+        '前走馬体重':        '1走前_馬体重',
+        '前走馬体重増減':    '1走前_馬体重増減',
+        '前走斤量_sec':      '1走前_斤量',
+        '前走斤量':          '1走前_斤量',
+        '前走頭数':          '1走前_頭数',
+        '前走馬番':          '1走前_馬番',
+        '前走脚質_num':      '1走前_脚質_num',
+        '前走_4角位置':      '1走前_4角',
+        '前走単勝オッズ':    '1走前_単勝オッズ',
+    }
+    for dst, src in _fillna_map.items():
+        if dst in df.columns and src in df.columns:
+            df[dst] = df[dst].fillna(df[src])
+    # 前走着差タイム: JRA-VAN未収録の場合、着差列をshift(1)して補完
+    # (着差タイム_クラス補正の上流なのでここで補完する)
+    if '前走着差タイム' in df.columns and '着差' in df.columns:
+        df['_着差_sec_tmp'] = clean_time_diff(df['着差'])
+        _1走前_着差 = df.groupby('馬名S', sort=False)['_着差_sec_tmp'].shift(1)
+        df['前走着差タイム'] = df['前走着差タイム'].fillna(_1走前_着差)
+        df.drop(columns=['_着差_sec_tmp'], inplace=True)
+    # 前走_surface / 前走_距離_m は 1走前_距離 文字列から導出
+    if '1走前_距離' in df.columns:
+        _dist1 = df['1走前_距離']
+        if '前走_surface' in df.columns:
+            mask = df['前走_surface'].isna() & _dist1.notna()
+            df.loc[mask, '前走_surface'] = _dist1[mask].map(extract_surface)
+        if '前走_距離_m' in df.columns:
+            mask = df['前走_距離_m'].isna() & _dist1.notna()
+            df.loc[mask, '前走_距離_m'] = _dist1[mask].map(extract_dist_m)
+    print("種類1前走列 → shift列で補完完了")
+
     # 海外行を除去（予測・訓練対象でないため）
     if _overseas_mask.any():
         df = df[~_overseas_mask].reset_index(drop=True)
@@ -743,7 +856,7 @@ def main():
     if finish_cols_5 and class_cols_5 and len(finish_cols_5) == len(class_cols_5):
         scores = []
         for fc, cc in zip(finish_cols_5, class_cols_5):
-            finish = df[fc].replace(99, np.nan)
+            finish = df[fc].replace(99, np.nan).replace(0, np.nan)
             cls    = df[cc].fillna(2)
             scores.append(cls / finish)
         df['近5走_クラス補正スコア'] = pd.concat(scores, axis=1).mean(axis=1)
@@ -845,9 +958,9 @@ def main():
         else:
             jt_style = None
         if jt_style is not None:
-            tmp = df[['騎手', '着順_num']].copy()
+            tmp = df[['騎手', '着順_num', '_stat_mask']].copy()
             tmp['_style'] = jt_style.values
-            jt_stats = tmp.groupby(['騎手', '_style'])['着順_num'].agg(
+            jt_stats = tmp[tmp['_stat_mask']].groupby(['騎手', '_style'])['着順_num'].agg(
                 騎手脚質_勝率  = lambda x: (x == 1).mean() if len(x) >= 10 else np.nan,
                 騎手脚質_複勝率 = lambda x: (x <= 3).mean() if len(x) >= 10 else np.nan,
             ).reset_index()
@@ -865,7 +978,7 @@ def main():
     # 過去レースの入着馬（3着以内）の4角位置の平均 = そのコースで有利な位置取り
     if '4角' in df.columns and '着順_num' in df.columns and '今回_距離_m' in df.columns:
         course_style = (
-            df[df['着順_num'] <= 3]
+            df[df['_stat_mask'] & (df['着順_num'] <= 3)]
             .groupby(['今回_会場', '今回_surface', '今回_距離_m'])['4角']
             .mean()
             .reset_index()
@@ -1128,7 +1241,7 @@ def main():
         df['相手レベル_実力差']   = grp.transform('std')
 
     # 13. 不要列を削除（高欠損・計算不可）
-    drop_cols = ['多頭出し', '市場取引価格_万', '近5走_平均追い上げ度']
+    drop_cols = ['多頭出し', '市場取引価格_万', '近5走_平均追い上げ度', '_stat_mask']
     drop_cols += [f'{i}走前_2角' for i in range(1, 11)]
     df.drop(columns=[c for c in drop_cols if c in df.columns], inplace=True)
 

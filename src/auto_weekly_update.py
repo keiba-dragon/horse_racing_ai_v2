@@ -30,6 +30,8 @@ PARQUET_PATH     = os.path.join(BASE_DIR, 'data', 'processed', 'all_venues_featu
 MAKE_FEATURES    = os.path.join(BASE_DIR, 'src', '01_make_features.py')
 FETCH_SCRIPT     = os.path.join(BASE_DIR, 'src', 'fetch.py')
 FETCH_OVERSEAS   = os.path.join(BASE_DIR, 'src', 'fetch_overseas.py')
+TRAIN_CLOGIT     = os.path.join(BASE_DIR, 'src', 'save_conditional_logit.py')
+TRAIN_FINAL      = os.path.join(BASE_DIR, 'src', 'save_final_model.py')
 
 
 def sec_to_jravan(t):
@@ -345,7 +347,32 @@ def rebuild_parquet():
         [sys.executable, MAKE_FEATURES],
         cwd=BASE_DIR
     )
-    return r.returncode == 0
+    if r.returncode != 0:
+        return False
+    # CSV → parquet 変換
+    csv_path = os.path.join(BASE_DIR, 'data', 'processed', 'all_venues_features.csv')
+    if os.path.exists(csv_path):
+        import pandas as pd
+        print('  CSV → parquet 変換中...')
+        pd.read_csv(csv_path, low_memory=False).to_parquet(PARQUET_PATH, index=False)
+        print('  parquet 更新完了')
+    return True
+
+
+def retrain_model():
+    """clogit再学習 → final_model.pkl 生成（完全自動化パイプライン）"""
+    print('  save_conditional_logit.py を実行中（30〜60分）...')
+    r = subprocess.run([sys.executable, TRAIN_CLOGIT], cwd=BASE_DIR)
+    if r.returncode != 0:
+        print('  ERROR: clogit学習失敗')
+        return False
+    print('  save_final_model.py を実行中...')
+    r = subprocess.run([sys.executable, TRAIN_FINAL], cwd=BASE_DIR)
+    if r.returncode != 0:
+        print('  ERROR: final_model生成失敗')
+        return False
+    print('  モデル更新完了')
+    return True
 
 
 def delete_parquet():
@@ -358,6 +385,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--no-fetch',   action='store_true', help='fetchをスキップ（変換・再生成のみ）')
     ap.add_argument('--no-rebuild', action='store_true', help='parquet再生成をスキップ（削除のみ）')
+    ap.add_argument('--no-train',   action='store_true', help='モデル再学習をスキップ')
     args = ap.parse_args()
 
     print('=' * 50)
@@ -387,16 +415,25 @@ def main():
 
     # Step 3: parquet 再生成
     if n > 0:
-        print('\n[4/4] parquet 再生成...')
+        print('\n[3/5] parquet 再生成...')
         if args.no_rebuild:
             delete_parquet()
         else:
             if not rebuild_parquet():
                 print('  WARNING: 01_make_features.py が失敗しました。手動で確認してください。')
                 sys.exit(1)
-        print('\n完了。')
+
+        # Step 4: モデル再学習
+        if not args.no_train:
+            print('\n[4/5] モデル再学習...')
+            if not retrain_model():
+                print('  WARNING: モデル再学習失敗。前回モデルのまま継続。')
+        else:
+            print('\n[4/5] モデル再学習 スキップ')
+
+        print('\n[5/5] 完了。')
     else:
-        print('\n更新データなし。parquetはそのまま。')
+        print('\n更新データなし。parquet・モデルはそのまま。')
 
 
 if __name__ == '__main__':

@@ -17,7 +17,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import save_lambdarank_pace as _slp
 from save_lambdarank_pace import add_pace_features, EXCLUDE, ODDS_REMOVE
 from save_conditional_logit import (
-    add_new_features, segment_softmax, prepare
+    add_new_features, segment_softmax, prepare,
+    apply_race_impute, RACE_IMPUTE_COLS
 )
 
 BASE_DIR  = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -51,8 +52,28 @@ def predict_surface(df_s, art):
 
 
 def main():
+    import argparse
+    ap = argparse.ArgumentParser(add_help=False)
+    ap.add_argument('--out-dir', default=MODEL_DIR,
+                    help='モデル保存先（デフォルト: models/）')
+    ap.add_argument('--clogit-dir', default=None,
+                    help='conditional_logit.pkl の読み込み元（デフォルト: --out-dir と同じ）')
+    ap.add_argument('--data-file', default=None,
+                    help='入力parquetパスの上書き（実験用。未指定なら通常パス）')
+    ap.add_argument('--race-impute-alpha', type=float, default=None,
+                    help='レース内平均+オッズ調整 NaN補完のα（clogitと同じ値を指定）')
+    args, _ = ap.parse_known_args()
+    out_dir    = args.out_dir
+    clogit_dir = args.clogit_dir or out_dir
+    data_file  = args.data_file or DATA_FILE
+    os.makedirs(out_dir, exist_ok=True)
+    if out_dir != MODEL_DIR:
+        print(f'[実験モード] 保存先: {out_dir}')
+    if data_file != DATA_FILE:
+        print(f'[実験モード] データ: {data_file}')
+
     print('モデル読み込み中...')
-    clogit_path = os.path.join(MODEL_DIR, 'conditional_logit.pkl')
+    clogit_path = os.path.join(clogit_dir, 'conditional_logit.pkl')
     if not os.path.exists(clogit_path):
         clogit_path = os.path.join(MODEL_DIR, 'surface_clogit.pkl')
     print(f'モデル: {os.path.basename(clogit_path)}')
@@ -72,20 +93,23 @@ def main():
         artifacts = {}
 
         print('データ読み込み・前処理中...')
-        df = pd.read_parquet(DATA_FILE)
+        df = pd.read_parquet(data_file)
         df['日付_num'] = pd.to_numeric(df['日付'], errors='coerce')
         df['着順_num'] = pd.to_numeric(df['着順_num'], errors='coerce')
         df['クラス_rank'] = pd.to_numeric(df['クラス_rank'], errors='coerce')
         df = df.dropna(subset=['日付_num', '着順_num'])
         df = df[df['着順_num'] < 99]
+        df = df[df['開催'].notna()].copy()
         df = make_race_id(df)
         df = add_pace_features(df)
         df = add_new_features(df)
+        if args.race_impute_alpha is not None:
+            df = apply_race_impute(df, alpha=args.race_impute_alpha)
         df['surface'] = get_surface(df)
         df = df[df['surface'].isin(['芝', 'ダ'])].copy()
         df['is_maiden'] = (df['クラス_rank'] == 2)
 
-        val = df[(df['日付_num'] >= 210101) & (df['日付_num'] <= 221231)]
+        val = df[(df['日付_num'] >= 220101) & (df['日付_num'] <= 221231)]
         for surf in ['芝', 'ダ']:
             val_s = val[val['surface'] == surf].sort_values('race_id').reset_index(drop=True)
             raw_val = predict_surface(val_s, base_art)
@@ -99,15 +123,18 @@ def main():
 
     print('データ読み込み・前処理中...' if 'artifacts' in pkg else 'OOS評価データ準備中...')
     if 'df' not in dir():
-        df = pd.read_parquet(DATA_FILE)
+        df = pd.read_parquet(data_file)
         df['日付_num'] = pd.to_numeric(df['日付'], errors='coerce')
         df['着順_num'] = pd.to_numeric(df['着順_num'], errors='coerce')
         df['クラス_rank'] = pd.to_numeric(df['クラス_rank'], errors='coerce')
         df = df.dropna(subset=['日付_num', '着順_num'])
         df = df[df['着順_num'] < 99]
+        df = df[df['開催'].notna()].copy()
         df = make_race_id(df)
         df = add_pace_features(df)
         df = add_new_features(df)
+        if args.race_impute_alpha is not None:
+            df = apply_race_impute(df, alpha=args.race_impute_alpha)
         df['surface'] = get_surface(df)
         df = df[df['surface'].isin(['芝', 'ダ'])].copy()
         df['is_maiden'] = (df['クラス_rank'] == 2)
@@ -203,7 +230,7 @@ def main():
         'val_roi_confirmed': -0.1209,
         'note': 'surface_clogit v1 beta + class-specific hybrid ranking',
     }
-    out_pkl = os.path.join(MODEL_DIR, 'final_model.pkl')
+    out_pkl = os.path.join(out_dir, 'final_model.pkl')
     with open(out_pkl, 'wb') as f:
         pickle.dump(final_pkg, f)
     print(f'\n保存完了: {out_pkl}')

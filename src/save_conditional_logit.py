@@ -28,6 +28,60 @@ NEW_FEATURE_COLS = [
     # '近走最良着順', '連続top3', '前走相対着順', '近5走_相対着順平均',
 ]
 
+# レース内平均+オッズ調整で補完する列と方向 (+1=高い方が良い, -1=低い方が良い, 0=調整なし)
+RACE_IMPUTE_COLS = {
+    '近5走_タイム指数平均':      +1,
+    '近5走_タイム指数_max':      +1,
+    '近5走_タイム指数_min':      +1,
+    '近5走_タイム指数_range':     0,
+    '近5走_タイム指数_std':       0,
+    '近5走_平均着順':            -1,
+    '近5走_複勝率':              +1,
+    '近5走_クラス調整_平均着順': -1,
+    '近5走_クラス補正スコア':    +1,
+    '近3走_勝率':                +1,
+    '近3走_平均着順':            -1,
+    '近3走_複勝率':              +1,
+    '近10走_勝率':               +1,
+    '近10走_平均着順':           -1,
+    '近10走_複勝率':             +1,
+    '1走前_タイム指数':          +1,
+    '1走前_着順_num':            -1,
+    '近走着順トレンド':           0,
+}
+
+
+def apply_race_impute(df, alpha=0.0):
+    """
+    NaN を同レース内の非NaN馬の平均で埋め、alpha>0 のときオッズ相対差で調整する。
+    非NaN 値は変更しない。race_id 列が必要。
+    """
+    df = df.copy()
+    mp = 1.0 / np.clip(pd.to_numeric(df['単勝オッズ'], errors='coerce').values, 1.0, None)
+    df['_mprob'] = mp
+
+    for col, sign in RACE_IMPUTE_COLS.items():
+        if col not in df.columns:
+            continue
+        nan_mask = df[col].isna()
+        if nan_mask.sum() == 0:
+            continue
+
+        race_mean = df.groupby('race_id')[col].transform('mean')
+        imputed   = race_mean.copy()
+
+        if alpha > 0 and sign != 0:
+            race_mean_mp = df.groupby('race_id')['_mprob'].transform('mean')
+            race_std_mp  = df.groupby('race_id')['_mprob'].transform('std').fillna(0.01).clip(lower=0.01)
+            odds_z       = (df['_mprob'] - race_mean_mp) / race_std_mp
+            race_std_col = df.groupby('race_id')[col].transform('std').fillna(df[col].std())
+            imputed      = imputed + sign * alpha * odds_z * race_std_col
+
+        df.loc[nan_mask, col] = imputed[nan_mask]
+
+    df = df.drop(columns=['_mprob'])
+    return df
+
 
 def _col(df, name, default=np.nan):
     """列を数値で取得。なければdefault埋め。"""
@@ -89,8 +143,6 @@ def add_new_features(df: pd.DataFrame) -> pd.DataFrame:
 BASE_DIR   = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_FILE  = os.path.join(BASE_DIR, 'data', 'processed', 'all_venues_features.parquet')
 MODEL_DIR  = os.path.join(BASE_DIR, 'models')
-MODEL_PATH = os.path.join(MODEL_DIR, 'conditional_logit.pkl')
-INFO_PATH  = os.path.join(MODEL_DIR, 'conditional_logit_info.json')
 
 ALPHA    = 1.0    # L2正則化
 TOP_K    = 35     # 2-way交互作用の対象特徴量数（50はval_loss悪化）
@@ -199,8 +251,27 @@ def roi_table(d, label):
 
 
 def main():
-    print(f'データ読み込み: {DATA_FILE}')
-    df = pd.read_parquet(DATA_FILE)
+    import argparse
+    ap = argparse.ArgumentParser(add_help=False)
+    ap.add_argument('--out-dir', default=MODEL_DIR,
+                    help='モデル保存先ディレクトリ（デフォルト: models/）')
+    ap.add_argument('--data-file', default=None,
+                    help='入力parquetパスの上書き（実験用。未指定なら通常パス）')
+    ap.add_argument('--race-impute-alpha', type=float, default=None,
+                    help='レース内平均+オッズ調整 NaN補完のα（未指定=補完なし）')
+    args, _ = ap.parse_known_args()
+    out_dir    = args.out_dir
+    data_file  = args.data_file or DATA_FILE
+    model_path = os.path.join(out_dir, 'conditional_logit.pkl')
+    info_path  = os.path.join(out_dir, 'conditional_logit_info.json')
+    os.makedirs(out_dir, exist_ok=True)
+    if out_dir != MODEL_DIR:
+        print(f'[実験モード] 保存先: {out_dir}')
+    if args.race_impute_alpha is not None:
+        print(f'[実験モード] NaN補完: レース内平均+オッズ調整 α={args.race_impute_alpha}')
+
+    print(f'データ読み込み: {data_file}')
+    df = pd.read_parquet(data_file)
     df['日付_num'] = pd.to_numeric(df['日付'], errors='coerce')
     df['着順_num'] = pd.to_numeric(df['着順_num'], errors='coerce')
     df = df.dropna(subset=['日付_num', '着順_num'])
@@ -208,6 +279,11 @@ def main():
     df['race_id'] = (df['日付_num'].astype(int).astype(str) + '_' +
                      df['開催'].astype(str).str.strip() + '_' +
                      df['Ｒ'].astype(str).str.strip())
+    # 開催列がない行（results_supplement由来）は race_id が 'nan' になるため除外
+    before = len(df)
+    df = df[df['開催'].notna()].copy()
+    if len(df) < before:
+        print(f'  開催NaN行を除外: {before - len(df):,}行')
 
     print('展開予想特徴量を追加中...')
     df = add_pace_features(df)
@@ -216,6 +292,11 @@ def main():
     df = add_new_features(df)
     added = [c for c in NEW_FEATURE_COLS if c in df.columns]
     print(f'  追加: {added}')
+
+    if args.race_impute_alpha is not None:
+        df = apply_race_impute(df, alpha=args.race_impute_alpha)
+        n_filled = sum(df[c].isna().sum() for c in RACE_IMPUTE_COLS if c in df.columns)
+        print(f'レース内平均NaN補完適用 (α={args.race_impute_alpha}) → 残NaN: {n_filled:,}')
 
     num_cols  = df.select_dtypes(include='number').columns.tolist()
     feat_cols = [c for c in num_cols if c not in EXCLUDE and c not in ODDS_REMOVE]
@@ -248,8 +329,8 @@ def main():
         top_idx3 = None
         print('lambdarank_pace モデルが見つからない → 交互作用なし')
 
-    trn = df[(df['日付_num'] >= 130101) & (df['日付_num'] <  210101)]
-    val = df[(df['日付_num'] >= 210101) & (df['日付_num'] <= 221231)]
+    trn = df[(df['日付_num'] >= 130101) & (df['日付_num'] <  220101)]
+    val = df[(df['日付_num'] >= 220101) & (df['日付_num'] <= 221231)]
     print(f'学習: {len(trn):,}行 / valid: {len(val):,}行')
 
     X_tr, y_tr, gs_tr, n_tr, nr_tr, scaler, poly2, iscaler2, poly3, iscaler3 = prepare(
@@ -370,7 +451,7 @@ def main():
         'coef':          beta,
         'feat_cols':     feat_cols,
     }
-    with open(MODEL_PATH, 'wb') as f:
+    with open(model_path, 'wb') as f:
         pickle.dump(artifact, f)
 
     # 係数絶対値でtop20（feature名は省略でインデックスのみ）
@@ -392,9 +473,9 @@ def main():
         'top_features': top_feats_info,
         'train_range':  [130101, 201231],
     }
-    with open(INFO_PATH, 'w', encoding='utf-8') as f:
+    with open(info_path, 'w', encoding='utf-8') as f:
         json.dump(info, f, ensure_ascii=False, indent=2)
-    print(f'\n保存完了: {MODEL_PATH}  (特徴量次元={X_tr.shape[1]})')
+    print(f'\n保存完了: {model_path}  (特徴量次元={X_tr.shape[1]})')
 
 
 if __name__ == '__main__':
