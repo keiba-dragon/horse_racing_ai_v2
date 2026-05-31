@@ -412,6 +412,71 @@ def predict_date(base_dir, target_date_num, card_df=None):
                             .str.replace('----', 'NaN')
                             .pipe(pd.to_numeric, errors='coerce'))
             df_latest['前走着差タイム'] = df_latest['前走着差タイム'].fillna(_chakusa_sec)
+
+        # ── 近N走集計特徴量をN走前シフト後に再計算 ─────────────────────────────
+        # parquetの近N走値は「その行のレース時点での直前N走」。fallbackでは最新行が
+        # 「前走」になるため、N走前シフト後の着順_num列から集計を再計算する。
+        _fn_map = {
+            3:  [f'{n}走前_着順_num' for n in range(1, 4)],
+            5:  [f'{n}走前_着順_num' for n in range(1, 6)],
+            10: [f'{n}走前_着順_num' for n in range(1, 11)],
+        }
+        for _N, _fcols in _fn_map.items():
+            _av = [c for c in _fcols if c in df_latest.columns]
+            if not _av:
+                continue
+            _mat = df_latest[_av].apply(pd.to_numeric, errors='coerce').replace(99, np.nan)
+            _cnt = _mat.notna().sum(axis=1).replace(0, np.nan)
+            if f'近{_N}走_平均着順' in df_latest.columns:
+                df_latest[f'近{_N}走_平均着順'] = _mat.mean(axis=1)
+            if f'近{_N}走_複勝率' in df_latest.columns:
+                df_latest[f'近{_N}走_複勝率'] = (_mat <= 3).sum(axis=1) / _cnt
+            if f'近{_N}走_勝率' in df_latest.columns:
+                df_latest[f'近{_N}走_勝率'] = (_mat == 1).sum(axis=1) / _cnt
+        # 近5走_タイム指数平均・std・max・min・range
+        _ti_cols = [f'{n}走前_タイム指数' for n in range(1, 6)]
+        _ti_av = [c for c in _ti_cols if c in df_latest.columns]
+        if _ti_av:
+            _ti_mat = df_latest[_ti_av].apply(pd.to_numeric, errors='coerce')
+            if '近5走_タイム指数平均' in df_latest.columns:
+                df_latest['近5走_タイム指数平均'] = _ti_mat.mean(axis=1)
+            if '近5走_タイム指数_std' in df_latest.columns:
+                df_latest['近5走_タイム指数_std'] = _ti_mat.std(axis=1)
+            if '近5走_タイム指数_max' in df_latest.columns:
+                df_latest['近5走_タイム指数_max'] = _ti_mat.max(axis=1)
+            if '近5走_タイム指数_min' in df_latest.columns:
+                df_latest['近5走_タイム指数_min'] = _ti_mat.min(axis=1)
+            if '近5走_タイム指数_range' in df_latest.columns:
+                df_latest['近5走_タイム指数_range'] = _ti_mat.max(axis=1) - _ti_mat.min(axis=1)
+        # 芝ダ一致_平均着順_近5走
+        if '芝ダ一致_平均着順_近5走' in df_latest.columns and '今回_surface' in df_latest.columns:
+            _sm_vals = []
+            for _n in range(1, 6):
+                _sc = f'{_n}走前_surface'
+                _cc = f'{_n}走前_着順_num'
+                if _sc in df_latest.columns and _cc in df_latest.columns:
+                    _match = (pd.to_numeric(df_latest[_sc], errors='coerce')
+                              == pd.to_numeric(df_latest['今回_surface'], errors='coerce'))
+                    _sm_vals.append(pd.to_numeric(df_latest[_cc], errors='coerce').where(_match))
+            if _sm_vals:
+                df_latest['芝ダ一致_平均着順_近5走'] = pd.concat(_sm_vals, axis=1).mean(axis=1)
+        # 近走着順トレンド（線形傾き）
+        _tr_cols = [c for c in [f'{n}走前_着順_num' for n in range(1, 6)]
+                    if c in df_latest.columns]
+        if '近走着順トレンド' in df_latest.columns and len(_tr_cols) >= 3:
+            _Y = np.column_stack([pd.to_numeric(df_latest[c], errors='coerce').values
+                                   for c in _tr_cols])
+            _xc = np.arange(_Y.shape[1], dtype=float) - np.arange(_Y.shape[1], dtype=float).mean()
+            _xvar = float(np.dot(_xc, _xc))
+            _nv = (~np.isnan(_Y)).sum(axis=1)
+            _Yf = _Y.copy()
+            _ri, _ci = np.where(np.isnan(_Y))
+            _rmeans = np.where(_nv > 0, np.nansum(_Y, axis=1) / np.maximum(_nv, 1), 8.0)
+            _Yf[_ri, _ci] = _rmeans[_ri]
+            _slopes = (_Yf - _Yf.mean(axis=1, keepdims=True)) @ _xc / _xvar
+            _slopes[_nv < 2] = np.nan
+            df_latest['近走着順トレンド'] = _slopes
+
         day = card_df.drop_duplicates('馬名S').copy()
         _clogit_feats_fb = set()
         if _clogit_pkg is not None:
@@ -497,6 +562,24 @@ def predict_date(base_dir, target_date_num, card_df=None):
                 day['クラス_rank'] = _today_cls_rank
                 if 'クラス変化' in day.columns:
                     day['クラス変化'] = _today_cls_rank - _prev_cls_rank
+
+                # N走前_クラス調整着順 を今日のクラス_rank で再計算
+                # 正しい式: N走前_着順_num * 今日クラス_rank / N走前クラス_rank (上限20)
+                _curr_cls = pd.to_numeric(day['クラス_rank'], errors='coerce').replace(0, np.nan).fillna(2)
+                for _n in range(1, 6):
+                    _fc = f'{_n}走前_着順_num'
+                    _kc = f'{_n}走前_クラス_rank'
+                    _ac = f'{_n}走前_クラス調整着順'
+                    if all(c in day.columns for c in [_fc, _kc, _ac]):
+                        _pf = pd.to_numeric(day[_fc], errors='coerce').replace(99, np.nan)
+                        _pk = pd.to_numeric(day[_kc], errors='coerce').replace(0, np.nan).fillna(2)
+                        day[_ac] = (_pf * _curr_cls / _pk).clip(upper=20)
+                # 近5走_クラス調整_平均着順 を再計算
+                _adj_ac = [f'{n}走前_クラス調整着順' for n in range(1, 6)
+                           if f'{n}走前_クラス調整着順' in day.columns]
+                if _adj_ac and '近5走_クラス調整_平均着順' in day.columns:
+                    _adj_mat = day[_adj_ac].apply(pd.to_numeric, errors='coerce').replace(0, np.nan)
+                    day['近5走_クラス調整_平均着順'] = _adj_mat.mean(axis=1)
 
     # 今回_surface / 今回_距離_m をカード情報から直接補完（フォールバック共通）
     if '今回_surface' not in day.columns or day['今回_surface'].isna().all():
@@ -667,7 +750,7 @@ def predict_date(base_dir, target_date_num, card_df=None):
         # ── clogit 予測 ────────────────────────────────────────────────────
         sub['clogit_score']  = np.nan
         sub['clogit_rank']   = np.nan
-        sub['clogit_calib']  = np.nan  # 生のisotonic確率（オッズ補正前）
+        sub['clogit_calib']  = np.nan  # raw softmax確率（isotonic丸め前）
         sub['clogit_factor'] = np.nan  # 市場補正係数（再計算用）
         _clogit_raw_saved  = None   # placing予測で再利用するためのraw softmax
         _clogit_surf_saved = None   # placing予測で使うsurface key
@@ -741,7 +824,7 @@ def predict_date(base_dir, target_date_num, card_df=None):
                     _score = np.where(np.isnan(_mprob), _calib, _calib - _factor * _mprob)
                     for _i, _oi in enumerate(_orig_index):
                         sub.loc[_oi, 'clogit_score']  = _score[_i]
-                        sub.loc[_oi, 'clogit_calib']  = _calib[_i]
+                        sub.loc[_oi, 'clogit_calib']  = _raw[_i]   # raw softmax（isotonic丸め前）
                         sub.loc[_oi, 'clogit_factor'] = _factor[_i]
                     sub['clogit_rank'] = sub['clogit_score'].rank(ascending=False, method='first')
             except Exception as _ce:
