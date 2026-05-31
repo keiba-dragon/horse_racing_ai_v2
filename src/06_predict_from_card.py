@@ -147,7 +147,8 @@ def convert_card_to_base_format(card_path):
 def merge_results_to_card_extra(base_dir, result_dfs):
     """結果ファイルをcard_extra.csvに反映（feature engineeringは実行しない）"""
     import glob as glob_mod
-    card_path = os.path.join(base_dir, 'data', 'raw', 'card_extra.csv')
+    # 01_make_features.py が読む正規パス: data/raw/misc/card_extra.csv
+    card_path = os.path.join(base_dir, 'data', 'raw', 'misc', 'card_extra.csv')
 
     if not result_dfs:
         return
@@ -172,7 +173,9 @@ def merge_results_to_card_extra(base_dir, result_dfs):
 
 def run_feature_engineering(base_dir, extra_df):
     """card_extra.csv に変換済みデータを書き、01_make_features.py を実行"""
-    card_path = os.path.join(base_dir, 'data', 'raw', 'card_extra.csv')
+    # 01_make_features.py が読む正規パス: data/raw/misc/card_extra.csv
+    card_path = os.path.join(base_dir, 'data', 'raw', 'misc', 'card_extra.csv')
+    os.makedirs(os.path.dirname(card_path), exist_ok=True)
 
     # 既存の card_extra.csv と日付単位でマージ（他日付分を消さない）
     new_dates = set(pd.to_numeric(extra_df['日付'], errors='coerce').dropna())
@@ -192,7 +195,7 @@ def run_feature_engineering(base_dir, extra_df):
     print(f"card_extra.csv 書込: {len(extra_df):,}行")
 
     script = os.path.join(base_dir, 'src', '01_make_features.py')
-    print("特徴量生成中（数分かかります）...")
+    print("特徴量生成中（25〜30分かかります）...")
     import os as _os
     _env = _os.environ.copy()
     _env['KEIBAI_BASE_DIR'] = base_dir
