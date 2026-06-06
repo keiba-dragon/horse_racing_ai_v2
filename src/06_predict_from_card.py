@@ -790,8 +790,26 @@ def predict_date(base_dir, target_date_num, card_df=None):
                 if _surf not in ('芝', 'ダ'):
                     _sd = _s['芝・ダ'].iloc[0] if '芝・ダ' in _s.columns else ''
                     _surf = '芝' if str(_sd).strip() in ('芝',) else 'ダ'
-                if _surf in _clogit_pkg['artifacts']:
-                    _art = _clogit_pkg['artifacts'][_surf]
+                # 5セグメント距離分岐
+                _dist_m_val = pd.to_numeric(
+                    _s['距離'].astype(str).str.extract(r'(\d+)')[0], errors='coerce').iloc[0]
+                if _surf == '芝':
+                    if pd.notna(_dist_m_val) and _dist_m_val <= 1400:
+                        _art_key = '芝短'
+                    elif pd.notna(_dist_m_val) and _dist_m_val <= 2000:
+                        _art_key = '芝中'
+                    elif pd.notna(_dist_m_val) and _dist_m_val > 2000:
+                        _art_key = '芝長'
+                    else:
+                        _art_key = '芝'
+                elif _surf == 'ダ':
+                    _art_key = 'ダ短' if (pd.notna(_dist_m_val) and _dist_m_val <= 1400) else 'ダ'
+                else:
+                    _art_key = _surf
+                if _art_key not in _clogit_pkg['artifacts']:
+                    _art_key = _surf
+                if _art_key in _clogit_pkg['artifacts']:
+                    _art = _clogit_pkg['artifacts'][_art_key]
                     # feat_cols の欠損列を NaN で補完
                     for _fc in _art['feat_cols']:
                         if _fc not in _s.columns:
