@@ -21,9 +21,9 @@ from save_v3 import add_computed_features
 
 MODEL_DIR = os.path.join(BASE_DIR, 'models')
 
-FEATS = ['馬番', '斤量', '馬体重', 'コース脚質_r200_勝率',
-         '1走前_馬場状態', 'ブリンカー変更', '間隔',
-         'コース枠_r200_勝率', '1走前_3角', '距離変化_前走']
+FEATS = ['馬番', '斤量', '馬体重', '馬距離_勝率',
+         '1走前_脚質_num', '性別_num', '1走前_3角',
+         'コース脚質_r200_勝率', '近5走_上り3F平均', 'ブリンカー変更']
 L2 = 0.006
 NAN_IND_THRESHOLD = 0.05
 
@@ -58,7 +58,8 @@ def load_segment():
     df['surface'] = (df['距離'].astype(str).str.strip()
                      .str.extract(r'^([芝ダ])')[0].fillna('不明'))
     dm = pd.to_numeric(df['距離'].astype(str).str.extract(r'(\d+)')[0], errors='coerce')
-    df = df[(df['surface'] == '芝') & (dm <= 1400)].copy()
+    df['クラス_rank'] = pd.to_numeric(df['クラス_rank'], errors='coerce')
+    df = df[(df['surface'] == '芝') & (dm <= 1400) & (df['クラス_rank'] != 1.0)].copy()
     df['dist_m'] = dm[df.index]
     df = add_computed_features(df)
     baba_map = {'良': 0, '稍重': 1, '重': 2, '不良': 3}
