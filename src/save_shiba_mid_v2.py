@@ -21,7 +21,8 @@ from save_v3 import add_computed_features
 
 MODEL_DIR = os.path.join(BASE_DIR, 'models')
 
-FEATS = ['馬番', '斤量', '馬距離_勝率', '3走前_クラス差', '性別_num']
+FEATS = ['馬番', '斤量', '馬距離_勝率', '3走前_クラス差', '性別_num',
+         '1走前_馬場状態', '芝ダ転向', '間隔', 'ブリンカー変更', 'コース枠_r200_勝率']
 L2 = 0.006
 NAN_IND_THRESHOLD = 0.05
 
@@ -59,6 +60,10 @@ def load_segment():
     df = df[(df['surface'] == '芝') & (dm > 1400) & (dm <= 2000)].copy()
     df['dist_m'] = dm[df.index]
     df = add_computed_features(df)
+    baba_map = {'良': 0, '稍重': 1, '重': 2, '不良': 3}
+    for col in df.columns:
+        if '馬場状態' in col and col != '馬場状態':
+            df[col] = df[col].map(baba_map)
     for col in FEATS:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors='coerce')
@@ -212,7 +217,7 @@ def main():
     print(f'\n保存完了: {final_pkl}')
     print(f'artifacts keys: {list(new_pkg["artifacts"].keys())}')
     print('=== 芝中距離 v2 保存完了 ===')
-    print(f'  2325: +1.77% (選択指標)')
+    print(f'  2325: +3.57% (選択指標)')
     print(f'  2323: {r2324_final:+.2%}')
     print(f'  25+26: {comb:+.2%}')
 

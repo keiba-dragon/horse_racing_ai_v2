@@ -1,11 +1,16 @@
 # coding: utf-8
 """
-search_shiba_long_2325.py - 芝長距離 特徴量探索 (2325選択指標)
+search_shiba_short_2325.py - 芝短距離 特徴量探索 (2325選択指標)
 
-v2.0: NaN修正後の再探索。選択指標を2023-25合算に変更。
-  セグメント: 芝 2001m以上
+v2.0: NaN修正後の再探索。選択指標を2023-24 → 2023-25合算に変更。
+  - supplementデータ(2025-05-17+)が実値を持つようになったため
+    2323だけでは2026分布を代表しない
+  - 選択指標: r2325 = (r2323×n2323 + r2025×n2025) / (n2323+n2025)
+  - フレッシュスタート（固定ベースなし）
+  - 最大10特徴
+  セグメント: 芝 ≤1400m
 """
-import sys, os, time
+import sys, os, time, itertools
 import numpy as np
 import pandas as pd
 
@@ -16,30 +21,33 @@ from save_v3 import add_computed_features
 
 L2 = 0.006
 MAX_FEATS = 10
-ROI_CAP = 0.30
+ROI_CAP = 0.30   # 単年ROIをこの値でキャップ（外れ値年が支配するのを防ぐ）
 
+# 常にベースに含める（タイ防止・必ず全馬に値あり）
 FORCED_BASE = ['馬番', '斤量']
 
 CANDIDATES = [
-    # 前走着順・タイム
-    '前走着差タイム', '1走前_クラス調整着順', '近5走_クラス調整_平均着順',
+    # 前走ポジション・脚質
+    '1走前_3角', '1走前_4角', '1走前_脚質_num',
+    # コース適性
+    '芝ダ転向', '距離変化_前走', '馬距離_勝率',
+    # タイム系
+    '前走着差タイム', '近5走_上り3F平均', '近5走_上り3F_std',
     '1走前_タイム指数', '近5走_タイム指数平均',
-    # 近走成績
-    '良馬場_平均着順_近5走', '同会場_平均着順_近5走', '道悪_平均着順_近5走',
-    '近5走_上り3F平均', '近5走_上り3F_std',
-    # クラス差
-    '1走前_クラス差', '2走前_クラス差', '3走前_クラス差',
-    # コース・騎手・調教師
-    '馬距離_勝率', 'コース枠_r200_勝率', 'コース脚質_r200_勝率',
+    # 馬体・装備
+    '馬体重', '斤量', 'ブリンカー変更',
+    # 馬番・枠
+    '馬番', 'コース枠_r200_勝率',
+    # クラス
+    '1走前_クラス差', '2走前_クラス差', '1走前_クラス調整着順',
+    '近5走_クラス調整_平均着順',
+    # 馬場
+    '1走前_馬場状態', '良馬場_平均着順_近5走', '道悪_平均着順_近5走',
+    # 会場・騎手
+    '同会場_平均着順_近5走', 'コース脚質_r200_勝率',
     '騎手コース_r100_勝率', '調教師コース_r100_勝率',
-    # 間隔・斤量・馬番
-    '間隔', '斤量', '馬番',
-    # 脚質・馬場
-    '1走前_脚質_num', '1走前_馬場状態',
-    # 馬体・転向
-    '馬体重', '芝ダ転向', '距離変化_前走',
-    # その他
-    '性別_num', '騎手変更', 'ブリンカー変更', '種牡馬_勝率',
+    # 間隔・その他
+    '間隔', '性別_num', '騎手変更',
 ]
 
 
@@ -56,7 +64,7 @@ def load_segment():
     df['surface'] = (df['距離'].astype(str).str.strip()
                      .str.extract(r'^([芝ダ])')[0].fillna('不明'))
     dm = pd.to_numeric(df['距離'].astype(str).str.extract(r'(\d+)')[0], errors='coerce')
-    df = df[(df['surface'] == '芝') & (dm > 2000)].copy()
+    df = df[(df['surface'] == '芝') & (dm <= 1400)].copy()
     df['dist_m'] = dm[df.index]
     df = add_computed_features(df)
     baba_map = {'良': 0, '稍重': 1, '重': 2, '不良': 3}
@@ -98,10 +106,14 @@ def adam_fit(X_tr, y_tr, gs_tr, n_tr, nr_tr, X_va, y_va, gs_va, n_va, nr_va, l2=
     return best_beta
 
 
-NAN_IND_THRESHOLD = 0.05
+NAN_IND_THRESHOLD = 0.05   # NaN率がこれ以上なら _isnan 指示変数を自動追加
 
 
 def expand_with_nan_indicators(dfs, feats):
+    """高NaN特徴量に isnan 指示変数を追加し、拡張された特徴量リストを返す。
+    NaN率>threshold の特徴 f → (f, f_isnan) ペアで使う。
+    実値列は fillna(0) 済みを前提。isnan 列は 0/1。
+    """
     extended = []
     ref_df = dfs[0]
     for f in feats:
@@ -120,7 +132,9 @@ def expand_with_nan_indicators(dfs, feats):
 
 def eval_feats(df_trn, df_val, oos_2324, oos_2025, oos_2026, feats):
     all_dfs = [df_trn, df_val, oos_2324, oos_2025, oos_2026]
+    # NaN指示変数を追加した拡張特徴量リスト
     expanded = expand_with_nan_indicators(all_dfs, feats)
+    # NaN率100%（全欠損）の列だけ除外。それ以外はNaN率問わず使う
     valid = [c for c in expanded if c in df_trn.columns
              and df_trn[c].isna().mean() < 1.0
              and df_trn[c].std(ddof=0) > 0]
@@ -153,6 +167,7 @@ def eval_feats(df_trn, df_val, oos_2324, oos_2025, oos_2026, feats):
         else:
             r26, n26 = r, len(top1)
 
+    # 選択指標: 2023-25合算。単年ROIをキャップして外れ値年の支配を防ぐ
     r2324c = np.clip(r2324, -ROI_CAP, ROI_CAP) if not np.isnan(r2324) else float('nan')
     r25c   = np.clip(r25,   -ROI_CAP, ROI_CAP) if not np.isnan(r25)   else float('nan')
     r2325  = (r2324c * n2324 + r25c * n25) / (n2324 + n25) if (n2324 + n25) > 0 else float('nan')
@@ -163,7 +178,7 @@ def eval_feats(df_trn, df_val, oos_2324, oos_2025, oos_2026, feats):
 def main():
     t0 = time.time()
     print("=" * 90)
-    print("  芝長距離 特徴量探索 v2.0 — 選択指標=2325(2023-25合算) OOS ROI")
+    print("  芝短距離 特徴量探索 v2.0 — 選択指標=2325(2023-25合算) OOS ROI")
     print("  NaN修正後フレッシュスタート。2026は参考値のみ。")
     print("=" * 90)
 
@@ -180,6 +195,7 @@ def main():
           f"2025:{oos_2025['race_id'].nunique()}R  "
           f"2026:{oos_2026['race_id'].nunique()}R")
 
+    # FORCED_BASE はCANDIDATESから除外
     selected = list(FORCED_BASE)
     remaining = [c for c in CANDIDATES if c not in FORCED_BASE]
     best_r2325 = float('-inf')
@@ -220,6 +236,7 @@ def main():
             print(f"\n  ✗ 全候補NaN。探索終了。")
             break
 
+    # 最終評価
     print(f"\n{'='*90}")
     print(f"  最終特徴量({len(selected)}個): {selected}")
     r2325_f, r2324_f, c2526_f, r25_f, r26_f, valid_f, beta_f = eval_feats(

@@ -1,11 +1,11 @@
 # coding: utf-8
 """
-search_shiba_long_2325.py - 芝長距離 特徴量探索 (2325選択指標)
+search_shiba_mid_2325.py - 芝中距離 特徴量探索 (2325選択指標)
 
-v2.0: NaN修正後の再探索。選択指標を2023-25合算に変更。
-  セグメント: 芝 2001m以上
+v2.0: NaN修正後の再探索。選択指標を2023-24 → 2023-25合算に変更。
+  セグメント: 芝 1401m-2000m
 """
-import sys, os, time
+import sys, os, time, itertools
 import numpy as np
 import pandas as pd
 
@@ -56,7 +56,7 @@ def load_segment():
     df['surface'] = (df['距離'].astype(str).str.strip()
                      .str.extract(r'^([芝ダ])')[0].fillna('不明'))
     dm = pd.to_numeric(df['距離'].astype(str).str.extract(r'(\d+)')[0], errors='coerce')
-    df = df[(df['surface'] == '芝') & (dm > 2000)].copy()
+    df = df[(df['surface'] == '芝') & (dm > 1400) & (dm <= 2000)].copy()
     df['dist_m'] = dm[df.index]
     df = add_computed_features(df)
     baba_map = {'良': 0, '稍重': 1, '重': 2, '不良': 3}
@@ -98,10 +98,11 @@ def adam_fit(X_tr, y_tr, gs_tr, n_tr, nr_tr, X_va, y_va, gs_va, n_va, nr_va, l2=
     return best_beta
 
 
-NAN_IND_THRESHOLD = 0.05
+NAN_IND_THRESHOLD = 0.05   # NaN率がこれ以上なら _isnan 指示変数を自動追加
 
 
 def expand_with_nan_indicators(dfs, feats):
+    """高NaN特徴量に isnan 指示変数を追加し、拡張された特徴量リストを返す。"""
     extended = []
     ref_df = dfs[0]
     for f in feats:
@@ -153,6 +154,7 @@ def eval_feats(df_trn, df_val, oos_2324, oos_2025, oos_2026, feats):
         else:
             r26, n26 = r, len(top1)
 
+    # 選択指標: 2023-25合算。単年ROIキャップで外れ値防止
     r2324c = np.clip(r2324, -ROI_CAP, ROI_CAP) if not np.isnan(r2324) else float('nan')
     r25c   = np.clip(r25,   -ROI_CAP, ROI_CAP) if not np.isnan(r25)   else float('nan')
     r2325  = (r2324c * n2324 + r25c * n25) / (n2324 + n25) if (n2324 + n25) > 0 else float('nan')
@@ -163,7 +165,7 @@ def eval_feats(df_trn, df_val, oos_2324, oos_2025, oos_2026, feats):
 def main():
     t0 = time.time()
     print("=" * 90)
-    print("  芝長距離 特徴量探索 v2.0 — 選択指標=2325(2023-25合算) OOS ROI")
+    print("  芝中距離 特徴量探索 v2.0 — 選択指標=2325(2023-25合算) OOS ROI")
     print("  NaN修正後フレッシュスタート。2026は参考値のみ。")
     print("=" * 90)
 
@@ -220,6 +222,7 @@ def main():
             print(f"\n  ✗ 全候補NaN。探索終了。")
             break
 
+    # 最終評価
     print(f"\n{'='*90}")
     print(f"  最終特徴量({len(selected)}個): {selected}")
     r2325_f, r2324_f, c2526_f, r25_f, r26_f, valid_f, beta_f = eval_feats(
