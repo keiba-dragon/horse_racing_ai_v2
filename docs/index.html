@@ -1,26 +1,1665 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>clogit 競馬新聞</title>
-<style>
-body { font-family: 'Meiryo', sans-serif; background: #f5f0e8; color: #1a1a1a; padding: 24px; }
-h1 { color: #1a1a2e; font-size: 24px; margin-bottom: 8px; }
-ul { list-style: none; padding: 0; }
-li { margin: 8px 0; }
-a { color: #0055cc; font-size: 15px; }
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Horse Racing AI v2 — Project Report</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #f4f6f9;
+      --surface: #ffffff;
+      --border: #e0e0e0;
+      --text: #212121;
+      --muted: #757575;
+      --radius: 10px;
+      --shadow: 0 2px 8px rgba(0,0,0,.10);
+    }
+    html { scroll-behavior: smooth; }
+    body { font-family: 'Segoe UI', 'Noto Sans JP', sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+
+    /* NAV */
+    nav {
+      position: sticky; top: 0; z-index: 100;
+      background: #1a1a2e;
+      display: flex; align-items: center; gap: 8px;
+      padding: 0 24px; height: 52px;
+      box-shadow: 0 2px 6px rgba(0,0,0,.3);
+    }
+    .nav-brand { color: #fff; font-weight: 700; font-size: 1rem; margin-right: 16px; white-space: nowrap; }
+    .nav-link {
+      color: #ccc; font-size: .875rem; font-weight: 600;
+      text-decoration: none; padding: 4px 10px; border-radius: 4px;
+      transition: background .15s;
+    }
+    .nav-link:hover { background: rgba(255,255,255,.12); color: #fff; }
+    .nav-right { margin-left: auto; color: #888; font-size: .8rem; }
+
+    /* HERO */
+    .hero {
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 60%, #0f3460 100%);
+      color: #fff; padding: 56px 24px 48px;
+    }
+    .hero-inner { max-width: 1100px; margin: 0 auto; }
+    .hero h1 { font-size: 2rem; font-weight: 800; letter-spacing: -.5px; margin-bottom: 10px; }
+    .hero p  { font-size: 1rem; color: #aab; max-width: 620px; line-height: 1.7; }
+    .hero-chips { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 18px; }
+    .chip {
+      background: rgba(255,255,255,.1); color: #dde; border-radius: 20px;
+      padding: 3px 12px; font-size: .8rem; border: 1px solid rgba(255,255,255,.15);
+    }
+
+    /* CONTAINER */
+    .container { max-width: 1100px; margin: 0 auto; padding: 32px 24px; }
+
+    /* SUMMARY TABLE BOX */
+    .overview-box {
+      background: var(--surface); border-radius: var(--radius);
+      box-shadow: var(--shadow); padding: 24px; margin-bottom: 32px;
+    }
+    .overview-box h2 { font-size: 1.1rem; margin-bottom: 16px; color: #1a237e; }
+
+    /* SEGMENT SECTION */
+    .seg-section {
+      background: var(--surface); border-radius: var(--radius);
+      box-shadow: var(--shadow); padding: 28px; margin-bottom: 28px;
+    }
+    .seg-header { padding-left: 14px; margin-bottom: 6px; }
+    .seg-header h2 { font-size: 1.35rem; font-weight: 700; display: inline; }
+    .seg-sublabel { font-size: 1rem; font-weight: 400; color: var(--muted); margin-left: 8px; }
+    .seg-cond { font-size: .82rem; color: var(--muted); margin-top: 2px; }
+    .seg-note { font-size: .875rem; color: #444; margin: 10px 0 18px; line-height: 1.6; }
+
+    /* KPI ROW */
+    .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+    .kpi-card { background: #f8f9fc; border-radius: 8px; padding: 14px 16px; border: 1px solid var(--border); }
+    .kpi-label { font-size: .75rem; color: var(--muted); margin-bottom: 4px; }
+    .kpi-star { background: #fff3e0; color: #e65100; border-radius: 10px; padding: 1px 6px; font-size: .7rem; font-weight: 700; margin-left: 4px; }
+    .kpi-note { background: #ede7f6; color: #4527a0; border-radius: 10px; padding: 1px 6px; font-size: .7rem; margin-left: 4px; }
+    .kpi-val { font-size: 1.4rem; font-weight: 700; line-height: 1.2; }
+    .kpi-sub { font-size: .75rem; color: var(--muted); margin-top: 4px; }
+
+    /* TABS */
+    .tab-group { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 2px solid var(--border); padding-bottom: 0; }
+    .tab-btn {
+      background: none; border: none; padding: 7px 16px; cursor: pointer;
+      font-size: .875rem; color: var(--muted); border-radius: 6px 6px 0 0;
+      border-bottom: 2px solid transparent; margin-bottom: -2px;
+      transition: color .15s;
+    }
+    .tab-btn.active { color: #1a237e; border-bottom-color: #1a237e; font-weight: 600; background: #f0f4ff; }
+    .tab-btn:hover:not(.active) { color: #333; background: #f5f5f5; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    /* TABLES */
+    table { width: 100%; border-collapse: collapse; font-size: .875rem; }
+    th { background: #1a237e; color: #fff; padding: 8px 12px; text-align: left; white-space: nowrap; font-weight: 600; }
+    td { padding: 7px 12px; border-bottom: 1px solid #eee; white-space: nowrap; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #f9f9ff; }
+    td.num { text-align: right; }
+
+    /* BADGES */
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: .75rem; font-weight: 600; }
+    .safe-badge { background: #e8f5e9; color: #1b5e20; }
+
+    /* LEAK LEGEND */
+    .leak-legend { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+    .legend-item { padding: 3px 10px; border-radius: 12px; font-size: .78rem; font-weight: 600; }
+
+    /* METHODOLOGY */
+    .method-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    .method-card { background: #f8f9fc; border-radius: 8px; padding: 16px; border: 1px solid var(--border); }
+    .method-card h3 { font-size: .9rem; color: #1a237e; margin-bottom: 8px; }
+    .method-card p  { font-size: .82rem; color: #444; line-height: 1.6; }
+
+    /* MISC */
+    .small  { font-size: .8rem; }
+    .muted  { color: var(--muted); }
+    code    { background: #f5f5f5; padding: 1px 5px; border-radius: 3px; font-size: .85em; }
+    .seg-link { text-decoration: none; font-weight: 700; }
+    .seg-link:hover { text-decoration: underline; }
+    section { scroll-margin-top: 60px; }
+
+    @media (max-width: 700px) {
+      .kpi-row       { grid-template-columns: repeat(2, 1fr); }
+      .method-grid   { grid-template-columns: 1fr; }
+    }
+    </style>
 </head>
 <body>
-<h1>clogit 競馬新聞</h1>
-<ul>
-  <li><a href="newspaper_20260531.html">2026-05-31（日）</a></li>
-  <li><a href="newspaper_20260530.html">2026-05-30（土）</a></li>
-  <li><a href="newspaper_20260524.html">2026-05-24（日）</a></li>
-  <li><a href="newspaper_20260523.html">2026-05-23（土）</a></li>
-  <li><a href="newspaper_20260517.html">2026-05-17（日）</a></li>
-  <li><a href="newspaper_20260516.html">2026-05-16（土）</a></li>
-</ul>
+
+<nav>
+  <span class="nav-brand">🏇 Horse Racing AI v2</span>
+  <a href="#overview" class="nav-link">概要</a>
+  <a href="#methodology" class="nav-link">手法</a>
+  <a href="#da-long" class="nav-link" style="border-bottom:2px solid #e65100">ダ長</a><a href="#da-short" class="nav-link" style="border-bottom:2px solid #bf360c">ダ短</a><a href="#shiba-mid" class="nav-link" style="border-bottom:2px solid #1b5e20">芝中</a><a href="#shiba-long" class="nav-link" style="border-bottom:2px solid #004d40">芝長</a><a href="#shiba-short" class="nav-link" style="border-bottom:2px solid #1a237e">芝短</a>
+  <span class="nav-right">2026-06-07</span>
+</nav>
+
+<div class="hero">
+  <div class="hero-inner">
+    <h1>Horse Racing AI v2 — Project Report</h1>
+    <p>
+      Conditional Logit + Isotonic Calibration による5セグメント予測モデル。<br>
+      OOS多重比較バイアスを排除するため <strong>2323 OOS ROI（2023-24）</strong> を選択指標とし、
+      2025・2026 は真のアウトオブサンプルとして報告のみ。
+    </p>
+    <div class="hero-chips">
+      <span class="chip">Conditional Logit</span>
+      <span class="chip">Adam Optimizer</span>
+      <span class="chip">Isotonic Calibration</span>
+      <span class="chip">5セグメント</span>
+      <span class="chip">10特徴/セグメント</span>
+      <span class="chip">train 2013-21 / val 2022</span>
+      <span class="chip">リークチェック済み</span>
+    </div>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- OVERVIEW -->
+  <section id="overview">
+    <div class="overview-box">
+      <h2>全セグメント サマリー</h2>
+      <table>
+        <thead><tr>
+          <th>セグメント</th><th>距離帯</th><th>特徴数</th>
+          <th>2323 ROI ★</th><th>2025 ROI</th><th>2026 ROI</th><th>モデル</th>
+        </tr></thead>
+        <tbody><tr>
+          <td><a href="#da-long" class="seg-link" style="color:#e65100">ダ長</a></td>
+          <td class="small">ダート長距離</td>
+          <td class="num">25</td>
+          <td class="num" style="background:#ffcdd2"><span style="color:#c62828;font-weight:700;font-size:inherit">-22.56%</span></td>
+          <td class="num" style="background:#ffcdd2"><span style="color:#c62828;font-weight:700;font-size:inherit">-17.31%</span></td>
+          <td class="num" style="background:#ffcdd2"><span style="color:#c62828;font-weight:700;font-size:inherit">-18.26%</span></td>
+          <td class="small muted">nv1 / 25特徴 / 500+実験</td>
+        </tr><tr>
+          <td><a href="#da-short" class="seg-link" style="color:#bf360c">ダ短</a></td>
+          <td class="small">ダート短距離</td>
+          <td class="num">10</td>
+          <td class="num" style="background:#c8e6c9"><span style="color:#2e7d32;font-weight:700;font-size:inherit">+8.10%</span></td>
+          <td class="num" style="background:#ffcdd2"><span style="color:#c62828;font-weight:700;font-size:inherit">-31.82%</span></td>
+          <td class="num" style="background:#fff9c4"><span style="color:#e65100;font-weight:700;font-size:inherit">-0.58%</span></td>
+          <td class="small muted">nv3 / 10特徴 / greedy (2323選択)</td>
+        </tr><tr>
+          <td><a href="#shiba-mid" class="seg-link" style="color:#1b5e20">芝中</a></td>
+          <td class="small">芝中距離</td>
+          <td class="num">10</td>
+          <td class="num" style="background:#ffcdd2"><span style="color:#c62828;font-weight:700;font-size:inherit">-6.52%</span></td>
+          <td class="num" style="background:#fff9c4"><span style="color:#e65100;font-weight:700;font-size:inherit">-4.87%</span></td>
+          <td class="num" style="background:#ffcdd2"><span style="color:#c62828;font-weight:700;font-size:inherit">-27.29%</span></td>
+          <td class="small muted">10特徴 / greedy (2323選択)</td>
+        </tr><tr>
+          <td><a href="#shiba-long" class="seg-link" style="color:#004d40">芝長</a></td>
+          <td class="small">芝長距離</td>
+          <td class="num">10</td>
+          <td class="num" style="background:#fff9c4"><span style="color:#2e7d32;font-weight:700;font-size:inherit">+3.41%</span></td>
+          <td class="num" style="background:#c8e6c9"><span style="color:#2e7d32;font-weight:700;font-size:inherit">+6.04%</span></td>
+          <td class="num" style="background:#c8e6c9"><span style="color:#2e7d32;font-weight:700;font-size:inherit">+26.02%</span></td>
+          <td class="small muted">10特徴 / greedy+triplet (2323選択)</td>
+        </tr><tr>
+          <td><a href="#shiba-short" class="seg-link" style="color:#1a237e">芝短</a></td>
+          <td class="small">芝短距離</td>
+          <td class="num">10</td>
+          <td class="num" style="background:#c8e6c9"><span style="color:#2e7d32;font-weight:700;font-size:inherit">+27.05%</span></td>
+          <td class="num" style="background:#ffcdd2"><span style="color:#c62828;font-weight:700;font-size:inherit">-42.50%</span></td>
+          <td class="num" style="background:#ffcdd2"><span style="color:#c62828;font-weight:700;font-size:inherit">-13.17%</span></td>
+          <td class="small muted">nv3 / 10特徴 / forced greedy (2323選択)</td>
+        </tr></tbody>
+      </table>
+      <p class="small muted" style="margin-top:10px">
+        ★ 2323 = 2023–24 OOS ROI（選択指標）。2025・2026 は最適化に使用していない真のOOS。
+        控除率20%相当のランダム予測ROIは −20%。
+      </p>
+    </div>
+  </section>
+
+  <!-- METHODOLOGY -->
+  <section id="methodology">
+    <div class="overview-box">
+      <h2>モデル手法・リークチェック</h2>
+      <div class="method-grid">
+        <div class="method-card">
+          <h3>モデル構造</h3>
+          <p>
+            Conditional Logit（条件付きロジットモデル）。
+            レース内 softmax で各馬の勝利確率を推定。<br>
+            最適化: Adam (lr=0.005, L2=0.006, early-stopping)。<br>
+            キャリブレーション: Isotonic Regression (val 2022)。
+          </p>
+        </div>
+        <div class="method-card">
+          <h3>特徴量のリーク対策</h3>
+          <p>
+            <strong>global統計</strong>（コース枠勝率・馬距離勝率等）:
+            <code>_stat_mask</code> により 2013-2020 データのみで計算。OOSデータを含まない。<br>
+            <strong>rolling統計</strong>: <code>cumsum[i-1]</code> で当該レース日前のデータのみ使用。<br>
+            <strong>前走データ</strong>: <code>shift(i)</code> で生成。当該レース除外済み。
+          </p>
+        </div>
+        <div class="method-card">
+          <h3>選択指標の変更</h3>
+          <p>
+            旧方針（25+26最大化）では74回比較のOOSスヌーピングにより
+            芝短nv2で+32.28%という過楽観な結果が生じた。<br>
+            新方針: <strong>2323 OOS ROI</strong> のみを選択指標とし、
+            2025・2026 を真のOOSとして留保。
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SEGMENT SECTIONS -->
+  
+  <section id="da-long" class="seg-section">
+    <div class="seg-header" style="border-left:5px solid #e65100">
+      <div>
+        <h2 style="color:#e65100">ダ長 <span class="seg-sublabel">ダート長距離</span></h2>
+        <p class="seg-cond">距離 > 1400m &nbsp;·&nbsp; nv1 / 25特徴 / 500+実験</p>
+      </div>
+    </div>
+    <p class="seg-note">ダート長距離は500回超の実験を経てnv1(-17.18%)が最良。賞金カラムはリーケージ除外済み。</p>
+    
+    <div class="kpi-row">
+      <div class="kpi-card">
+        <div class="kpi-label">2323 ROI <span class="kpi-star">★ 選択指標</span></div>
+        <div class="kpi-val" style="color:#e65100"><span style="color:#c62828;font-weight:700;font-size:1.35rem">-22.56%</span></div>
+        <div class="kpi-sub">1,941 レース (2023–24)</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">2025 ROI <span class="kpi-note">参考</span></div>
+        <div class="kpi-val"><span style="color:#c62828;font-weight:700;font-size:1.35rem">-17.31%</span></div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">2026 ROI <span class="kpi-note">参考</span></div>
+        <div class="kpi-val"><span style="color:#c62828;font-weight:700;font-size:1.35rem">-18.26%</span></div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">特徴量数 / モデル</div>
+        <div class="kpi-val" style="font-size:1.6rem;color:#e65100">25</div>
+        <div class="kpi-sub">nv1 / 25特徴 / 500+実験</div>
+      </div>
+    </div>
+
+    <div class="tab-group" data-seg="da-long">
+      <button class="tab-btn active" data-tab="roi">年別 ROI</button>
+      <button class="tab-btn" data-tab="odds">オッズ帯別</button>
+      <button class="tab-btn" data-tab="feats">特徴量 / リークチェック</button>
+    </div>
+
+    <div class="tab-content active" data-seg="da-long" data-tab="roi">
+      
+    <table>
+      <thead><tr>
+        <th>期間</th><th>R数</th><th>的中</th><th>的中率</th>
+        <th>回収率</th><th>平均オッズ(的中)</th><th>平均オッズ(全)</th>
+      </tr></thead>
+      <tbody><tr style="background:">
+          <td style="">訓練 2013-21</td>
+          <td class="num">8,484</td>
+          <td class="num">2,252</td>
+          <td class="num" style="background:#c8e6c9">26.5%</td>
+          <td class="num" style="background:#ffcdd2"><span style="color:#c62828;font-weight:700;font-size:inherit">-19.97%</span></td>
+          <td class="num">3.02</td>
+          <td class="num">4.63</td>
+        </tr><tr style="background:">
+          <td style="">Val 2022</td>
+          <td class="num">982</td>
+          <td class="num">275</td>
+          <td class="num" style="background:#c8e6c9">28.0%</td>
+          <td class="num" style="background:#ffcdd2"><span style="color:#c62828;font-weight:700;font-size:inherit">-22.11%</span></td>
+          <td class="num">2.78</td>
+          <td class="num">4.77</td>
+        </tr><tr style="background:">
+          <td style="">2023</td>
+          <td class="num">968</td>
+          <td class="num">247</td>
+          <td class="num" style="background:#c8e6c9">25.5%</td>
+          <td class="num" style="background:#ffcdd2"><span style="color:#c62828;font-weight:700;font-size:inherit">-28.90%</span></td>
+          <td class="num">2.79</td>
+          <td class="num">4.35</td>
+        </tr><tr style="background:">
+          <td style="">2024</td>
+          <td class="num">973</td>
+          <td class="num">274</td>
+          <td class="num" style="background:#c8e6c9">28.2%</td>
+          <td class="num" style="background:#ffcdd2"><span style="color:#c62828;font-weight:700;font-size:inherit">-16.25%</span></td>
+          <td class="num">2.97</td>
+          <td class="num">4.19</td>
+        </tr><tr style="background:#eef2ff">
+          <td style="font-weight:600;">2023-24 ★ ★</td>
+          <td class="num">1,941</td>
+          <td class="num">521</td>
+          <td class="num" style="background:#c8e6c9">26.8%</td>
+          <td class="num" style="background:#ffcdd2"><span style="color:#c62828;font-weight:700;font-size:inherit">-22.56%</span></td>
+          <td class="num">2.89</td>
+          <td class="num">4.27</td>
+        </tr><tr style="background:">
+          <td style="">2025</td>
+          <td class="num">975</td>
+          <td class="num">274</td>
+          <td class="num" style="background:#c8e6c9">28.1%</td>
+          <td class="num" style="background:#ffcdd2"><span style="color:#c62828;font-weight:700;font-size:inherit">-17.31%</span></td>
+          <td class="num">2.94</td>
+          <td class="num">4.74</td>
+        </tr><tr style="background:">
+          <td style="">2026</td>
+          <td class="num">373</td>
+          <td class="num">108</td>
+          <td class="num" style="background:#c8e6c9">29.0%</td>
+          <td class="num" style="background:#ffcdd2"><span style="color:#c62828;font-weight:700;font-size:inherit">-18.26%</span></td>
+          <td class="num">2.82</td>
+          <td class="num">3.82</td>
+        </tr></tbody>
+    </table>
+      <p class="small muted">★ 2023-24 = 選択指標（この期間のみを最適化）。2025・2026は真のOOS参考値。</p>
+    </div>
+    <div class="tab-content" data-seg="da-long" data-tab="odds">
+      <p class="small muted">集計対象: OOS 2023–2026</p>
+      
+    <table>
+      <thead><tr>
+        <th>オッズ帯</th><th>R数</th><th>的中</th><th>的中率</th>
+        <th>回収率</th><th>平均オッズ(的中)</th>
+      </tr></thead>
+      <tbody><tr>
+          <td><strong>~3倍</strong></td>
+          <td class="num">1,584</td>
+          <td class="num">629</td>
+          <td class="num" style="background:#c8e6c9">39.7%</td>
+          <td class="num" style="background:#ffcdd2"><span style="color:#c62828;font-weight:700;font-size:inherit">-23.40%</span></td>
+          <td class="num">1.93</td>
+        </tr><tr>
+          <td><strong>3〜6倍</strong></td>
+          <td class="num">1,222</td>
+          <td class="num">224</td>
+          <td class="num" style="background:#c8e6c9">18.3%</td>
+          <td class="num" style="background:#ffcdd2"><span style="color:#c62828;font-weight:700;font-size:inherit">-25.64%</span></td>
+          <td class="num">4.06</td>
+        </tr><tr>
+          <td><strong>6〜10倍</strong></td>
+          <td class="num">300</td>
+          <td class="num">36</td>
+          <td class="num" style="background:#fff9c4">12.0%</td>
+          <td class="num" style="background:#ffcdd2"><span style="color:#c62828;font-weight:700;font-size:inherit">-7.70%</span></td>
+          <td class="num">7.69</td>
+        </tr><tr>
+          <td><strong>10〜20倍</strong></td>
+          <td class="num">135</td>
+          <td class="num">12</td>
+          <td class="num" style="background:#fff9c4">8.9%</td>
+          <td class="num" style="background:#c8e6c9"><span style="color:#2e7d32;font-weight:700;font-size:inherit">+19.93%</span></td>
+          <td class="num">13.49</td>
+        </tr><tr>
+          <td><strong>20〜50倍</strong></td>
+          <td class="num">39</td>
+          <td class="num">2</td>
+          <td class="num" style="background:#ffcdd2">5.1%</td>
+          <td class="num" style="background:#c8e6c9"><span style="color:#2e7d32;font-weight:700;font-size:inherit">+36.92%</span></td>
+          <td class="num">26.70</td>
+        </tr><tr>
+          <td><strong>50倍〜</strong></td>
+          <td class="num">9</td>
+          <td class="num">0</td>
+          <td class="num" style="background:#ffcdd2">0.0%</td>
+          <td class="num" style="background:#ffcdd2"><span style="color:#c62828;font-weight:700;font-size:inherit">-100.00%</span></td>
+          <td class="num">nan</td>
+        </tr></tbody>
+    </table>
+    </div>
+    <div class="tab-content" data-seg="da-long" data-tab="feats">
+      
+    <table>
+      <thead><tr>
+        <th>特徴量</th><th>種別</th><th>計算方法</th>
+        <th>β係数</th><th>NaN率 (train)</th><th>NaN率 (OOS)</th><th>リーク判定</th>
+      </tr></thead>
+      <tbody><tr>
+          <td><code>近5走_クラス調整_平均着順</code></td>
+          <td><span class="badge" style="background:#fff8e1;color:#e65100">rolling-5</span></td>
+          <td class="small muted">1走前~5走前クラス補正平均</td>
+          <td class="num" style="color:#c62828">-0.2817</td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">7%</span></td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">7%</span></td>
+          <td class="num"><span class="badge safe-badge">✅ safe</span></td>
+        </tr><tr>
+          <td><code>近5走_タイム指数_max</code></td>
+          <td><span class="badge" style="background:#f5f5f5;color:#333">不明</span></td>
+          <td class="small muted">—</td>
+          <td class="num" style="color:#2e7d32">+0.3329</td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">7%</span></td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">7%</span></td>
+          <td class="num"><span class="badge safe-badge">✅ safe</span></td>
+        </tr><tr>
+          <td><code>1走前_タイム指数</code></td>
+          <td><span class="badge" style="background:#f5f5f5;color:#333">不明</span></td>
+          <td class="small muted">—</td>
+          <td class="num" style="color:#2e7d32">+0.1716</td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">8%</span></td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">10%</span></td>
+          <td class="num"><span class="badge safe-badge">✅ safe</span></td>
+        </tr><tr>
+          <td><code>前走着差タイム</code></td>
+          <td><span class="badge" style="background:#e3f2fd;color:#0d47a1">前走データ</span></td>
+          <td class="small muted">shift(1) _着差_sec</td>
+          <td class="num" style="color:#c62828">-0.2311</td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">6%</span></td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">7%</span></td>
+          <td class="num"><span class="badge safe-badge">✅ safe</span></td>
+        </tr><tr>
+          <td><code>騎手コース_r100_勝率</code></td>
+          <td><span class="badge" style="background:#f5f5f5;color:#333">不明</span></td>
+          <td class="small muted">—</td>
+          <td class="num" style="color:#2e7d32">+0.2104</td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">1%</span></td>
+          <td class="num"><span class="badge safe-badge">✅ safe</span></td>
+        </tr><tr>
+          <td><code>1走前_クラス調整着順</code></td>
+          <td><span class="badge" style="background:#e3f2fd;color:#0d47a1">前走データ</span></td>
+          <td class="small muted">shift(1) by 馬名S</td>
+          <td class="num" style="color:#c62828">-0.1887</td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">8%</span></td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">7%</span></td>
+          <td class="num"><span class="badge safe-badge">✅ safe</span></td>
+        </tr><tr>
+          <td><code>調教師コース_r100_勝率</code></td>
+          <td><span class="badge" style="background:#fce4ec;color:#880e4f">global統計</span></td>
+          <td class="small muted">_stat_mask 2013-2020固定</td>
+          <td class="num" style="color:#2e7d32">+0.1835</td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span class="badge safe-badge">✅ safe</span></td>
+        </tr><tr>
+          <td><code>1走前_RPCI</code></td>
+          <td><span class="badge" style="background:#f5f5f5;color:#333">不明</span></td>
+          <td class="small muted">—</td>
+          <td class="num" style="color:#2e7d32">+0.0271</td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">10%</span></td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">9%</span></td>
+          <td class="num"><span class="badge safe-badge">✅ safe</span></td>
+        </tr><tr>
+          <td><code>1走前_上3F地点差</code></td>
+          <td><span class="badge" style="background:#f5f5f5;color:#333">不明</span></td>
+          <td class="small muted">—</td>
+          <td class="num" style="color:#c62828">-0.0881</td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">11%</span></td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">10%</span></td>
+          <td class="num"><span class="badge safe-badge">✅ safe</span></td>
+        </tr><tr>
+          <td><code>斤量</code></td>
+          <td><span class="badge" style="background:#e8f5e9;color:#1b5e20">race-day固定</span></td>
+          <td class="small muted">エントリー時決定</td>
+          <td class="num" style="color:#2e7d32">+0.1078</td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span class="badge safe-badge">✅ safe</span></td>
+        </tr><tr>
+          <td><code>種牡馬_勝率</code></td>
+          <td><span class="badge" style="background:#f5f5f5;color:#333">不明</span></td>
+          <td class="small muted">—</td>
+          <td class="num" style="color:#2e7d32">+0.0773</td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span class="badge safe-badge">✅ safe</span></td>
+        </tr><tr>
+          <td><code>間隔_長_flag</code></td>
+          <td><span class="badge" style="background:#f5f5f5;color:#333">不明</span></td>
+          <td class="small muted">—</td>
+          <td class="num" style="color:#c62828">-0.0575</td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span class="badge safe-badge">✅ safe</span></td>
+        </tr><tr>
+          <td><code>1走前_脚質_num</code></td>
+          <td><span class="badge" style="background:#e3f2fd;color:#0d47a1">前走データ</span></td>
+          <td class="small muted">shift(1) by 馬名S</td>
+          <td class="num" style="color:#c62828">-0.0293</td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">8%</span></td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">7%</span></td>
+          <td class="num"><span class="badge safe-badge">✅ safe</span></td>
+        </tr><tr>
+          <td><code>騎手変更</code></td>
+          <td><span class="badge" style="background:#f5f5f5;color:#333">不明</span></td>
+          <td class="small muted">—</td>
+          <td class="num" style="color:#c62828">-0.0249</td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span class="badge safe-badge">✅ safe</span></td>
+        </tr><tr>
+          <td><code>馬番</code></td>
+          <td><span class="badge" style="background:#e8f5e9;color:#1b5e20">race-day固定</span></td>
+          <td class="small muted">エントリー時決定</td>
+          <td class="num" style="color:#2e7d32">+0.0260</td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span class="badge safe-badge">✅ safe</span></td>
+        </tr><tr>
+          <td><code>近3走_複勝率</code></td>
+          <td><span class="badge" style="background:#f5f5f5;color:#333">不明</span></td>
+          <td class="small muted">—</td>
+          <td class="num" style="color:#2e7d32">+0.2143</td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">7%</span></td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">7%</span></td>
+          <td class="num"><span class="badge safe-badge">✅ safe</span></td>
+        </tr><tr>
+          <td><code>調教師_r200_複勝率</code></td>
+          <td><span class="badge" style="background:#f5f5f5;color:#333">不明</span></td>
+          <td class="small muted">—</td>
+          <td class="num" style="color:#2e7d32">+0.0529</td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span class="badge safe-badge">✅ safe</span></td>
+        </tr><tr>
+          <td><code>ブリンカー変更</code></td>
+          <td><span class="badge" style="background:#f5f5f5;color:#333">不明</span></td>
+          <td class="small muted">—</td>
+          <td class="num" style="color:#2e7d32">+0.0230</td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span class="badge safe-badge">✅ safe</span></td>
+        </tr><tr>
+          <td><code>2走前_クラス差</code></td>
+          <td><span class="badge" style="background:#e3f2fd;color:#0d47a1">前走データ</span></td>
+          <td class="small muted">shift(2) by 馬名S</td>
+          <td class="num" style="color:#2e7d32">+0.0334</td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span class="badge safe-badge">✅ safe</span></td>
+        </tr><tr>
+          <td><code>4走前_クラス差</code></td>
+          <td><span class="badge" style="background:#f5f5f5;color:#333">不明</span></td>
+          <td class="small muted">—</td>
+          <td class="num" style="color:#2e7d32">+0.0262</td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span class="badge safe-badge">✅ safe</span></td>
+        </tr><tr>
+          <td><code>1走前_馬場状態</code></td>
+          <td><span class="badge" style="background:#e3f2fd;color:#0d47a1">前走データ</span></td>
+          <td class="small muted">shift(1) + baba_map</td>
+          <td class="num" style="color:#c62828">-0.0157</td>
+          <td class="num"><span style="background:#fff9c4;color:#e65100;padding:1px 6px;border-radius:10px;font-size:.8rem">31%</span></td>
+          <td class="num"><span style="background:#fff9c4;color:#e65100;padding:1px 6px;border-radius:10px;font-size:.8rem">27%</span></td>
+          <td class="num"><span class="badge safe-badge">✅ safe</span></td>
+        </tr><tr>
+          <td><code>性別_num</code></td>
+          <td><span class="badge" style="background:#e8f5e9;color:#1b5e20">race-day固定</span></td>
+          <td class="small muted">エントリー時決定</td>
+          <td class="num" style="color:#c62828">-0.0961</td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span class="badge safe-badge">✅ safe</span></td>
+        </tr><tr>
+          <td><code>所属_num</code></td>
+          <td><span class="badge" style="background:#f5f5f5;color:#333">不明</span></td>
+          <td class="small muted">—</td>
+          <td class="num" style="color:#2e7d32">+0.0916</td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span class="badge safe-badge">✅ safe</span></td>
+        </tr><tr>
+          <td><code>キャリア_浅い</code></td>
+          <td><span class="badge" style="background:#f5f5f5;color:#333">不明</span></td>
+          <td class="small muted">—</td>
+          <td class="num" style="color:#2e7d32">+0.0644</td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span class="badge safe-badge">✅ safe</span></td>
+        </tr><tr>
+          <td><code>タイム指数_近5走_slope</code></td>
+          <td><span class="badge" style="background:#f5f5f5;color:#333">不明</span></td>
+          <td class="small muted">—</td>
+          <td class="num" style="color:#c62828">-0.0049</td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">16%</span></td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">17%</span></td>
+          <td class="num"><span class="badge safe-badge">✅ safe</span></td>
+        </tr></tbody>
+    </table>
+      <div class="leak-legend">
+        <span class="legend-item" style="background:#e8f5e9;color:#1b5e20">race-day固定</span>
+        <span class="legend-item" style="background:#e3f2fd;color:#0d47a1">前走データ (shift)</span>
+        <span class="legend-item" style="background:#fff8e1;color:#e65100">rolling-5 (shift based)</span>
+        <span class="legend-item" style="background:#fce4ec;color:#880e4f">global統計 (_stat_mask 2013-2020)</span>
+      </div>
+    </div>
+  </section>
+  <section id="da-short" class="seg-section">
+    <div class="seg-header" style="border-left:5px solid #bf360c">
+      <div>
+        <h2 style="color:#bf360c">ダ短 <span class="seg-sublabel">ダート短距離</span></h2>
+        <p class="seg-cond">距離 ≤ 1400m &nbsp;·&nbsp; nv3 / 10特徴 / greedy (2323選択)</p>
+      </div>
+    </div>
+    <p class="seg-note">旧nv2(5特徴)から10特徴へ拡張。greedy forward selectionで2323指標を最大化。</p>
+    
+    <div class="kpi-row">
+      <div class="kpi-card">
+        <div class="kpi-label">2323 ROI <span class="kpi-star">★ 選択指標</span></div>
+        <div class="kpi-val" style="color:#bf360c"><span style="color:#2e7d32;font-weight:700;font-size:1.35rem">+8.10%</span></div>
+        <div class="kpi-sub">1,450 レース (2023–24)</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">2025 ROI <span class="kpi-note">参考</span></div>
+        <div class="kpi-val"><span style="color:#c62828;font-weight:700;font-size:1.35rem">-31.82%</span></div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">2026 ROI <span class="kpi-note">参考</span></div>
+        <div class="kpi-val"><span style="color:#e65100;font-weight:700;font-size:1.35rem">-0.58%</span></div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">特徴量数 / モデル</div>
+        <div class="kpi-val" style="font-size:1.6rem;color:#bf360c">10</div>
+        <div class="kpi-sub">nv3 / 10特徴 / greedy (2323選択)</div>
+      </div>
+    </div>
+
+    <div class="tab-group" data-seg="da-short">
+      <button class="tab-btn active" data-tab="roi">年別 ROI</button>
+      <button class="tab-btn" data-tab="odds">オッズ帯別</button>
+      <button class="tab-btn" data-tab="feats">特徴量 / リークチェック</button>
+    </div>
+
+    <div class="tab-content active" data-seg="da-short" data-tab="roi">
+      
+    <table>
+      <thead><tr>
+        <th>期間</th><th>R数</th><th>的中</th><th>的中率</th>
+        <th>回収率</th><th>平均オッズ(的中)</th><th>平均オッズ(全)</th>
+      </tr></thead>
+      <tbody><tr style="background:">
+          <td style="">訓練 2013-21</td>
+          <td class="num">6,874</td>
+          <td class="num">788</td>
+          <td class="num" style="background:#fff9c4">11.5%</td>
+          <td class="num" style="background:#ffcdd2"><span style="color:#c62828;font-weight:700;font-size:inherit">-27.51%</span></td>
+          <td class="num">6.32</td>
+          <td class="num">40.80</td>
+        </tr><tr style="background:">
+          <td style="">Val 2022</td>
+          <td class="num">741</td>
+          <td class="num">87</td>
+          <td class="num" style="background:#fff9c4">11.7%</td>
+          <td class="num" style="background:#ffcdd2"><span style="color:#c62828;font-weight:700;font-size:inherit">-18.83%</span></td>
+          <td class="num">6.91</td>
+          <td class="num">39.93</td>
+        </tr><tr style="background:">
+          <td style="">2023</td>
+          <td class="num">719</td>
+          <td class="num">86</td>
+          <td class="num" style="background:#fff9c4">12.0%</td>
+          <td class="num" style="background:#ffcdd2"><span style="color:#c62828;font-weight:700;font-size:inherit">-23.59%</span></td>
+          <td class="num">6.39</td>
+          <td class="num">39.87</td>
+        </tr><tr style="background:">
+          <td style="">2024</td>
+          <td class="num">731</td>
+          <td class="num">109</td>
+          <td class="num" style="background:#fff9c4">14.9%</td>
+          <td class="num" style="background:#c8e6c9"><span style="color:#2e7d32;font-weight:700;font-size:inherit">+39.26%</span></td>
+          <td class="num">9.34</td>
+          <td class="num">39.94</td>
+        </tr><tr style="background:#eef2ff">
+          <td style="font-weight:600;">2023-24 ★ ★</td>
+          <td class="num">1,450</td>
+          <td class="num">195</td>
+          <td class="num" style="background:#fff9c4">13.4%</td>
+          <td class="num" style="background:#c8e6c9"><span style="color:#2e7d32;font-weight:700;font-size:inherit">+8.10%</span></td>
+          <td class="num">8.04</td>
+          <td class="num">39.90</td>
+        </tr><tr style="background:">
+          <td style="">2025</td>
+          <td class="num">718</td>
+          <td class="num">89</td>
+          <td class="num" style="background:#fff9c4">12.4%</td>
+          <td class="num" style="background:#ffcdd2"><span style="color:#c62828;font-weight:700;font-size:inherit">-31.82%</span></td>
+          <td class="num">5.50</td>
+          <td class="num">48.64</td>
+        </tr><tr style="background:">
+          <td style="">2026</td>
+          <td class="num">278</td>
+          <td class="num">40</td>
+          <td class="num" style="background:#fff9c4">14.4%</td>
+          <td class="num" style="background:#fff9c4"><span style="color:#e65100;font-weight:700;font-size:inherit">-0.58%</span></td>
+          <td class="num">6.91</td>
+          <td class="num">44.60</td>
+        </tr></tbody>
+    </table>
+      <p class="small muted">★ 2023-24 = 選択指標（この期間のみを最適化）。2025・2026は真のOOS参考値。</p>
+    </div>
+    <div class="tab-content" data-seg="da-short" data-tab="odds">
+      <p class="small muted">集計対象: OOS 2023–2026</p>
+      
+    <table>
+      <thead><tr>
+        <th>オッズ帯</th><th>R数</th><th>的中</th><th>的中率</th>
+        <th>回収率</th><th>平均オッズ(的中)</th>
+      </tr></thead>
+      <tbody><tr>
+          <td><strong>~3倍</strong></td>
+          <td class="num">334</td>
+          <td class="num">136</td>
+          <td class="num" style="background:#c8e6c9">40.7%</td>
+          <td class="num" style="background:#ffcdd2"><span style="color:#c62828;font-weight:700;font-size:inherit">-13.17%</span></td>
+          <td class="num">2.13</td>
+        </tr><tr>
+          <td><strong>3〜6倍</strong></td>
+          <td class="num">500</td>
+          <td class="num">96</td>
+          <td class="num" style="background:#c8e6c9">19.2%</td>
+          <td class="num" style="background:#ffcdd2"><span style="color:#c62828;font-weight:700;font-size:inherit">-19.26%</span></td>
+          <td class="num">4.21</td>
+        </tr><tr>
+          <td><strong>6〜10倍</strong></td>
+          <td class="num">341</td>
+          <td class="num">48</td>
+          <td class="num" style="background:#fff9c4">14.1%</td>
+          <td class="num" style="background:#c8e6c9"><span style="color:#2e7d32;font-weight:700;font-size:inherit">+7.04%</span></td>
+          <td class="num">7.60</td>
+        </tr><tr>
+          <td><strong>10〜20倍</strong></td>
+          <td class="num">375</td>
+          <td class="num">22</td>
+          <td class="num" style="background:#ffcdd2">5.9%</td>
+          <td class="num" style="background:#ffcdd2"><span style="color:#c62828;font-weight:700;font-size:inherit">-21.57%</span></td>
+          <td class="num">13.37</td>
+        </tr><tr>
+          <td><strong>20〜50倍</strong></td>
+          <td class="num">383</td>
+          <td class="num">19</td>
+          <td class="num" style="background:#ffcdd2">5.0%</td>
+          <td class="num" style="background:#c8e6c9"><span style="color:#2e7d32;font-weight:700;font-size:inherit">+56.48%</span></td>
+          <td class="num">31.54</td>
+        </tr><tr>
+          <td><strong>50倍〜</strong></td>
+          <td class="num">513</td>
+          <td class="num">3</td>
+          <td class="num" style="background:#ffcdd2">0.6%</td>
+          <td class="num" style="background:#ffcdd2"><span style="color:#c62828;font-weight:700;font-size:inherit">-25.69%</span></td>
+          <td class="num">127.07</td>
+        </tr></tbody>
+    </table>
+    </div>
+    <div class="tab-content" data-seg="da-short" data-tab="feats">
+      
+    <table>
+      <thead><tr>
+        <th>特徴量</th><th>種別</th><th>計算方法</th>
+        <th>β係数</th><th>NaN率 (train)</th><th>NaN率 (OOS)</th><th>リーク判定</th>
+      </tr></thead>
+      <tbody><tr>
+          <td><code>近5走_上り3F平均</code></td>
+          <td><span class="badge" style="background:#fff8e1;color:#e65100">rolling-5</span></td>
+          <td class="small muted">1走前~5走前の平均</td>
+          <td class="num" style="color:#2e7d32">+0.1603</td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">10%</span></td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">9%</span></td>
+          <td class="num"><span class="badge safe-badge">✅ safe</span></td>
+        </tr><tr>
+          <td><code>コース枠_r200_勝率</code></td>
+          <td><span class="badge" style="background:#fce4ec;color:#880e4f">global統計</span></td>
+          <td class="small muted">_stat_mask 2013-2020固定</td>
+          <td class="num" style="color:#2e7d32">+0.0017</td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span class="badge safe-badge">✅ safe</span></td>
+        </tr><tr>
+          <td><code>1走前_馬場状態</code></td>
+          <td><span class="badge" style="background:#e3f2fd;color:#0d47a1">前走データ</span></td>
+          <td class="small muted">shift(1) + baba_map</td>
+          <td class="num" style="color:#2e7d32">+0.0006</td>
+          <td class="num"><span style="background:#fff9c4;color:#e65100;padding:1px 6px;border-radius:10px;font-size:.8rem">33%</span></td>
+          <td class="num"><span style="background:#fff9c4;color:#e65100;padding:1px 6px;border-radius:10px;font-size:.8rem">29%</span></td>
+          <td class="num"><span class="badge safe-badge">✅ safe</span></td>
+        </tr><tr>
+          <td><code>1走前_クラス差</code></td>
+          <td><span class="badge" style="background:#e3f2fd;color:#0d47a1">前走データ</span></td>
+          <td class="small muted">shift(1) by 馬名S</td>
+          <td class="num" style="color:#2e7d32">+0.0756</td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span class="badge safe-badge">✅ safe</span></td>
+        </tr><tr>
+          <td><code>2走前_クラス差</code></td>
+          <td><span class="badge" style="background:#e3f2fd;color:#0d47a1">前走データ</span></td>
+          <td class="small muted">shift(2) by 馬名S</td>
+          <td class="num" style="color:#2e7d32">+0.0336</td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span class="badge safe-badge">✅ safe</span></td>
+        </tr><tr>
+          <td><code>性別_num</code></td>
+          <td><span class="badge" style="background:#e8f5e9;color:#1b5e20">race-day固定</span></td>
+          <td class="small muted">エントリー時決定</td>
+          <td class="num" style="color:#c62828">-0.0540</td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span class="badge safe-badge">✅ safe</span></td>
+        </tr><tr>
+          <td><code>斤量</code></td>
+          <td><span class="badge" style="background:#e8f5e9;color:#1b5e20">race-day固定</span></td>
+          <td class="small muted">エントリー時決定</td>
+          <td class="num" style="color:#2e7d32">+0.0937</td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span class="badge safe-badge">✅ safe</span></td>
+        </tr><tr>
+          <td><code>同会場_平均着順_近5走</code></td>
+          <td><span class="badge" style="background:#fff8e1;color:#e65100">rolling-5</span></td>
+          <td class="small muted">1走前~5走前同会場フィルタ</td>
+          <td class="num" style="color:#c62828">-0.2570</td>
+          <td class="num"><span style="background:#fff9c4;color:#e65100;padding:1px 6px;border-radius:10px;font-size:.8rem">49%</span></td>
+          <td class="num"><span style="background:#fff9c4;color:#e65100;padding:1px 6px;border-radius:10px;font-size:.8rem">49%</span></td>
+          <td class="num"><span class="badge safe-badge">✅ safe</span></td>
+        </tr><tr>
+          <td><code>馬体重</code></td>
+          <td><span class="badge" style="background:#e8f5e9;color:#1b5e20">race-day固定</span></td>
+          <td class="small muted">レース当日公表</td>
+          <td class="num" style="color:#2e7d32">+0.2598</td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span class="badge safe-badge">✅ safe</span></td>
+        </tr><tr>
+          <td><code>馬距離_勝率</code></td>
+          <td><span class="badge" style="background:#fce4ec;color:#880e4f">global統計</span></td>
+          <td class="small muted">_stat_mask 2013-2020固定</td>
+          <td class="num" style="color:#2e7d32">+0.2550</td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span class="badge safe-badge">✅ safe</span></td>
+        </tr></tbody>
+    </table>
+      <div class="leak-legend">
+        <span class="legend-item" style="background:#e8f5e9;color:#1b5e20">race-day固定</span>
+        <span class="legend-item" style="background:#e3f2fd;color:#0d47a1">前走データ (shift)</span>
+        <span class="legend-item" style="background:#fff8e1;color:#e65100">rolling-5 (shift based)</span>
+        <span class="legend-item" style="background:#fce4ec;color:#880e4f">global統計 (_stat_mask 2013-2020)</span>
+      </div>
+    </div>
+  </section>
+  <section id="shiba-mid" class="seg-section">
+    <div class="seg-header" style="border-left:5px solid #1b5e20">
+      <div>
+        <h2 style="color:#1b5e20">芝中 <span class="seg-sublabel">芝中距離</span></h2>
+        <p class="seg-cond">1400m < 距離 ≤ 2000m &nbsp;·&nbsp; 10特徴 / greedy (2323選択)</p>
+      </div>
+    </div>
+    <p class="seg-note">旧AI(5特徴,25+26=+8.81%)から10特徴へ。的中率23-24%と安定。</p>
+    
+    <div class="kpi-row">
+      <div class="kpi-card">
+        <div class="kpi-label">2323 ROI <span class="kpi-star">★ 選択指標</span></div>
+        <div class="kpi-val" style="color:#1b5e20"><span style="color:#c62828;font-weight:700;font-size:1.35rem">-6.52%</span></div>
+        <div class="kpi-sub">1,953 レース (2023–24)</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">2025 ROI <span class="kpi-note">参考</span></div>
+        <div class="kpi-val"><span style="color:#e65100;font-weight:700;font-size:1.35rem">-4.87%</span></div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">2026 ROI <span class="kpi-note">参考</span></div>
+        <div class="kpi-val"><span style="color:#c62828;font-weight:700;font-size:1.35rem">-27.29%</span></div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">特徴量数 / モデル</div>
+        <div class="kpi-val" style="font-size:1.6rem;color:#1b5e20">10</div>
+        <div class="kpi-sub">10特徴 / greedy (2323選択)</div>
+      </div>
+    </div>
+
+    <div class="tab-group" data-seg="shiba-mid">
+      <button class="tab-btn active" data-tab="roi">年別 ROI</button>
+      <button class="tab-btn" data-tab="odds">オッズ帯別</button>
+      <button class="tab-btn" data-tab="feats">特徴量 / リークチェック</button>
+    </div>
+
+    <div class="tab-content active" data-seg="shiba-mid" data-tab="roi">
+      
+    <table>
+      <thead><tr>
+        <th>期間</th><th>R数</th><th>的中</th><th>的中率</th>
+        <th>回収率</th><th>平均オッズ(的中)</th><th>平均オッズ(全)</th>
+      </tr></thead>
+      <tbody><tr style="background:">
+          <td style="">訓練 2013-21</td>
+          <td class="num">8,551</td>
+          <td class="num">1,823</td>
+          <td class="num" style="background:#c8e6c9">21.3%</td>
+          <td class="num" style="background:#ffcdd2"><span style="color:#c62828;font-weight:700;font-size:inherit">-24.08%</span></td>
+          <td class="num">3.56</td>
+          <td class="num">13.64</td>
+        </tr><tr style="background:">
+          <td style="">Val 2022</td>
+          <td class="num">957</td>
+          <td class="num">208</td>
+          <td class="num" style="background:#c8e6c9">21.7%</td>
+          <td class="num" style="background:#ffcdd2"><span style="color:#c62828;font-weight:700;font-size:inherit">-30.29%</span></td>
+          <td class="num">3.21</td>
+          <td class="num">13.86</td>
+        </tr><tr style="background:">
+          <td style="">2023</td>
+          <td class="num">986</td>
+          <td class="num">244</td>
+          <td class="num" style="background:#c8e6c9">24.7%</td>
+          <td class="num" style="background:#fff9c4"><span style="color:#2e7d32;font-weight:700;font-size:inherit">+0.92%</span></td>
+          <td class="num">4.08</td>
+          <td class="num">14.93</td>
+        </tr><tr style="background:">
+          <td style="">2024</td>
+          <td class="num">967</td>
+          <td class="num">225</td>
+          <td class="num" style="background:#c8e6c9">23.3%</td>
+          <td class="num" style="background:#ffcdd2"><span style="color:#c62828;font-weight:700;font-size:inherit">-14.12%</span></td>
+          <td class="num">3.69</td>
+          <td class="num">16.21</td>
+        </tr><tr style="background:#eef2ff">
+          <td style="font-weight:600;">2023-24 ★ ★</td>
+          <td class="num">1,953</td>
+          <td class="num">469</td>
+          <td class="num" style="background:#c8e6c9">24.0%</td>
+          <td class="num" style="background:#ffcdd2"><span style="color:#c62828;font-weight:700;font-size:inherit">-6.52%</span></td>
+          <td class="num">3.89</td>
+          <td class="num">15.56</td>
+        </tr><tr style="background:">
+          <td style="">2025</td>
+          <td class="num">1,002</td>
+          <td class="num">234</td>
+          <td class="num" style="background:#c8e6c9">23.4%</td>
+          <td class="num" style="background:#fff9c4"><span style="color:#e65100;font-weight:700;font-size:inherit">-4.87%</span></td>
+          <td class="num">4.07</td>
+          <td class="num">15.27</td>
+        </tr><tr style="background:">
+          <td style="">2026</td>
+          <td class="num">317</td>
+          <td class="num">63</td>
+          <td class="num" style="background:#c8e6c9">19.9%</td>
+          <td class="num" style="background:#ffcdd2"><span style="color:#c62828;font-weight:700;font-size:inherit">-27.29%</span></td>
+          <td class="num">3.66</td>
+          <td class="num">15.18</td>
+        </tr></tbody>
+    </table>
+      <p class="small muted">★ 2023-24 = 選択指標（この期間のみを最適化）。2025・2026は真のOOS参考値。</p>
+    </div>
+    <div class="tab-content" data-seg="shiba-mid" data-tab="odds">
+      <p class="small muted">集計対象: OOS 2023–2026</p>
+      
+    <table>
+      <thead><tr>
+        <th>オッズ帯</th><th>R数</th><th>的中</th><th>的中率</th>
+        <th>回収率</th><th>平均オッズ(的中)</th>
+      </tr></thead>
+      <tbody><tr>
+          <td><strong>~3倍</strong></td>
+          <td class="num">1,122</td>
+          <td class="num">466</td>
+          <td class="num" style="background:#c8e6c9">41.5%</td>
+          <td class="num" style="background:#ffcdd2"><span style="color:#c62828;font-weight:700;font-size:inherit">-16.84%</span></td>
+          <td class="num">2.00</td>
+        </tr><tr>
+          <td><strong>3〜6倍</strong></td>
+          <td class="num">1,053</td>
+          <td class="num">228</td>
+          <td class="num" style="background:#c8e6c9">21.7%</td>
+          <td class="num" style="background:#ffcdd2"><span style="color:#c62828;font-weight:700;font-size:inherit">-9.94%</span></td>
+          <td class="num">4.16</td>
+        </tr><tr>
+          <td><strong>6〜10倍</strong></td>
+          <td class="num">399</td>
+          <td class="num">36</td>
+          <td class="num" style="background:#fff9c4">9.0%</td>
+          <td class="num" style="background:#ffcdd2"><span style="color:#c62828;font-weight:700;font-size:inherit">-33.51%</span></td>
+          <td class="num">7.37</td>
+        </tr><tr>
+          <td><strong>10〜20倍</strong></td>
+          <td class="num">285</td>
+          <td class="num">21</td>
+          <td class="num" style="background:#fff9c4">7.4%</td>
+          <td class="num" style="background:#c8e6c9"><span style="color:#2e7d32;font-weight:700;font-size:inherit">+5.02%</span></td>
+          <td class="num">14.25</td>
+        </tr><tr>
+          <td><strong>20〜50倍</strong></td>
+          <td class="num">187</td>
+          <td class="num">10</td>
+          <td class="num" style="background:#ffcdd2">5.3%</td>
+          <td class="num" style="background:#c8e6c9"><span style="color:#2e7d32;font-weight:700;font-size:inherit">+51.66%</span></td>
+          <td class="num">28.36</td>
+        </tr><tr>
+          <td><strong>50倍〜</strong></td>
+          <td class="num">226</td>
+          <td class="num">5</td>
+          <td class="num" style="background:#ffcdd2">2.2%</td>
+          <td class="num" style="background:#c8e6c9"><span style="color:#2e7d32;font-weight:700;font-size:inherit">+23.76%</span></td>
+          <td class="num">55.94</td>
+        </tr></tbody>
+    </table>
+    </div>
+    <div class="tab-content" data-seg="shiba-mid" data-tab="feats">
+      
+    <table>
+      <thead><tr>
+        <th>特徴量</th><th>種別</th><th>計算方法</th>
+        <th>β係数</th><th>NaN率 (train)</th><th>NaN率 (OOS)</th><th>リーク判定</th>
+      </tr></thead>
+      <tbody><tr>
+          <td><code>調教師コース_r100_勝率</code></td>
+          <td><span class="badge" style="background:#fce4ec;color:#880e4f">global統計</span></td>
+          <td class="small muted">_stat_mask 2013-2020固定</td>
+          <td class="num" style="color:#2e7d32">+0.3101</td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span class="badge safe-badge">✅ safe</span></td>
+        </tr><tr>
+          <td><code>馬距離_勝率</code></td>
+          <td><span class="badge" style="background:#fce4ec;color:#880e4f">global統計</span></td>
+          <td class="small muted">_stat_mask 2013-2020固定</td>
+          <td class="num" style="color:#2e7d32">+0.1468</td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span class="badge safe-badge">✅ safe</span></td>
+        </tr><tr>
+          <td><code>1走前_クラス調整着順</code></td>
+          <td><span class="badge" style="background:#e3f2fd;color:#0d47a1">前走データ</span></td>
+          <td class="small muted">shift(1) by 馬名S</td>
+          <td class="num" style="color:#c62828">-0.2776</td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">16%</span></td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">16%</span></td>
+          <td class="num"><span class="badge safe-badge">✅ safe</span></td>
+        </tr><tr>
+          <td><code>近5走_クラス調整_平均着順</code></td>
+          <td><span class="badge" style="background:#fff8e1;color:#e65100">rolling-5</span></td>
+          <td class="small muted">1走前~5走前クラス補正平均</td>
+          <td class="num" style="color:#c62828">-0.3061</td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">16%</span></td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">15%</span></td>
+          <td class="num"><span class="badge safe-badge">✅ safe</span></td>
+        </tr><tr>
+          <td><code>間隔</code></td>
+          <td><span class="badge" style="background:#e8f5e9;color:#1b5e20">race-day固定</span></td>
+          <td class="small muted">前走日付との差分</td>
+          <td class="num" style="color:#c62828">-0.0010</td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">15%</span></td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">15%</span></td>
+          <td class="num"><span class="badge safe-badge">✅ safe</span></td>
+        </tr><tr>
+          <td><code>馬番</code></td>
+          <td><span class="badge" style="background:#e8f5e9;color:#1b5e20">race-day固定</span></td>
+          <td class="small muted">エントリー時決定</td>
+          <td class="num" style="color:#c62828">-0.0315</td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span class="badge safe-badge">✅ safe</span></td>
+        </tr><tr>
+          <td><code>前走着差タイム</code></td>
+          <td><span class="badge" style="background:#e3f2fd;color:#0d47a1">前走データ</span></td>
+          <td class="small muted">shift(1) _着差_sec</td>
+          <td class="num" style="color:#c62828">-0.3008</td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">15%</span></td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">16%</span></td>
+          <td class="num"><span class="badge safe-badge">✅ safe</span></td>
+        </tr><tr>
+          <td><code>良馬場_平均着順_近5走</code></td>
+          <td><span class="badge" style="background:#fff8e1;color:#e65100">rolling-5</span></td>
+          <td class="small muted">1走前~5走前良馬場フィルタ</td>
+          <td class="num" style="color:#c62828">-0.2727</td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">20%</span></td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">18%</span></td>
+          <td class="num"><span class="badge safe-badge">✅ safe</span></td>
+        </tr><tr>
+          <td><code>2走前_クラス差</code></td>
+          <td><span class="badge" style="background:#e3f2fd;color:#0d47a1">前走データ</span></td>
+          <td class="small muted">shift(2) by 馬名S</td>
+          <td class="num" style="color:#2e7d32">+0.1007</td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span class="badge safe-badge">✅ safe</span></td>
+        </tr><tr>
+          <td><code>コース枠_r200_勝率</code></td>
+          <td><span class="badge" style="background:#fce4ec;color:#880e4f">global統計</span></td>
+          <td class="small muted">_stat_mask 2013-2020固定</td>
+          <td class="num" style="color:#2e7d32">+0.0054</td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span class="badge safe-badge">✅ safe</span></td>
+        </tr></tbody>
+    </table>
+      <div class="leak-legend">
+        <span class="legend-item" style="background:#e8f5e9;color:#1b5e20">race-day固定</span>
+        <span class="legend-item" style="background:#e3f2fd;color:#0d47a1">前走データ (shift)</span>
+        <span class="legend-item" style="background:#fff8e1;color:#e65100">rolling-5 (shift based)</span>
+        <span class="legend-item" style="background:#fce4ec;color:#880e4f">global統計 (_stat_mask 2013-2020)</span>
+      </div>
+    </div>
+  </section>
+  <section id="shiba-long" class="seg-section">
+    <div class="seg-header" style="border-left:5px solid #004d40">
+      <div>
+        <h2 style="color:#004d40">芝長 <span class="seg-sublabel">芝長距離</span></h2>
+        <p class="seg-cond">距離 > 2000m &nbsp;·&nbsp; 10特徴 / greedy+triplet (2323選択)</p>
+      </div>
+    </div>
+    <p class="seg-note">旧Y8(5特徴,25+26=-3.03%)から大幅改善。2025/2026ともプラス。</p>
+    
+    <div class="kpi-row">
+      <div class="kpi-card">
+        <div class="kpi-label">2323 ROI <span class="kpi-star">★ 選択指標</span></div>
+        <div class="kpi-val" style="color:#004d40"><span style="color:#2e7d32;font-weight:700;font-size:1.35rem">+3.41%</span></div>
+        <div class="kpi-sub">578 レース (2023–24)</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">2025 ROI <span class="kpi-note">参考</span></div>
+        <div class="kpi-val"><span style="color:#2e7d32;font-weight:700;font-size:1.35rem">+6.04%</span></div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">2026 ROI <span class="kpi-note">参考</span></div>
+        <div class="kpi-val"><span style="color:#2e7d32;font-weight:700;font-size:1.35rem">+26.02%</span></div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">特徴量数 / モデル</div>
+        <div class="kpi-val" style="font-size:1.6rem;color:#004d40">10</div>
+        <div class="kpi-sub">10特徴 / greedy+triplet (2323選択)</div>
+      </div>
+    </div>
+
+    <div class="tab-group" data-seg="shiba-long">
+      <button class="tab-btn active" data-tab="roi">年別 ROI</button>
+      <button class="tab-btn" data-tab="odds">オッズ帯別</button>
+      <button class="tab-btn" data-tab="feats">特徴量 / リークチェック</button>
+    </div>
+
+    <div class="tab-content active" data-seg="shiba-long" data-tab="roi">
+      
+    <table>
+      <thead><tr>
+        <th>期間</th><th>R数</th><th>的中</th><th>的中率</th>
+        <th>回収率</th><th>平均オッズ(的中)</th><th>平均オッズ(全)</th>
+      </tr></thead>
+      <tbody><tr style="background:">
+          <td style="">訓練 2013-21</td>
+          <td class="num">2,439</td>
+          <td class="num">529</td>
+          <td class="num" style="background:#c8e6c9">21.7%</td>
+          <td class="num" style="background:#ffcdd2"><span style="color:#c62828;font-weight:700;font-size:inherit">-25.27%</span></td>
+          <td class="num">3.45</td>
+          <td class="num">9.42</td>
+        </tr><tr style="background:">
+          <td style="">Val 2022</td>
+          <td class="num">286</td>
+          <td class="num">63</td>
+          <td class="num" style="background:#c8e6c9">22.0%</td>
+          <td class="num" style="background:#ffcdd2"><span style="color:#c62828;font-weight:700;font-size:inherit">-31.43%</span></td>
+          <td class="num">3.11</td>
+          <td class="num">7.64</td>
+        </tr><tr style="background:">
+          <td style="">2023</td>
+          <td class="num">284</td>
+          <td class="num">60</td>
+          <td class="num" style="background:#c8e6c9">21.1%</td>
+          <td class="num" style="background:#c8e6c9"><span style="color:#2e7d32;font-weight:700;font-size:inherit">+9.44%</span></td>
+          <td class="num">5.18</td>
+          <td class="num">9.55</td>
+        </tr><tr style="background:">
+          <td style="">2024</td>
+          <td class="num">294</td>
+          <td class="num">79</td>
+          <td class="num" style="background:#c8e6c9">26.9%</td>
+          <td class="num" style="background:#fff9c4"><span style="color:#e65100;font-weight:700;font-size:inherit">-2.41%</span></td>
+          <td class="num">3.63</td>
+          <td class="num">8.34</td>
+        </tr><tr style="background:#eef2ff">
+          <td style="font-weight:600;">2023-24 ★ ★</td>
+          <td class="num">578</td>
+          <td class="num">139</td>
+          <td class="num" style="background:#c8e6c9">24.0%</td>
+          <td class="num" style="background:#fff9c4"><span style="color:#2e7d32;font-weight:700;font-size:inherit">+3.41%</span></td>
+          <td class="num">4.30</td>
+          <td class="num">8.93</td>
+        </tr><tr style="background:">
+          <td style="">2025</td>
+          <td class="num">268</td>
+          <td class="num">87</td>
+          <td class="num" style="background:#c8e6c9">32.5%</td>
+          <td class="num" style="background:#c8e6c9"><span style="color:#2e7d32;font-weight:700;font-size:inherit">+6.04%</span></td>
+          <td class="num">3.27</td>
+          <td class="num">9.71</td>
+        </tr><tr style="background:">
+          <td style="">2026</td>
+          <td class="num">103</td>
+          <td class="num">25</td>
+          <td class="num" style="background:#c8e6c9">24.3%</td>
+          <td class="num" style="background:#c8e6c9"><span style="color:#2e7d32;font-weight:700;font-size:inherit">+26.02%</span></td>
+          <td class="num">5.19</td>
+          <td class="num">15.05</td>
+        </tr></tbody>
+    </table>
+      <p class="small muted">★ 2023-24 = 選択指標（この期間のみを最適化）。2025・2026は真のOOS参考値。</p>
+    </div>
+    <div class="tab-content" data-seg="shiba-long" data-tab="odds">
+      <p class="small muted">集計対象: OOS 2023–2026</p>
+      
+    <table>
+      <thead><tr>
+        <th>オッズ帯</th><th>R数</th><th>的中</th><th>的中率</th>
+        <th>回収率</th><th>平均オッズ(的中)</th>
+      </tr></thead>
+      <tbody><tr>
+          <td><strong>~3倍</strong></td>
+          <td class="num">331</td>
+          <td class="num">152</td>
+          <td class="num" style="background:#c8e6c9">45.9%</td>
+          <td class="num" style="background:#ffcdd2"><span style="color:#c62828;font-weight:700;font-size:inherit">-5.29%</span></td>
+          <td class="num">2.06</td>
+        </tr><tr>
+          <td><strong>3〜6倍</strong></td>
+          <td class="num">311</td>
+          <td class="num">72</td>
+          <td class="num" style="background:#c8e6c9">23.2%</td>
+          <td class="num" style="background:#ffcdd2"><span style="color:#c62828;font-weight:700;font-size:inherit">-7.59%</span></td>
+          <td class="num">3.99</td>
+        </tr><tr>
+          <td><strong>6〜10倍</strong></td>
+          <td class="num">133</td>
+          <td class="num">14</td>
+          <td class="num" style="background:#fff9c4">10.5%</td>
+          <td class="num" style="background:#ffcdd2"><span style="color:#c62828;font-weight:700;font-size:inherit">-21.05%</span></td>
+          <td class="num">7.50</td>
+        </tr><tr>
+          <td><strong>10〜20倍</strong></td>
+          <td class="num">95</td>
+          <td class="num">7</td>
+          <td class="num" style="background:#fff9c4">7.4%</td>
+          <td class="num" style="background:#fff9c4"><span style="color:#2e7d32;font-weight:700;font-size:inherit">+2.32%</span></td>
+          <td class="num">13.89</td>
+        </tr><tr>
+          <td><strong>20〜50倍</strong></td>
+          <td class="num">49</td>
+          <td class="num">5</td>
+          <td class="num" style="background:#fff9c4">10.2%</td>
+          <td class="num" style="background:#c8e6c9"><span style="color:#2e7d32;font-weight:700;font-size:inherit">+210.20%</span></td>
+          <td class="num">30.40</td>
+        </tr><tr>
+          <td><strong>50倍〜</strong></td>
+          <td class="num">30</td>
+          <td class="num">1</td>
+          <td class="num" style="background:#ffcdd2">3.3%</td>
+          <td class="num" style="background:#c8e6c9"><span style="color:#2e7d32;font-weight:700;font-size:inherit">+88.67%</span></td>
+          <td class="num">56.60</td>
+        </tr></tbody>
+    </table>
+    </div>
+    <div class="tab-content" data-seg="shiba-long" data-tab="feats">
+      
+    <table>
+      <thead><tr>
+        <th>特徴量</th><th>種別</th><th>計算方法</th>
+        <th>β係数</th><th>NaN率 (train)</th><th>NaN率 (OOS)</th><th>リーク判定</th>
+      </tr></thead>
+      <tbody><tr>
+          <td><code>前走着差タイム</code></td>
+          <td><span class="badge" style="background:#e3f2fd;color:#0d47a1">前走データ</span></td>
+          <td class="small muted">shift(1) _着差_sec</td>
+          <td class="num" style="color:#c62828">-0.5384</td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">1%</span></td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">2%</span></td>
+          <td class="num"><span class="badge safe-badge">✅ safe</span></td>
+        </tr><tr>
+          <td><code>距離変化_前走</code></td>
+          <td><span class="badge" style="background:#e8f5e9;color:#1b5e20">race-day固定</span></td>
+          <td class="small muted">今回距離 - shift(1)距離</td>
+          <td class="num" style="color:#c62828">-0.2551</td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">2%</span></td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">1%</span></td>
+          <td class="num"><span class="badge safe-badge">✅ safe</span></td>
+        </tr><tr>
+          <td><code>1走前_クラス差</code></td>
+          <td><span class="badge" style="background:#e3f2fd;color:#0d47a1">前走データ</span></td>
+          <td class="small muted">shift(1) by 馬名S</td>
+          <td class="num" style="color:#2e7d32">+0.2005</td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span class="badge safe-badge">✅ safe</span></td>
+        </tr><tr>
+          <td><code>馬距離_勝率</code></td>
+          <td><span class="badge" style="background:#fce4ec;color:#880e4f">global統計</span></td>
+          <td class="small muted">_stat_mask 2013-2020固定</td>
+          <td class="num" style="color:#2e7d32">+0.3986</td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span class="badge safe-badge">✅ safe</span></td>
+        </tr><tr>
+          <td><code>間隔</code></td>
+          <td><span class="badge" style="background:#e8f5e9;color:#1b5e20">race-day固定</span></td>
+          <td class="small muted">前走日付との差分</td>
+          <td class="num" style="color:#c62828">-0.0516</td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">1%</span></td>
+          <td class="num"><span class="badge safe-badge">✅ safe</span></td>
+        </tr><tr>
+          <td><code>芝ダ転向</code></td>
+          <td><span class="badge" style="background:#e8f5e9;color:#1b5e20">race-day固定</span></td>
+          <td class="small muted">shift(1)路線との比較</td>
+          <td class="num" style="color:#c62828">-0.1175</td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span class="badge safe-badge">✅ safe</span></td>
+        </tr><tr>
+          <td><code>2走前_クラス差</code></td>
+          <td><span class="badge" style="background:#e3f2fd;color:#0d47a1">前走データ</span></td>
+          <td class="small muted">shift(2) by 馬名S</td>
+          <td class="num" style="color:#2e7d32">+0.0852</td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span class="badge safe-badge">✅ safe</span></td>
+        </tr><tr>
+          <td><code>斤量</code></td>
+          <td><span class="badge" style="background:#e8f5e9;color:#1b5e20">race-day固定</span></td>
+          <td class="small muted">エントリー時決定</td>
+          <td class="num" style="color:#2e7d32">+0.1428</td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span class="badge safe-badge">✅ safe</span></td>
+        </tr><tr>
+          <td><code>馬番</code></td>
+          <td><span class="badge" style="background:#e8f5e9;color:#1b5e20">race-day固定</span></td>
+          <td class="small muted">エントリー時決定</td>
+          <td class="num" style="color:#c62828">-0.0769</td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span class="badge safe-badge">✅ safe</span></td>
+        </tr><tr>
+          <td><code>近5走_上り3F_std</code></td>
+          <td><span class="badge" style="background:#fff8e1;color:#e65100">rolling-5</span></td>
+          <td class="small muted">1走前~5走前のstd</td>
+          <td class="num" style="color:#2e7d32">+0.0322</td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">6%</span></td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">5%</span></td>
+          <td class="num"><span class="badge safe-badge">✅ safe</span></td>
+        </tr></tbody>
+    </table>
+      <div class="leak-legend">
+        <span class="legend-item" style="background:#e8f5e9;color:#1b5e20">race-day固定</span>
+        <span class="legend-item" style="background:#e3f2fd;color:#0d47a1">前走データ (shift)</span>
+        <span class="legend-item" style="background:#fff8e1;color:#e65100">rolling-5 (shift based)</span>
+        <span class="legend-item" style="background:#fce4ec;color:#880e4f">global統計 (_stat_mask 2013-2020)</span>
+      </div>
+    </div>
+  </section>
+  <section id="shiba-short" class="seg-section">
+    <div class="seg-header" style="border-left:5px solid #1a237e">
+      <div>
+        <h2 style="color:#1a237e">芝短 <span class="seg-sublabel">芝短距離</span></h2>
+        <p class="seg-cond">距離 ≤ 1400m &nbsp;·&nbsp; nv3 / 10特徴 / forced greedy (2323選択)</p>
+      </div>
+    </div>
+    <p class="seg-note">旧nv2のOOSスヌーピング(74比較→+32.28%)を修正。2323基準で+27.05%。</p>
+    
+    <div class="kpi-row">
+      <div class="kpi-card">
+        <div class="kpi-label">2323 ROI <span class="kpi-star">★ 選択指標</span></div>
+        <div class="kpi-val" style="color:#1a237e"><span style="color:#2e7d32;font-weight:700;font-size:1.35rem">+27.05%</span></div>
+        <div class="kpi-sub">988 レース (2023–24)</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">2025 ROI <span class="kpi-note">参考</span></div>
+        <div class="kpi-val"><span style="color:#c62828;font-weight:700;font-size:1.35rem">-42.50%</span></div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">2026 ROI <span class="kpi-note">参考</span></div>
+        <div class="kpi-val"><span style="color:#c62828;font-weight:700;font-size:1.35rem">-13.17%</span></div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">特徴量数 / モデル</div>
+        <div class="kpi-val" style="font-size:1.6rem;color:#1a237e">10</div>
+        <div class="kpi-sub">nv3 / 10特徴 / forced greedy (2323選択)</div>
+      </div>
+    </div>
+
+    <div class="tab-group" data-seg="shiba-short">
+      <button class="tab-btn active" data-tab="roi">年別 ROI</button>
+      <button class="tab-btn" data-tab="odds">オッズ帯別</button>
+      <button class="tab-btn" data-tab="feats">特徴量 / リークチェック</button>
+    </div>
+
+    <div class="tab-content active" data-seg="shiba-short" data-tab="roi">
+      
+    <table>
+      <thead><tr>
+        <th>期間</th><th>R数</th><th>的中</th><th>的中率</th>
+        <th>回収率</th><th>平均オッズ(的中)</th><th>平均オッズ(全)</th>
+      </tr></thead>
+      <tbody><tr style="background:">
+          <td style="">訓練 2013-21</td>
+          <td class="num">4,738</td>
+          <td class="num">792</td>
+          <td class="num" style="background:#fff9c4">16.7%</td>
+          <td class="num" style="background:#ffcdd2"><span style="color:#c62828;font-weight:700;font-size:inherit">-20.76%</span></td>
+          <td class="num">4.74</td>
+          <td class="num">15.12</td>
+        </tr><tr style="background:">
+          <td style="">Val 2022</td>
+          <td class="num">490</td>
+          <td class="num">89</td>
+          <td class="num" style="background:#c8e6c9">18.2%</td>
+          <td class="num" style="background:#ffcdd2"><span style="color:#c62828;font-weight:700;font-size:inherit">-14.16%</span></td>
+          <td class="num">4.73</td>
+          <td class="num">13.29</td>
+        </tr><tr style="background:">
+          <td style="">2023</td>
+          <td class="num">499</td>
+          <td class="num">106</td>
+          <td class="num" style="background:#c8e6c9">21.2%</td>
+          <td class="num" style="background:#c8e6c9"><span style="color:#2e7d32;font-weight:700;font-size:inherit">+52.59%</span></td>
+          <td class="num">7.18</td>
+          <td class="num">13.27</td>
+        </tr><tr style="background:">
+          <td style="">2024</td>
+          <td class="num">489</td>
+          <td class="num">105</td>
+          <td class="num" style="background:#c8e6c9">21.5%</td>
+          <td class="num" style="background:#fff9c4"><span style="color:#2e7d32;font-weight:700;font-size:inherit">+1.00%</span></td>
+          <td class="num">4.70</td>
+          <td class="num">13.68</td>
+        </tr><tr style="background:#eef2ff">
+          <td style="font-weight:600;">2023-24 ★ ★</td>
+          <td class="num">988</td>
+          <td class="num">211</td>
+          <td class="num" style="background:#c8e6c9">21.4%</td>
+          <td class="num" style="background:#c8e6c9"><span style="color:#2e7d32;font-weight:700;font-size:inherit">+27.05%</span></td>
+          <td class="num">5.95</td>
+          <td class="num">13.47</td>
+        </tr><tr style="background:">
+          <td style="">2025</td>
+          <td class="num">492</td>
+          <td class="num">66</td>
+          <td class="num" style="background:#fff9c4">13.4%</td>
+          <td class="num" style="background:#ffcdd2"><span style="color:#c62828;font-weight:700;font-size:inherit">-42.50%</span></td>
+          <td class="num">4.29</td>
+          <td class="num">13.10</td>
+        </tr><tr style="background:">
+          <td style="">2026</td>
+          <td class="num">123</td>
+          <td class="num">22</td>
+          <td class="num" style="background:#c8e6c9">17.9%</td>
+          <td class="num" style="background:#ffcdd2"><span style="color:#c62828;font-weight:700;font-size:inherit">-13.17%</span></td>
+          <td class="num">4.85</td>
+          <td class="num">10.88</td>
+        </tr></tbody>
+    </table>
+      <p class="small muted">★ 2023-24 = 選択指標（この期間のみを最適化）。2025・2026は真のOOS参考値。</p>
+    </div>
+    <div class="tab-content" data-seg="shiba-short" data-tab="odds">
+      <p class="small muted">集計対象: OOS 2023–2026</p>
+      
+    <table>
+      <thead><tr>
+        <th>オッズ帯</th><th>R数</th><th>的中</th><th>的中率</th>
+        <th>回収率</th><th>平均オッズ(的中)</th>
+      </tr></thead>
+      <tbody><tr>
+          <td><strong>~3倍</strong></td>
+          <td class="num">351</td>
+          <td class="num">135</td>
+          <td class="num" style="background:#c8e6c9">38.5%</td>
+          <td class="num" style="background:#ffcdd2"><span style="color:#c62828;font-weight:700;font-size:inherit">-18.80%</span></td>
+          <td class="num">2.11</td>
+        </tr><tr>
+          <td><strong>3〜6倍</strong></td>
+          <td class="num">534</td>
+          <td class="num">104</td>
+          <td class="num" style="background:#c8e6c9">19.5%</td>
+          <td class="num" style="background:#ffcdd2"><span style="color:#c62828;font-weight:700;font-size:inherit">-15.15%</span></td>
+          <td class="num">4.36</td>
+        </tr><tr>
+          <td><strong>6〜10倍</strong></td>
+          <td class="num">265</td>
+          <td class="num">33</td>
+          <td class="num" style="background:#fff9c4">12.5%</td>
+          <td class="num" style="background:#ffcdd2"><span style="color:#c62828;font-weight:700;font-size:inherit">-5.77%</span></td>
+          <td class="num">7.57</td>
+        </tr><tr>
+          <td><strong>10〜20倍</strong></td>
+          <td class="num">226</td>
+          <td class="num">15</td>
+          <td class="num" style="background:#ffcdd2">6.6%</td>
+          <td class="num" style="background:#ffcdd2"><span style="color:#c62828;font-weight:700;font-size:inherit">-7.26%</span></td>
+          <td class="num">13.97</td>
+        </tr><tr>
+          <td><strong>20〜50倍</strong></td>
+          <td class="num">143</td>
+          <td class="num">10</td>
+          <td class="num" style="background:#ffcdd2">7.0%</td>
+          <td class="num" style="background:#c8e6c9"><span style="color:#2e7d32;font-weight:700;font-size:inherit">+84.76%</span></td>
+          <td class="num">26.42</td>
+        </tr><tr>
+          <td><strong>50倍〜</strong></td>
+          <td class="num">84</td>
+          <td class="num">2</td>
+          <td class="num" style="background:#ffcdd2">2.4%</td>
+          <td class="num" style="background:#c8e6c9"><span style="color:#2e7d32;font-weight:700;font-size:inherit">+118.33%</span></td>
+          <td class="num">91.70</td>
+        </tr></tbody>
+    </table>
+    </div>
+    <div class="tab-content" data-seg="shiba-short" data-tab="feats">
+      
+    <table>
+      <thead><tr>
+        <th>特徴量</th><th>種別</th><th>計算方法</th>
+        <th>β係数</th><th>NaN率 (train)</th><th>NaN率 (OOS)</th><th>リーク判定</th>
+      </tr></thead>
+      <tbody><tr>
+          <td><code>1走前_3角</code></td>
+          <td><span class="badge" style="background:#e3f2fd;color:#0d47a1">前走データ</span></td>
+          <td class="small muted">shift(1) by 馬名S</td>
+          <td class="num" style="color:#c62828">-0.1109</td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">18%</span></td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">15%</span></td>
+          <td class="num"><span class="badge safe-badge">✅ safe</span></td>
+        </tr><tr>
+          <td><code>芝ダ転向</code></td>
+          <td><span class="badge" style="background:#e8f5e9;color:#1b5e20">race-day固定</span></td>
+          <td class="small muted">shift(1)路線との比較</td>
+          <td class="num" style="color:#c62828">-0.2405</td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span class="badge safe-badge">✅ safe</span></td>
+        </tr><tr>
+          <td><code>距離変化_前走</code></td>
+          <td><span class="badge" style="background:#e8f5e9;color:#1b5e20">race-day固定</span></td>
+          <td class="small muted">今回距離 - shift(1)距離</td>
+          <td class="num" style="color:#c62828">-0.0929</td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">15%</span></td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">11%</span></td>
+          <td class="num"><span class="badge safe-badge">✅ safe</span></td>
+        </tr><tr>
+          <td><code>1走前_脚質_num</code></td>
+          <td><span class="badge" style="background:#e3f2fd;color:#0d47a1">前走データ</span></td>
+          <td class="small muted">shift(1) by 馬名S</td>
+          <td class="num" style="color:#c62828">-0.1189</td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">15%</span></td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">12%</span></td>
+          <td class="num"><span class="badge safe-badge">✅ safe</span></td>
+        </tr><tr>
+          <td><code>馬体重</code></td>
+          <td><span class="badge" style="background:#e8f5e9;color:#1b5e20">race-day固定</span></td>
+          <td class="small muted">レース当日公表</td>
+          <td class="num" style="color:#2e7d32">+0.2427</td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span class="badge safe-badge">✅ safe</span></td>
+        </tr><tr>
+          <td><code>前走着差タイム</code></td>
+          <td><span class="badge" style="background:#e3f2fd;color:#0d47a1">前走データ</span></td>
+          <td class="small muted">shift(1) _着差_sec</td>
+          <td class="num" style="color:#c62828">-0.5468</td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">13%</span></td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">12%</span></td>
+          <td class="num"><span class="badge safe-badge">✅ safe</span></td>
+        </tr><tr>
+          <td><code>馬距離_勝率</code></td>
+          <td><span class="badge" style="background:#fce4ec;color:#880e4f">global統計</span></td>
+          <td class="small muted">_stat_mask 2013-2020固定</td>
+          <td class="num" style="color:#2e7d32">+0.2612</td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span class="badge safe-badge">✅ safe</span></td>
+        </tr><tr>
+          <td><code>近5走_上り3F平均</code></td>
+          <td><span class="badge" style="background:#fff8e1;color:#e65100">rolling-5</span></td>
+          <td class="small muted">1走前~5走前の平均</td>
+          <td class="num" style="color:#2e7d32">+0.2096</td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">15%</span></td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">11%</span></td>
+          <td class="num"><span class="badge safe-badge">✅ safe</span></td>
+        </tr><tr>
+          <td><code>コース枠_r200_勝率</code></td>
+          <td><span class="badge" style="background:#fce4ec;color:#880e4f">global統計</span></td>
+          <td class="small muted">_stat_mask 2013-2020固定</td>
+          <td class="num" style="color:#2e7d32">+0.0209</td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span class="badge safe-badge">✅ safe</span></td>
+        </tr><tr>
+          <td><code>馬番</code></td>
+          <td><span class="badge" style="background:#e8f5e9;color:#1b5e20">race-day固定</span></td>
+          <td class="small muted">エントリー時決定</td>
+          <td class="num" style="color:#c62828">-0.0396</td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:10px;font-size:.8rem">0%</span></td>
+          <td class="num"><span class="badge safe-badge">✅ safe</span></td>
+        </tr></tbody>
+    </table>
+      <div class="leak-legend">
+        <span class="legend-item" style="background:#e8f5e9;color:#1b5e20">race-day固定</span>
+        <span class="legend-item" style="background:#e3f2fd;color:#0d47a1">前走データ (shift)</span>
+        <span class="legend-item" style="background:#fff8e1;color:#e65100">rolling-5 (shift based)</span>
+        <span class="legend-item" style="background:#fce4ec;color:#880e4f">global統計 (_stat_mask 2013-2020)</span>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const seg = btn.closest('[data-seg]') ?
+            btn.closest('[data-seg]').dataset.seg :
+            btn.parentElement.dataset.seg;
+          const tab = btn.dataset.tab;
+          btn.parentElement.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          document.querySelectorAll(`.tab-content[data-seg="${seg}"]`).forEach(c => {
+            c.classList.toggle('active', c.dataset.tab === tab);
+          });
+        });
+      });
+    });
+    </script>
 </body>
 </html>
