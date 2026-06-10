@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>競馬AI v2 — 的中率最大化モデル レポート 2026-06-10</title>
+  <style>
+    :root {
+      --indigo:    #1a237e;
+      --indigo2:   #283593;
+      --indigo3:   #3949ab;
+      --green:     #2e7d32;
+      --green-bg:  #e8f5e9;
+      --red:       #c62828;
+      --red-bg:    #ffebee;
+      --orange:    #e65100;
+      --orange-bg: #fff3e0;
+      --gray:      #546e7a;
+      --bg:        #f0f2f5;
+      --card:      #ffffff;
+      --border:    #e0e0e0;
+    }
+    * { box-sizing:border-box; margin:0; padding:0; }
+    body { font-family:'Segoe UI','Helvetica Neue',sans-serif; background:var(--bg); color:#212121; font-size:14px; line-height:1.6; }
+
+    nav { background:var(--indigo); color:#fff; padding:0 24px; height:52px; display:flex; align-items:center; justify-content:space-between; position:sticky; top:0; z-index:100; box-shadow:0 2px 8px rgba(0,0,0,.3); }
+    nav .brand { font-size:1rem; font-weight:700; letter-spacing:.5px; }
+    nav .nav-links { display:flex; gap:20px; font-size:0.82rem; }
+    nav .nav-links a { color:rgba(255,255,255,.8); text-decoration:none; }
+    nav .nav-links a:hover { color:#fff; }
+
+    .hero { background:linear-gradient(135deg,var(--indigo) 0%,#283593 50%,#1565c0 100%); color:#fff; padding:48px 24px 40px; text-align:center; }
+    .hero h1 { font-size:1.9rem; font-weight:800; margin-bottom:10px; letter-spacing:-.5px; }
+    .hero .subtitle { font-size:0.95rem; opacity:.85; margin-bottom:28px; }
+    .mission-badge { display:inline-block; background:rgba(255,255,255,.15); border:2px solid rgba(255,255,255,.4); border-radius:50px; padding:8px 24px; font-size:1.05rem; font-weight:700; backdrop-filter:blur(4px); }
+    .mission-badge .check { color:#69f0ae; margin-right:6px; }
+    .mission-badge .pending { color:#ffcc80; margin-right:6px; }
+
+    .container { max-width:1100px; margin:0 auto; padding:32px 20px 60px; }
+    .section { margin-bottom:40px; }
+    .section-title { font-size:1.05rem; font-weight:700; color:var(--indigo2); border-left:4px solid var(--indigo3); padding-left:10px; margin-bottom:16px; }
+
+    .kpi-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin-bottom:32px; }
+    .kpi-card { background:var(--card); border-radius:10px; box-shadow:0 2px 8px rgba(0,0,0,.08); padding:16px 14px; border-top:4px solid var(--indigo3); transition:transform .15s; }
+    .kpi-card:hover { transform:translateY(-2px); box-shadow:0 4px 16px rgba(0,0,0,.12); }
+    .kpi-card.goal-ok { border-top-color:var(--green); }
+    .kpi-card.goal-ng { border-top-color:var(--red); }
+    .kpi-label { font-size:0.72rem; color:#888; margin-bottom:4px; font-weight:600; text-transform:uppercase; letter-spacing:.5px; }
+    .kpi-seg   { font-size:0.88rem; font-weight:700; color:var(--indigo2); margin-bottom:6px; }
+    .kpi-roi   { font-size:1.7rem; font-weight:800; line-height:1; margin-bottom:8px; }
+    .kpi-sub   { font-size:0.75rem; color:#777; }
+    .kpi-tag   { display:inline-block; padding:2px 10px; border-radius:20px; font-size:0.72rem; font-weight:700; margin-top:6px; }
+    .tag-ok    { background:var(--green-bg); color:var(--green); }
+    .tag-ng    { background:var(--red-bg);   color:var(--red); }
+
+    .roi-pos { color:var(--green); }
+    .roi-neg { color:var(--red); }
+    .roi-neu { color:var(--orange); }
+
+    .box { background:var(--card); border-radius:10px; box-shadow:0 2px 8px rgba(0,0,0,.08); padding:20px 24px; margin-bottom:20px; overflow-x:auto; }
+    table { border-collapse:collapse; width:100%; font-size:0.86rem; }
+    th { background:var(--indigo2); color:#fff; padding:9px 14px; text-align:left; white-space:nowrap; font-size:0.82rem; }
+    td { padding:8px 14px; border-bottom:1px solid var(--border); white-space:nowrap; }
+    tr:last-child td { border-bottom:none; }
+    tr:hover td { background:#f5f7ff; }
+    .ok-row td { background:#f1f8e9 !important; }
+    .ok-row:hover td { background:#e8f5e9 !important; }
+    .num { font-variant-numeric:tabular-nums; }
+    .mono { font-family:monospace; }
+
+    .tab-bar { display:flex; gap:4px; flex-wrap:wrap; margin-bottom:16px; }
+    .tab-btn { padding:7px 18px; border:2px solid transparent; border-radius:6px 6px 0 0; background:#e0e4ef; color:var(--gray); font-size:0.84rem; font-weight:600; cursor:pointer; transition:all .15s; }
+    .tab-btn:hover { background:#d0d6f0; }
+    .tab-btn.active { background:var(--card); color:var(--indigo); border-color:var(--border); border-bottom-color:var(--card); }
+    .tab-panel { display:none; }
+    .tab-panel.active { display:block; }
+
+    .feat-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:10px; margin-bottom:16px; }
+    .feat-item { background:#f5f7ff; border:1px solid #c5cae9; border-radius:8px; padding:10px 12px; }
+    .feat-name { font-weight:700; font-size:0.85rem; color:var(--indigo); margin-bottom:2px; }
+    .feat-beta { font-size:0.78rem; color:#555; }
+    .beta-pos  { color:var(--green); font-weight:700; }
+    .beta-neg  { color:var(--red); font-weight:700; }
+    .feat-item.isnan { background:#fafafa; border-color:#ddd; }
+
+    .design-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .design-item { background:#f5f7ff; border-radius:8px; padding:14px 16px; }
+    .di-label { font-size:0.75rem; color:#888; font-weight:600; text-transform:uppercase; margin-bottom:4px; }
+    .di-val   { font-weight:700; color:var(--indigo); }
+
+    .timeline { list-style:none; position:relative; padding-left:28px; }
+    .timeline::before { content:''; position:absolute; left:8px; top:8px; bottom:8px; width:2px; background:var(--border); }
+    .timeline li { position:relative; margin-bottom:20px; }
+    .timeline li::before { content:''; position:absolute; left:-24px; top:6px; width:12px; height:12px; border-radius:50%; background:var(--indigo3); border:2px solid #fff; box-shadow:0 0 0 2px var(--indigo3); }
+    .timeline-title { font-weight:700; color:var(--indigo2); margin-bottom:4px; }
+    .timeline-body  { font-size:0.85rem; color:#555; }
+
+    footer { text-align:center; padding:24px; color:#aaa; font-size:0.78rem; background:var(--bg); }
+
+    @media(max-width:768px) {
+      .kpi-grid { grid-template-columns:repeat(2,1fr); }
+      .design-grid { grid-template-columns:1fr; }
+      nav .nav-links { display:none; }
+    }
+  </style>
+</head>
+<body>
+
+<nav>
+  <span class="brand">🏇 競馬AI v2 — 的中率最大化モデル</span>
+  <div class="nav-links">
+    <a href="#summary">サマリー</a>
+    <a href="#model">モデル設計</a>
+    <a href="#segments">セグメント詳細</a>
+    <a href="#history">改善経緯</a>
+  </div>
+</nav>
+
+<div class="hero">
+  <h1>的中率最大化モデル レポート</h1>
+  <div class="subtitle">競馬AI v2 — clogit + Isotonic Calibration &nbsp;|&nbsp; 2026-06-10</div>
+  <div class="mission-badge">
+    <span class="pending">🎯</span> 目標: 全5セグメントで1番人気の的中率を超える
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- KPI -->
+  <div id="summary" class="section" style="padding-top:8px">
+    <div class="section-title">的中率 2323–25 合算（指標1位全買い）</div>
+    <div class="kpi-grid">
+      
+      <div class="kpi-card goal-ng">
+        <div class="kpi-label">AI的中率 2325合算</div>
+        <div class="kpi-seg">芝長</div>
+        <div class="kpi-roi roi-neu">35.11%</div>
+        <div class="kpi-sub">芝 &gt;2000m | 1番人気=36.05% / gap=-0.94%</div>
+        <div class="kpi-sub" style="margin-top:3px">25+26 ROI <span class="roi-neg">-19.43%</span></div>
+        <span class="kpi-tag tag-ng">残り 0.94pp</span>
+      </div>
+      <div class="kpi-card goal-ng">
+        <div class="kpi-label">AI的中率 2325合算</div>
+        <div class="kpi-seg">芝中</div>
+        <div class="kpi-roi roi-neg">30.60%</div>
+        <div class="kpi-sub">芝 1401–2000m | 1番人気=33.21% / gap=-2.61%</div>
+        <div class="kpi-sub" style="margin-top:3px">25+26 ROI <span class="roi-neg">-29.28%</span></div>
+        <span class="kpi-tag tag-ng">残り 2.61pp</span>
+      </div>
+      <div class="kpi-card goal-ng">
+        <div class="kpi-label">AI的中率 2325合算</div>
+        <div class="kpi-seg">芝短</div>
+        <div class="kpi-roi roi-neg">26.46%</div>
+        <div class="kpi-sub">芝 ≤1400m | 1番人気=28.69% / gap=-2.23%</div>
+        <div class="kpi-sub" style="margin-top:3px">25+26 ROI <span class="roi-neg">-33.82%</span></div>
+        <span class="kpi-tag tag-ng">残り 2.23pp</span>
+      </div>
+      <div class="kpi-card goal-ng">
+        <div class="kpi-label">AI的中率 2325合算</div>
+        <div class="kpi-seg">ダ長</div>
+        <div class="kpi-roi roi-neg">30.09%</div>
+        <div class="kpi-sub">ダ &gt;1400m | 1番人気=34.03% / gap=-3.94%</div>
+        <div class="kpi-sub" style="margin-top:3px">25+26 ROI <span class="roi-neg">-16.35%</span></div>
+        <span class="kpi-tag tag-ng">残り 3.94pp</span>
+      </div>
+      <div class="kpi-card goal-ng">
+        <div class="kpi-label">AI的中率 2325合算</div>
+        <div class="kpi-seg">ダ短</div>
+        <div class="kpi-roi roi-neg">30.84%</div>
+        <div class="kpi-sub">ダ ≤1400m | 1番人気=34.90% / gap=-4.06%</div>
+        <div class="kpi-sub" style="margin-top:3px">25+26 ROI <span class="roi-neu">-6.00%</span></div>
+        <span class="kpi-tag tag-ng">残り 4.06pp</span>
+      </div>
+    </div>
+
+    <!-- サマリーテーブル -->
+    <div class="box">
+      <table>
+        <thead>
+          <tr>
+            <th>セグメント</th><th>条件</th><th>特徴数</th>
+            <th>AI的中率<br>2325合算</th><th>1番人気<br>目標</th><th>差</th>
+            <th>25+26 ROI</th><th>25+26 的中率</th><th>バージョン</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+          <tr >
+            <td><strong>芝長</strong></td>
+            <td>芝 &gt;2000m</td>
+            <td>29</td>
+            <td class="num roi-neu">35.11%</td>
+            <td class="num" style="color:#9c27b0">36.05%</td>
+            <td class="num roi-neg">-0.94%</td>
+            <td class="num roi-neg">-19.43%</td>
+            <td class="num">30.52%</td>
+            <td class="mono" style="font-size:0.8em">shiba_long_acc_rand</td>
+          </tr>
+          <tr >
+            <td><strong>芝中</strong></td>
+            <td>芝 1401–2000m</td>
+            <td>38</td>
+            <td class="num roi-neg">30.60%</td>
+            <td class="num" style="color:#9c27b0">33.21%</td>
+            <td class="num roi-neg">-2.61%</td>
+            <td class="num roi-neg">-29.28%</td>
+            <td class="num">27.36%</td>
+            <td class="mono" style="font-size:0.8em">shiba_mid_acc_v4</td>
+          </tr>
+          <tr >
+            <td><strong>芝短</strong></td>
+            <td>芝 ≤1400m</td>
+            <td>31</td>
+            <td class="num roi-neg">26.46%</td>
+            <td class="num" style="color:#9c27b0">28.69%</td>
+            <td class="num roi-neg">-2.23%</td>
+            <td class="num roi-neg">-33.82%</td>
+            <td class="num">19.91%</td>
+            <td class="mono" style="font-size:0.8em">shiba_short_acc_v2</td>
+          </tr>
+          <tr >
+            <td><strong>ダ長</strong></td>
+            <td>ダ &gt;1400m</td>
+            <td>37</td>
+            <td class="num roi-neg">30.09%</td>
+            <td class="num" style="color:#9c27b0">34.03%</td>
+            <td class="num roi-neg">-3.94%</td>
+            <td class="num roi-neg">-16.35%</td>
+            <td class="num">30.05%</td>
+            <td class="mono" style="font-size:0.8em">da_long_acc_v8</td>
+          </tr>
+          <tr >
+            <td><strong>ダ短</strong></td>
+            <td>ダ ≤1400m</td>
+            <td>41</td>
+            <td class="num roi-neg">30.84%</td>
+            <td class="num" style="color:#9c27b0">34.90%</td>
+            <td class="num roi-neg">-4.06%</td>
+            <td class="num roi-neu">-6.00%</td>
+            <td class="num">29.09%</td>
+            <td class="mono" style="font-size:0.8em">ダ短_acc_L2_0003</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- モデル設計 -->
+  <div id="model" class="section">
+    <div class="section-title">モデル設計</div>
+    <div class="box">
+      <div class="design-grid">
+        <div class="design-item"><div class="di-label">アーキテクチャ</div><div class="di-val">clogit（条件付きロジット）+ Isotonic Calibration</div></div>
+        <div class="design-item"><div class="di-label">選択指標</div><div class="di-val">acc_2325 = (acc2324×n2324 + acc2025×n2025) / (n2324+n2025)</div></div>
+        <div class="design-item"><div class="di-label">学習期間 / 評価期間</div><div class="di-val">train: 2013–2021 / val: 2022 / OOS: 2023–2026</div></div>
+        <div class="design-item"><div class="di-label">正則化</div><div class="di-val">L2 = 0.006（Adam optimizer、val NLL early stopping）</div></div>
+        <div class="design-item"><div class="di-label">新馬除外</div><div class="di-val">クラス_rank ≠ 1.0（全セグメント共通）</div></div>
+        <div class="design-item"><div class="di-label">特徴量制約</div><div class="di-val">JVLink API 出馬表（前日〜当日12時）で取得可能なもの限定。賞金・今走オッズ禁止。</div></div>
+        <div class="design-item"><div class="di-label">探索手法</div><div class="di-val">greedy forward selection + ランダムサーチ（局所最適脱出）</div></div>
+        <div class="design-item"><div class="di-label">NaN 処理</div><div class="di-val">train NaN率 &gt;5% の特徴に _isnan 指示変数を自動追加</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- セグメント詳細 -->
+  <div id="segments" class="section">
+    <div class="section-title">セグメント詳細（特徴量・係数）</div>
+    <div class="box">
+      <div class="tab-bar">
+        <button class="tab-btn active" onclick="showTab('芝長')">芝長</button><button class="tab-btn " onclick="showTab('芝中')">芝中</button><button class="tab-btn " onclick="showTab('芝短')">芝短</button><button class="tab-btn " onclick="showTab('ダ長')">ダ長</button><button class="tab-btn " onclick="showTab('ダ短')">ダ短</button>
+      </div>
+      
+    <div class="tab-panel active" id="panel-芝長">
+      <div class="design-grid" style="margin-bottom:16px">
+        <div class="design-item">
+          <div class="di-label">AI 的中率 (2325合算)</div>
+          <div class="di-val" style="font-size:1.6rem;">35.11%</div>
+          <div style="font-size:0.8rem;color:#888;margin-top:4px">1番人気 36.05% / 差 <span class="roi-neg">-0.94%</span></div>
+        </div>
+        <div class="design-item">
+          <div class="di-label">25+26 合算</div>
+          <div class="di-val" style="font-size:1.6rem">30.52%</div>
+          <div style="font-size:0.8rem;color:#888;margin-top:4px">ROI <span class="roi-neg">-19.43%</span></div>
+        </div>
+        <div class="design-item">
+          <div class="di-label">条件</div>
+          <div class="di-val">芝 &gt;2000m</div>
+          <div style="font-size:0.8rem;color:#888;margin-top:4px">新馬除外 (クラス_rank≠1.0)</div>
+        </div>
+        <div class="design-item">
+          <div class="di-label">バージョン / 特徴数</div>
+          <div class="di-val" style="font-family:monospace;font-size:0.9rem">shiba_long_acc_rand</div>
+          <div style="font-size:0.8rem;color:#888;margin-top:4px">29 特徴量</div>
+        </div>
+      </div>
+      <div class="section-title" style="margin-bottom:12px">使用特徴量 (29個) と係数</div>
+      <div class="feat-grid"><div class="feat-item"><div class="feat-name">近3走_複勝率</div><div class="feat-beta">β = <span class="beta-pos">+0.3370</span></div></div><div class="feat-item"><div class="feat-name">騎手距離_r100_勝率</div><div class="feat-beta">β = <span class="beta-pos">+0.2862</span></div></div><div class="feat-item"><div class="feat-name">近5走_タイム指数平均</div><div class="feat-beta">β = <span class="beta-pos">+0.2704</span></div></div><div class="feat-item"><div class="feat-name">馬コース_r20_勝率</div><div class="feat-beta">β = <span class="beta-pos">+0.1828</span></div></div><div class="feat-item"><div class="feat-name">タイム指数_近3走_slope</div><div class="feat-beta">β = <span class="beta-neg">-0.0283</span></div></div><div class="feat-item isnan"><div class="feat-name">タイム指数_近3走_slope [NaN指示]</div><div class="feat-beta">β = <span class="beta-pos">+0.0254</span></div></div><div class="feat-item"><div class="feat-name">調教師コース_r100_勝率</div><div class="feat-beta">β = <span class="beta-pos">+0.1511</span></div></div><div class="feat-item"><div class="feat-name">同会場_複勝率_近5走</div><div class="feat-beta">β = <span class="beta-pos">+0.0874</span></div></div><div class="feat-item"><div class="feat-name">近5走_上り3F_std</div><div class="feat-beta">β = <span class="beta-pos">+0.0498</span></div></div><div class="feat-item isnan"><div class="feat-name">近5走_上り3F_std [NaN指示]</div><div class="feat-beta">β = <span class="beta-neg">-0.1560</span></div></div><div class="feat-item"><div class="feat-name">コース枠_r200_複勝率</div><div class="feat-beta">β = <span class="beta-pos">+0.0534</span></div></div><div class="feat-item"><div class="feat-name">相手レベル_平均着順</div><div class="feat-beta">β = <span class="beta-pos">+0.4051</span></div></div><div class="feat-item"><div class="feat-name">タイム指数_加速度</div><div class="feat-beta">β = <span class="beta-neg">-0.0148</span></div></div><div class="feat-item isnan"><div class="feat-name">タイム指数_加速度 [NaN指示]</div><div class="feat-beta">β = <span class="beta-pos">+0.0057</span></div></div><div class="feat-item"><div class="feat-name">近10走_勝率</div><div class="feat-beta">β = <span class="beta-pos">+0.0361</span></div></div><div class="feat-item"><div class="feat-name">近3走_体重増減合計</div><div class="feat-beta">β = <span class="beta-neg">-0.0085</span></div></div><div class="feat-item"><div class="feat-name">コース馬場_r200_勝率</div><div class="feat-beta">β = <span class="beta-pos">+0.0043</span></div></div><div class="feat-item"><div class="feat-name">種牡馬_ダ_勝率</div><div class="feat-beta">β = <span class="beta-pos">+0.1001</span></div></div><div class="feat-item"><div class="feat-name">タイム指数_近5走_slope</div><div class="feat-beta">β = <span class="beta-neg">-0.0017</span></div></div><div class="feat-item isnan"><div class="feat-name">タイム指数_近5走_slope [NaN指示]</div><div class="feat-beta">β = <span class="beta-pos">+0.1354</span></div></div><div class="feat-item"><div class="feat-name">道悪_平均着順_近5走</div><div class="feat-beta">β = <span class="beta-neg">-0.1511</span></div></div><div class="feat-item isnan"><div class="feat-name">道悪_平均着順_近5走 [NaN指示]</div><div class="feat-beta">β = <span class="beta-neg">-0.0564</span></div></div><div class="feat-item"><div class="feat-name">1走前_タイム指数</div><div class="feat-beta">β = <span class="beta-pos">+0.1396</span></div></div><div class="feat-item"><div class="feat-name">距離変化_前走</div><div class="feat-beta">β = <span class="beta-neg">-0.2401</span></div></div><div class="feat-item"><div class="feat-name">性別_num</div><div class="feat-beta">β = <span class="beta-neg">-0.0279</span></div></div><div class="feat-item"><div class="feat-name">馬体重</div><div class="feat-beta">β = <span class="beta-pos">+0.0292</span></div></div><div class="feat-item"><div class="feat-name">馬体重増減</div><div class="feat-beta">β = <span class="beta-neg">-0.0402</span></div></div><div class="feat-item"><div class="feat-name">調教師_r200_勝率</div><div class="feat-beta">β = <span class="beta-pos">+0.0225</span></div></div><div class="feat-item"><div class="feat-name">輸送有無</div><div class="feat-beta">β = <span class="beta-pos">+0.0001</span></div></div><div class="feat-item"><div class="feat-name">コース枠_r200_勝率</div><div class="feat-beta">β = <span class="beta-neg">-0.0327</span></div></div><div class="feat-item"><div class="feat-name">種牡馬_勝率</div><div class="feat-beta">β = <span class="beta-neg">-0.0357</span></div></div><div class="feat-item"><div class="feat-name">馬番</div><div class="feat-beta">β = <span class="beta-neg">-0.0759</span></div></div><div class="feat-item"><div class="feat-name">斤量</div><div class="feat-beta">β = <span class="beta-pos">+0.0265</span></div></div><div class="feat-item"><div class="feat-name">近5走_タイム指数_min</div><div class="feat-beta">β = <span class="beta-neg">-0.0607</span></div></div></div>
+    </div>
+    <div class="tab-panel " id="panel-芝中">
+      <div class="design-grid" style="margin-bottom:16px">
+        <div class="design-item">
+          <div class="di-label">AI 的中率 (2325合算)</div>
+          <div class="di-val" style="font-size:1.6rem;">30.60%</div>
+          <div style="font-size:0.8rem;color:#888;margin-top:4px">1番人気 33.21% / 差 <span class="roi-neg">-2.61%</span></div>
+        </div>
+        <div class="design-item">
+          <div class="di-label">25+26 合算</div>
+          <div class="di-val" style="font-size:1.6rem">27.36%</div>
+          <div style="font-size:0.8rem;color:#888;margin-top:4px">ROI <span class="roi-neg">-29.28%</span></div>
+        </div>
+        <div class="design-item">
+          <div class="di-label">条件</div>
+          <div class="di-val">芝 1401–2000m</div>
+          <div style="font-size:0.8rem;color:#888;margin-top:4px">新馬除外 (クラス_rank≠1.0)</div>
+        </div>
+        <div class="design-item">
+          <div class="di-label">バージョン / 特徴数</div>
+          <div class="di-val" style="font-family:monospace;font-size:0.9rem">shiba_mid_acc_v4</div>
+          <div style="font-size:0.8rem;color:#888;margin-top:4px">38 特徴量</div>
+        </div>
+      </div>
+      <div class="section-title" style="margin-bottom:12px">使用特徴量 (38個) と係数</div>
+      <div class="feat-grid"><div class="feat-item"><div class="feat-name">馬番</div><div class="feat-beta">β = <span class="beta-neg">-0.0460</span></div></div><div class="feat-item"><div class="feat-name">斤量</div><div class="feat-beta">β = <span class="beta-neg">-0.0353</span></div></div><div class="feat-item"><div class="feat-name">芝ダ一致_平均着順_近5走</div><div class="feat-beta">β = <span class="beta-neg">-0.3036</span></div></div><div class="feat-item isnan"><div class="feat-name">芝ダ一致_平均着順_近5走 [NaN指示]</div><div class="feat-beta">β = <span class="beta-neg">-0.2236</span></div></div><div class="feat-item"><div class="feat-name">騎手距離_r100_勝率</div><div class="feat-beta">β = <span class="beta-pos">+0.2788</span></div></div><div class="feat-item"><div class="feat-name">1走前_タイム指数</div><div class="feat-beta">β = <span class="beta-pos">+0.1142</span></div></div><div class="feat-item"><div class="feat-name">1走前_クラス調整着順</div><div class="feat-beta">β = <span class="beta-neg">-0.2290</span></div></div><div class="feat-item"><div class="feat-name">馬コース_r20_勝率</div><div class="feat-beta">β = <span class="beta-pos">+0.1326</span></div></div><div class="feat-item"><div class="feat-name">種牡馬_ダ_勝率</div><div class="feat-beta">β = <span class="beta-pos">+0.0962</span></div></div><div class="feat-item"><div class="feat-name">馬体重</div><div class="feat-beta">β = <span class="beta-pos">+0.1162</span></div></div><div class="feat-item"><div class="feat-name">前走着差タイム</div><div class="feat-beta">β = <span class="beta-neg">-0.2125</span></div></div><div class="feat-item"><div class="feat-name">近5走_上り3F平均</div><div class="feat-beta">β = <span class="beta-neg">-0.1073</span></div></div><div class="feat-item"><div class="feat-name">近5走_タイム指数平均</div><div class="feat-beta">β = <span class="beta-pos">+0.1861</span></div></div><div class="feat-item"><div class="feat-name">1走前_クラス差</div><div class="feat-beta">β = <span class="beta-pos">+0.1187</span></div></div><div class="feat-item"><div class="feat-name">同馬場_平均着順_近5走</div><div class="feat-beta">β = <span class="beta-neg">-0.2250</span></div></div><div class="feat-item isnan"><div class="feat-name">同馬場_平均着順_近5走 [NaN指示]</div><div class="feat-beta">β = <span class="beta-neg">-0.1079</span></div></div><div class="feat-item"><div class="feat-name">コース枠_r200_勝率</div><div class="feat-beta">β = <span class="beta-pos">+0.0160</span></div></div><div class="feat-item"><div class="feat-name">輸送有無</div><div class="feat-beta">β = <span class="beta-pos">+0.0207</span></div></div><div class="feat-item"><div class="feat-name">性別_num</div><div class="feat-beta">β = <span class="beta-neg">-0.0388</span></div></div><div class="feat-item"><div class="feat-name">1走前_馬場状態</div><div class="feat-beta">β = <span class="beta-pos">+0.0076</span></div></div><div class="feat-item isnan"><div class="feat-name">1走前_馬場状態 [NaN指示]</div><div class="feat-beta">β = <span class="beta-neg">-0.0093</span></div></div><div class="feat-item"><div class="feat-name">ブリンカー変更</div><div class="feat-beta">β = <span class="beta-neg">-0.0038</span></div></div><div class="feat-item"><div class="feat-name">コース馬場_r200_勝率</div><div class="feat-beta">β = <span class="beta-pos">+0.0221</span></div></div><div class="feat-item"><div class="feat-name">芝ダ転向</div><div class="feat-beta">β = <span class="beta-neg">-0.0361</span></div></div><div class="feat-item"><div class="feat-name">近3走_体重増減合計</div><div class="feat-beta">β = <span class="beta-pos">+0.0145</span></div></div><div class="feat-item"><div class="feat-name">間隔</div><div class="feat-beta">β = <span class="beta-neg">-0.0095</span></div></div><div class="feat-item"><div class="feat-name">相手レベル_平均着順</div><div class="feat-beta">β = <span class="beta-pos">+0.2016</span></div></div><div class="feat-item"><div class="feat-name">タイム指数_加速度</div><div class="feat-beta">β = <span class="beta-neg">-0.0299</span></div></div><div class="feat-item isnan"><div class="feat-name">タイム指数_加速度 [NaN指示]</div><div class="feat-beta">β = <span class="beta-pos">+0.0206</span></div></div><div class="feat-item"><div class="feat-name">母父馬_勝率</div><div class="feat-beta">β = <span class="beta-pos">+0.0315</span></div></div><div class="feat-item"><div class="feat-name">近3走_勝率</div><div class="feat-beta">β = <span class="beta-neg">-0.0380</span></div></div><div class="feat-item"><div class="feat-name">騎手変更</div><div class="feat-beta">β = <span class="beta-neg">-0.0313</span></div></div><div class="feat-item"><div class="feat-name">1走前_4角</div><div class="feat-beta">β = <span class="beta-neg">-0.0296</span></div></div><div class="feat-item"><div class="feat-name">着順_近3走_slope</div><div class="feat-beta">β = <span class="beta-neg">-0.0139</span></div></div><div class="feat-item isnan"><div class="feat-name">着順_近3走_slope [NaN指示]</div><div class="feat-beta">β = <span class="beta-pos">+0.0360</span></div></div><div class="feat-item"><div class="feat-name">上り3F_近3走_slope</div><div class="feat-beta">β = <span class="beta-pos">+0.0142</span></div></div><div class="feat-item isnan"><div class="feat-name">上り3F_近3走_slope [NaN指示]</div><div class="feat-beta">β = <span class="beta-pos">+0.0200</span></div></div><div class="feat-item"><div class="feat-name">1走前_3角</div><div class="feat-beta">β = <span class="beta-neg">-0.0436</span></div></div><div class="feat-item"><div class="feat-name">近5走_上り3F_std</div><div class="feat-beta">β = <span class="beta-pos">+0.0177</span></div></div><div class="feat-item isnan"><div class="feat-name">近5走_上り3F_std [NaN指示]</div><div class="feat-beta">β = <span class="beta-pos">+0.0445</span></div></div><div class="feat-item"><div class="feat-name">近5走_タイム指数_max</div><div class="feat-beta">β = <span class="beta-pos">+0.2398</span></div></div><div class="feat-item"><div class="feat-name">タイム指数_近5走_slope</div><div class="feat-beta">β = <span class="beta-neg">-0.0208</span></div></div><div class="feat-item isnan"><div class="feat-name">タイム指数_近5走_slope [NaN指示]</div><div class="feat-beta">β = <span class="beta-pos">+0.0087</span></div></div><div class="feat-item"><div class="feat-name">1走前_単勝オッズ</div><div class="feat-beta">β = <span class="beta-neg">-0.3258</span></div></div><div class="feat-item"><div class="feat-name">近5走_タイム指数_min</div><div class="feat-beta">β = <span class="beta-pos">+0.0433</span></div></div><div class="feat-item"><div class="feat-name">近3走_上り3F_min</div><div class="feat-beta">β = <span class="beta-neg">-0.1175</span></div></div></div>
+    </div>
+    <div class="tab-panel " id="panel-芝短">
+      <div class="design-grid" style="margin-bottom:16px">
+        <div class="design-item">
+          <div class="di-label">AI 的中率 (2325合算)</div>
+          <div class="di-val" style="font-size:1.6rem;">26.46%</div>
+          <div style="font-size:0.8rem;color:#888;margin-top:4px">1番人気 28.69% / 差 <span class="roi-neg">-2.23%</span></div>
+        </div>
+        <div class="design-item">
+          <div class="di-label">25+26 合算</div>
+          <div class="di-val" style="font-size:1.6rem">19.91%</div>
+          <div style="font-size:0.8rem;color:#888;margin-top:4px">ROI <span class="roi-neg">-33.82%</span></div>
+        </div>
+        <div class="design-item">
+          <div class="di-label">条件</div>
+          <div class="di-val">芝 ≤1400m</div>
+          <div style="font-size:0.8rem;color:#888;margin-top:4px">新馬除外 (クラス_rank≠1.0)</div>
+        </div>
+        <div class="design-item">
+          <div class="di-label">バージョン / 特徴数</div>
+          <div class="di-val" style="font-family:monospace;font-size:0.9rem">shiba_short_acc_v2</div>
+          <div style="font-size:0.8rem;color:#888;margin-top:4px">31 特徴量</div>
+        </div>
+      </div>
+      <div class="section-title" style="margin-bottom:12px">使用特徴量 (31個) と係数</div>
+      <div class="feat-grid"><div class="feat-item"><div class="feat-name">馬番</div><div class="feat-beta">β = <span class="beta-neg">-0.0487</span></div></div><div class="feat-item"><div class="feat-name">斤量</div><div class="feat-beta">β = <span class="beta-neg">-0.0433</span></div></div><div class="feat-item"><div class="feat-name">芝ダ一致_平均着順_近5走</div><div class="feat-beta">β = <span class="beta-neg">-0.2618</span></div></div><div class="feat-item isnan"><div class="feat-name">芝ダ一致_平均着順_近5走 [NaN指示]</div><div class="feat-beta">β = <span class="beta-neg">-0.2096</span></div></div><div class="feat-item"><div class="feat-name">1走前_タイム指数</div><div class="feat-beta">β = <span class="beta-pos">+0.2640</span></div></div><div class="feat-item"><div class="feat-name">近5走_クラス調整_平均着順</div><div class="feat-beta">β = <span class="beta-neg">-0.2608</span></div></div><div class="feat-item"><div class="feat-name">馬コース_r20_勝率</div><div class="feat-beta">β = <span class="beta-pos">+0.0504</span></div></div><div class="feat-item"><div class="feat-name">騎手コース_r100_勝率</div><div class="feat-beta">β = <span class="beta-pos">+0.1379</span></div></div><div class="feat-item"><div class="feat-name">近10走_勝率</div><div class="feat-beta">β = <span class="beta-neg">-0.0038</span></div></div><div class="feat-item"><div class="feat-name">馬体重</div><div class="feat-beta">β = <span class="beta-pos">+0.2276</span></div></div><div class="feat-item"><div class="feat-name">近5走_上り3F平均</div><div class="feat-beta">β = <span class="beta-neg">-0.0568</span></div></div><div class="feat-item"><div class="feat-name">芝ダ転向</div><div class="feat-beta">β = <span class="beta-neg">-0.0607</span></div></div><div class="feat-item"><div class="feat-name">近3走_体重増減合計</div><div class="feat-beta">β = <span class="beta-neg">-0.0163</span></div></div><div class="feat-item"><div class="feat-name">相手レベル_平均着順</div><div class="feat-beta">β = <span class="beta-pos">+0.1390</span></div></div><div class="feat-item"><div class="feat-name">道悪_平均着順_近5走</div><div class="feat-beta">β = <span class="beta-neg">-0.0131</span></div></div><div class="feat-item isnan"><div class="feat-name">道悪_平均着順_近5走 [NaN指示]</div><div class="feat-beta">β = <span class="beta-pos">+0.0051</span></div></div><div class="feat-item"><div class="feat-name">タイム指数_近3走_slope</div><div class="feat-beta">β = <span class="beta-pos">+0.0424</span></div></div><div class="feat-item isnan"><div class="feat-name">タイム指数_近3走_slope [NaN指示]</div><div class="feat-beta">β = <span class="beta-pos">+0.0202</span></div></div><div class="feat-item"><div class="feat-name">馬体重増減</div><div class="feat-beta">β = <span class="beta-neg">-0.0006</span></div></div><div class="feat-item"><div class="feat-name">コース馬場_r200_勝率</div><div class="feat-beta">β = <span class="beta-neg">-0.0103</span></div></div><div class="feat-item"><div class="feat-name">ブリンカー変更</div><div class="feat-beta">β = <span class="beta-pos">+0.0286</span></div></div><div class="feat-item"><div class="feat-name">3走前_クラス差</div><div class="feat-beta">β = <span class="beta-pos">+0.0888</span></div></div><div class="feat-item"><div class="feat-name">近5走_上り3F_std</div><div class="feat-beta">β = <span class="beta-pos">+0.0124</span></div></div><div class="feat-item isnan"><div class="feat-name">近5走_上り3F_std [NaN指示]</div><div class="feat-beta">β = <span class="beta-neg">-0.0396</span></div></div><div class="feat-item"><div class="feat-name">騎手コース距離_r100_勝率</div><div class="feat-beta">β = <span class="beta-pos">+0.1379</span></div></div><div class="feat-item"><div class="feat-name">2走前_クラス差</div><div class="feat-beta">β = <span class="beta-pos">+0.1084</span></div></div><div class="feat-item"><div class="feat-name">着順_近3走_slope</div><div class="feat-beta">β = <span class="beta-pos">+0.0508</span></div></div><div class="feat-item isnan"><div class="feat-name">着順_近3走_slope [NaN指示]</div><div class="feat-beta">β = <span class="beta-neg">-0.0207</span></div></div><div class="feat-item"><div class="feat-name">近3走_複勝率</div><div class="feat-beta">β = <span class="beta-pos">+0.1497</span></div></div><div class="feat-item"><div class="feat-name">馬距離_勝率</div><div class="feat-beta">β = <span class="beta-pos">+0.0522</span></div></div><div class="feat-item"><div class="feat-name">1走前_3角</div><div class="feat-beta">β = <span class="beta-neg">-0.1434</span></div></div><div class="feat-item isnan"><div class="feat-name">1走前_3角 [NaN指示]</div><div class="feat-beta">β = <span class="beta-neg">-0.0796</span></div></div><div class="feat-item"><div class="feat-name">1走前_馬場状態</div><div class="feat-beta">β = <span class="beta-neg">-0.0082</span></div></div><div class="feat-item isnan"><div class="feat-name">1走前_馬場状態 [NaN指示]</div><div class="feat-beta">β = <span class="beta-pos">+0.0428</span></div></div><div class="feat-item"><div class="feat-name">コース枠_r200_勝率</div><div class="feat-beta">β = <span class="beta-pos">+0.0224</span></div></div><div class="feat-item"><div class="feat-name">前走着差タイム</div><div class="feat-beta">β = <span class="beta-neg">-0.2585</span></div></div><div class="feat-item"><div class="feat-name">馬_r20_勝率</div><div class="feat-beta">β = <span class="beta-pos">+0.0522</span></div></div><div class="feat-item"><div class="feat-name">2走前_着順_num</div><div class="feat-beta">β = <span class="beta-neg">-0.0863</span></div></div><div class="feat-item isnan"><div class="feat-name">2走前_着順_num [NaN指示]</div><div class="feat-beta">β = <span class="beta-neg">-0.0802</span></div></div></div>
+    </div>
+    <div class="tab-panel " id="panel-ダ長">
+      <div class="design-grid" style="margin-bottom:16px">
+        <div class="design-item">
+          <div class="di-label">AI 的中率 (2325合算)</div>
+          <div class="di-val" style="font-size:1.6rem;">30.09%</div>
+          <div style="font-size:0.8rem;color:#888;margin-top:4px">1番人気 34.03% / 差 <span class="roi-neg">-3.94%</span></div>
+        </div>
+        <div class="design-item">
+          <div class="di-label">25+26 合算</div>
+          <div class="di-val" style="font-size:1.6rem">30.05%</div>
+          <div style="font-size:0.8rem;color:#888;margin-top:4px">ROI <span class="roi-neg">-16.35%</span></div>
+        </div>
+        <div class="design-item">
+          <div class="di-label">条件</div>
+          <div class="di-val">ダ &gt;1400m</div>
+          <div style="font-size:0.8rem;color:#888;margin-top:4px">新馬除外 (クラス_rank≠1.0)</div>
+        </div>
+        <div class="design-item">
+          <div class="di-label">バージョン / 特徴数</div>
+          <div class="di-val" style="font-family:monospace;font-size:0.9rem">da_long_acc_v8</div>
+          <div style="font-size:0.8rem;color:#888;margin-top:4px">37 特徴量</div>
+        </div>
+      </div>
+      <div class="section-title" style="margin-bottom:12px">使用特徴量 (37個) と係数</div>
+      <div class="feat-grid"><div class="feat-item"><div class="feat-name">馬番</div><div class="feat-beta">β = <span class="beta-pos">+0.0256</span></div></div><div class="feat-item"><div class="feat-name">斤量</div><div class="feat-beta">β = <span class="beta-pos">+0.0685</span></div></div><div class="feat-item"><div class="feat-name">近3走_複勝率</div><div class="feat-beta">β = <span class="beta-pos">+0.2707</span></div></div><div class="feat-item"><div class="feat-name">騎手コース_r100_勝率</div><div class="feat-beta">β = <span class="beta-pos">+0.1651</span></div></div><div class="feat-item"><div class="feat-name">1走前_クラス調整着順</div><div class="feat-beta">β = <span class="beta-neg">-0.2308</span></div></div><div class="feat-item"><div class="feat-name">近5走_タイム指数_max</div><div class="feat-beta">β = <span class="beta-pos">+0.3752</span></div></div><div class="feat-item"><div class="feat-name">馬距離_勝率</div><div class="feat-beta">β = <span class="beta-pos">+0.0859</span></div></div><div class="feat-item"><div class="feat-name">種牡馬_勝率</div><div class="feat-beta">β = <span class="beta-pos">+0.0898</span></div></div><div class="feat-item"><div class="feat-name">タイム指数_加速度</div><div class="feat-beta">β = <span class="beta-neg">-0.0346</span></div></div><div class="feat-item isnan"><div class="feat-name">タイム指数_加速度 [NaN指示]</div><div class="feat-beta">β = <span class="beta-pos">+0.0193</span></div></div><div class="feat-item"><div class="feat-name">近5走_タイム指数平均</div><div class="feat-beta">β = <span class="beta-pos">+0.3676</span></div></div><div class="feat-item"><div class="feat-name">近5走_上り3F平均</div><div class="feat-beta">β = <span class="beta-neg">-0.2929</span></div></div><div class="feat-item"><div class="feat-name">近5走_上り3F_std</div><div class="feat-beta">β = <span class="beta-pos">+0.0247</span></div></div><div class="feat-item isnan"><div class="feat-name">近5走_上り3F_std [NaN指示]</div><div class="feat-beta">β = <span class="beta-pos">+0.0703</span></div></div><div class="feat-item"><div class="feat-name">1走前_クラス差</div><div class="feat-beta">β = <span class="beta-pos">+0.0290</span></div></div><div class="feat-item"><div class="feat-name">ブリンカー変更</div><div class="feat-beta">β = <span class="beta-pos">+0.0176</span></div></div><div class="feat-item"><div class="feat-name">1走前_3角</div><div class="feat-beta">β = <span class="beta-neg">-0.0414</span></div></div><div class="feat-item"><div class="feat-name">間隔</div><div class="feat-beta">β = <span class="beta-neg">-0.0363</span></div></div><div class="feat-item"><div class="feat-name">距離変化_前走</div><div class="feat-beta">β = <span class="beta-neg">-0.0699</span></div></div><div class="feat-item"><div class="feat-name">前走着差タイム</div><div class="feat-beta">β = <span class="beta-neg">-0.2701</span></div></div><div class="feat-item"><div class="feat-name">騎手変更</div><div class="feat-beta">β = <span class="beta-neg">-0.0162</span></div></div><div class="feat-item"><div class="feat-name">輸送有無</div><div class="feat-beta">β = <span class="beta-neg">-0.0124</span></div></div><div class="feat-item"><div class="feat-name">コース枠_r200_勝率</div><div class="feat-beta">β = <span class="beta-pos">+0.0054</span></div></div><div class="feat-item"><div class="feat-name">馬体重増減</div><div class="feat-beta">β = <span class="beta-neg">-0.0035</span></div></div><div class="feat-item"><div class="feat-name">コース脚質_r200_勝率</div><div class="feat-beta">β = <span class="beta-pos">+0.0037</span></div></div><div class="feat-item"><div class="feat-name">1走前_馬場状態</div><div class="feat-beta">β = <span class="beta-neg">-0.0054</span></div></div><div class="feat-item isnan"><div class="feat-name">1走前_馬場状態 [NaN指示]</div><div class="feat-beta">β = <span class="beta-neg">-0.0102</span></div></div><div class="feat-item"><div class="feat-name">1走前_脚質_num</div><div class="feat-beta">β = <span class="beta-neg">-0.0100</span></div></div><div class="feat-item"><div class="feat-name">近10走_勝率</div><div class="feat-beta">β = <span class="beta-pos">+0.1478</span></div></div><div class="feat-item"><div class="feat-name">2走前_クラス差</div><div class="feat-beta">β = <span class="beta-pos">+0.0218</span></div></div><div class="feat-item"><div class="feat-name">道悪_平均着順_近5走</div><div class="feat-beta">β = <span class="beta-neg">-0.0823</span></div></div><div class="feat-item isnan"><div class="feat-name">道悪_平均着順_近5走 [NaN指示]</div><div class="feat-beta">β = <span class="beta-neg">-0.0292</span></div></div><div class="feat-item"><div class="feat-name">コース馬場_r200_勝率</div><div class="feat-beta">β = <span class="beta-neg">-0.0094</span></div></div><div class="feat-item"><div class="feat-name">種牡馬_ダ_勝率</div><div class="feat-beta">β = <span class="beta-pos">+0.0000</span></div></div><div class="feat-item"><div class="feat-name">近3走_勝率</div><div class="feat-beta">β = <span class="beta-neg">-0.1763</span></div></div><div class="feat-item"><div class="feat-name">コース枠_r200_複勝率</div><div class="feat-beta">β = <span class="beta-pos">+0.0200</span></div></div><div class="feat-item"><div class="feat-name">馬_r20_勝率</div><div class="feat-beta">β = <span class="beta-pos">+0.0859</span></div></div><div class="feat-item"><div class="feat-name">性別_num</div><div class="feat-beta">β = <span class="beta-neg">-0.0989</span></div></div><div class="feat-item"><div class="feat-name">騎手会場_r100_勝率</div><div class="feat-beta">β = <span class="beta-pos">+0.1103</span></div></div><div class="feat-item"><div class="feat-name">相手レベル_平均着順</div><div class="feat-beta">β = <span class="beta-pos">+0.1317</span></div></div><div class="feat-item"><div class="feat-name">1走前_4角</div><div class="feat-beta">β = <span class="beta-neg">-0.0324</span></div></div></div>
+    </div>
+    <div class="tab-panel " id="panel-ダ短">
+      <div class="design-grid" style="margin-bottom:16px">
+        <div class="design-item">
+          <div class="di-label">AI 的中率 (2325合算)</div>
+          <div class="di-val" style="font-size:1.6rem;">30.84%</div>
+          <div style="font-size:0.8rem;color:#888;margin-top:4px">1番人気 34.90% / 差 <span class="roi-neg">-4.06%</span></div>
+        </div>
+        <div class="design-item">
+          <div class="di-label">25+26 合算</div>
+          <div class="di-val" style="font-size:1.6rem">29.09%</div>
+          <div style="font-size:0.8rem;color:#888;margin-top:4px">ROI <span class="roi-neu">-6.00%</span></div>
+        </div>
+        <div class="design-item">
+          <div class="di-label">条件</div>
+          <div class="di-val">ダ ≤1400m</div>
+          <div style="font-size:0.8rem;color:#888;margin-top:4px">新馬除外 (クラス_rank≠1.0)</div>
+        </div>
+        <div class="design-item">
+          <div class="di-label">バージョン / 特徴数</div>
+          <div class="di-val" style="font-family:monospace;font-size:0.9rem">ダ短_acc_L2_0003</div>
+          <div style="font-size:0.8rem;color:#888;margin-top:4px">41 特徴量</div>
+        </div>
+      </div>
+      <div class="section-title" style="margin-bottom:12px">使用特徴量 (41個) と係数</div>
+      <div class="feat-grid"><div class="feat-item"><div class="feat-name">馬番</div><div class="feat-beta">β = <span class="beta-pos">+0.0700</span></div></div><div class="feat-item"><div class="feat-name">斤量</div><div class="feat-beta">β = <span class="beta-pos">+0.0164</span></div></div><div class="feat-item"><div class="feat-name">芝ダ一致_平均着順_近5走</div><div class="feat-beta">β = <span class="beta-neg">-0.3147</span></div></div><div class="feat-item isnan"><div class="feat-name">芝ダ一致_平均着順_近5走 [NaN指示]</div><div class="feat-beta">β = <span class="beta-neg">-0.1878</span></div></div><div class="feat-item"><div class="feat-name">1走前_タイム指数</div><div class="feat-beta">β = <span class="beta-pos">+0.2575</span></div></div><div class="feat-item"><div class="feat-name">近5走_クラス調整_平均着順</div><div class="feat-beta">β = <span class="beta-neg">-0.2953</span></div></div><div class="feat-item"><div class="feat-name">輸送有無</div><div class="feat-beta">β = <span class="beta-neg">-0.0546</span></div></div><div class="feat-item"><div class="feat-name">馬コース_r20_勝率</div><div class="feat-beta">β = <span class="beta-pos">+0.0773</span></div></div><div class="feat-item"><div class="feat-name">近3走_体重増減合計</div><div class="feat-beta">β = <span class="beta-pos">+0.0624</span></div></div><div class="feat-item"><div class="feat-name">性別_num</div><div class="feat-beta">β = <span class="beta-neg">-0.0745</span></div></div><div class="feat-item"><div class="feat-name">1走前_クラス差</div><div class="feat-beta">β = <span class="beta-neg">-0.0004</span></div></div><div class="feat-item"><div class="feat-name">コース枠_r200_複勝率</div><div class="feat-beta">β = <span class="beta-pos">+0.0313</span></div></div><div class="feat-item"><div class="feat-name">コース枠_r200_勝率</div><div class="feat-beta">β = <span class="beta-neg">-0.0178</span></div></div><div class="feat-item"><div class="feat-name">3走前_クラス差</div><div class="feat-beta">β = <span class="beta-neg">-0.0213</span></div></div><div class="feat-item"><div class="feat-name">近10走_勝率</div><div class="feat-beta">β = <span class="beta-pos">+0.1206</span></div></div><div class="feat-item"><div class="feat-name">調教師_r200_勝率</div><div class="feat-beta">β = <span class="beta-pos">+0.1065</span></div></div><div class="feat-item"><div class="feat-name">ブリンカー変更</div><div class="feat-beta">β = <span class="beta-pos">+0.0120</span></div></div><div class="feat-item"><div class="feat-name">2走前_クラス差</div><div class="feat-beta">β = <span class="beta-pos">+0.0135</span></div></div><div class="feat-item"><div class="feat-name">相手レベル_平均着順</div><div class="feat-beta">β = <span class="beta-pos">+0.2019</span></div></div><div class="feat-item"><div class="feat-name">コース馬場_r200_勝率</div><div class="feat-beta">β = <span class="beta-pos">+0.1100</span></div></div><div class="feat-item"><div class="feat-name">種牡馬_ダ_勝率</div><div class="feat-beta">β = <span class="beta-neg">-0.0000</span></div></div><div class="feat-item"><div class="feat-name">近5走_上り3F平均</div><div class="feat-beta">β = <span class="beta-neg">-0.1501</span></div></div><div class="feat-item"><div class="feat-name">近5走_タイム指数_max</div><div class="feat-beta">β = <span class="beta-pos">+0.3232</span></div></div><div class="feat-item"><div class="feat-name">1走前_馬場状態</div><div class="feat-beta">β = <span class="beta-neg">-0.0097</span></div></div><div class="feat-item isnan"><div class="feat-name">1走前_馬場状態 [NaN指示]</div><div class="feat-beta">β = <span class="beta-pos">+0.0136</span></div></div><div class="feat-item"><div class="feat-name">タイム指数_近5走_slope</div><div class="feat-beta">β = <span class="beta-neg">-0.0717</span></div></div><div class="feat-item isnan"><div class="feat-name">タイム指数_近5走_slope [NaN指示]</div><div class="feat-beta">β = <span class="beta-neg">-0.0072</span></div></div><div class="feat-item"><div class="feat-name">上り3F_近3走_slope</div><div class="feat-beta">β = <span class="beta-neg">-0.0116</span></div></div><div class="feat-item isnan"><div class="feat-name">上り3F_近3走_slope [NaN指示]</div><div class="feat-beta">β = <span class="beta-pos">+0.0180</span></div></div><div class="feat-item"><div class="feat-name">近3走_勝率</div><div class="feat-beta">β = <span class="beta-neg">-0.2536</span></div></div><div class="feat-item"><div class="feat-name">タイム指数_加速度</div><div class="feat-beta">β = <span class="beta-neg">-0.0679</span></div></div><div class="feat-item isnan"><div class="feat-name">タイム指数_加速度 [NaN指示]</div><div class="feat-beta">β = <span class="beta-pos">+0.0579</span></div></div><div class="feat-item"><div class="feat-name">1走前_クラス調整着順</div><div class="feat-beta">β = <span class="beta-neg">-0.2588</span></div></div><div class="feat-item"><div class="feat-name">距離変化_前走</div><div class="feat-beta">β = <span class="beta-neg">-0.1747</span></div></div><div class="feat-item"><div class="feat-name">間隔</div><div class="feat-beta">β = <span class="beta-neg">-0.0886</span></div></div><div class="feat-item"><div class="feat-name">騎手馬場_r100_勝率</div><div class="feat-beta">β = <span class="beta-pos">+0.1940</span></div></div><div class="feat-item"><div class="feat-name">近5走_タイム指数平均</div><div class="feat-beta">β = <span class="beta-pos">+0.3006</span></div></div><div class="feat-item"><div class="feat-name">馬体重増減</div><div class="feat-beta">β = <span class="beta-pos">+0.0719</span></div></div><div class="feat-item"><div class="feat-name">タイム指数_近3走_slope</div><div class="feat-beta">β = <span class="beta-pos">+0.0187</span></div></div><div class="feat-item isnan"><div class="feat-name">タイム指数_近3走_slope [NaN指示]</div><div class="feat-beta">β = <span class="beta-pos">+0.0116</span></div></div><div class="feat-item"><div class="feat-name">近5走_上り3F_std</div><div class="feat-beta">β = <span class="beta-pos">+0.0081</span></div></div><div class="feat-item isnan"><div class="feat-name">近5走_上り3F_std [NaN指示]</div><div class="feat-beta">β = <span class="beta-pos">+0.0126</span></div></div><div class="feat-item"><div class="feat-name">着順_近3走_slope</div><div class="feat-beta">β = <span class="beta-neg">-0.0354</span></div></div><div class="feat-item isnan"><div class="feat-name">着順_近3走_slope [NaN指示]</div><div class="feat-beta">β = <span class="beta-pos">+0.0163</span></div></div><div class="feat-item"><div class="feat-name">馬距離_勝率</div><div class="feat-beta">β = <span class="beta-pos">+0.1427</span></div></div><div class="feat-item"><div class="feat-name">母父馬_勝率</div><div class="feat-beta">β = <span class="beta-pos">+0.0417</span></div></div><div class="feat-item"><div class="feat-name">前走着差タイム</div><div class="feat-beta">β = <span class="beta-neg">-0.2579</span></div></div><div class="feat-item"><div class="feat-name">騎手変更</div><div class="feat-beta">β = <span class="beta-neg">-0.0343</span></div></div><div class="feat-item"><div class="feat-name">1走前_頭数</div><div class="feat-beta">β = <span class="beta-pos">+0.0257</span></div></div></div>
+    </div>
+    </div>
+  </div>
+
+  <!-- 改善経緯 -->
+  <div id="history" class="section">
+    <div class="section-title">改善経緯</div>
+    <div class="box">
+      <ul class="timeline">
+      <li>
+        <div class="timeline-title">2026-06-07 — greedy forward selection 開始（acc_2325 指標）</div>
+        <div class="timeline-body">全5セグメントで的中率最大化モデルの探索を開始。SEEDはゼロから構築。</div>
+      </li>
+      <li>
+        <div class="timeline-title">2026-06-08 — 芝長 shiba_long_acc_v1 確定（acc_2325=34.75%）</div>
+        <div class="timeline-body">30特徴で芝長モデルを確立。2025=36.70%と高い精度。</div>
+      </li>
+      <li>
+        <div class="timeline-title">2026-06-09 — ダ短 da_short_acc_v3 確定（acc_2325=30.79%）</div>
+        <div class="timeline-body">40特徴。新候補（タイム指数slope、上り3F slope等）を全探索。</div>
+      </li>
+      <li>
+        <div class="timeline-title">2026-06-10 AM — 新候補特徴量追加探索（1走前_単勝オッズ、近5走_タイム指数_min等）</div>
+        <div class="timeline-body">芝中で1走前_単勝オッズ・近5走_タイム指数_minが有効（+0.31pp）。</div>
+      </li>
+      <li>
+        <div class="timeline-title">2026-06-10 — L2=0.003/0.010 変更探索 + 新特徴量（近3走_上り3F_min 等）</div>
+        <div class="timeline-body">前走_1番人気フラグ・前走_人気着順差・近3走_上り3F_minを追加。芝中+0.04pp。</div>
+      </li>
+      <li>
+        <div class="timeline-title">2026-06-10 — ランダムサーチ（局所最適脱出）で芝長 35.11% 達成</div>
+        <div class="timeline-body">greedy の局所最適を remove/add/swap 500回で脱出。芝長が+0.36pp改善。</div>
+      </li></ul>
+    </div>
+  </div>
+
+</div>
+
+<footer>
+  競馬AI v2 — 的中率最大化モデル | 生成: 2026-06-10 | accuracy_model.pkl<br>
+  clogit + Isotonic Calibration | 新馬除外済み | JVLink API 出馬表データのみ使用
+</footer>
+
+<script>
+function showTab(seg) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('panel-' + seg).classList.add('active');
+  event.target.classList.add('active');
+}
+</script>
+</body>
+</html>
