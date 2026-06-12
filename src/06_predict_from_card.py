@@ -171,11 +171,176 @@ def merge_results_to_card_extra(base_dir, result_dfs):
     print(f"  card_extra.csv 結果反映: {len(result_dfs)}ファイル → {len(combined):,}行")
 
 
+# ── 海外帰り馬パッチ ──────────────────────────────────────────────────────────
+_CHAKUSA_MAP = {
+    'ハナ': 0.1, 'アタマ': 0.1, 'クビ': 0.2,
+    '1/2': 0.3, '3/4': 0.4,
+    '1': 0.5, '1.1/4': 0.6, '1.1/2': 0.7, '1.3/4': 0.8,
+    '2': 1.0, '2.1/2': 1.2,
+    '3': 1.5, '3.1/2': 1.7,
+    '4': 2.0, '5': 2.5, '6': 3.0, '7': 3.5, '8': 4.0, '大差': 4.9,
+}
+
+
+def _fetch_horse_page_html(horse_id: str) -> str:
+    import urllib.request as _urlreq
+    url = f'https://db.netkeiba.com/horse/{horse_id}/'
+    req = _urlreq.Request(url, headers={
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+        'Accept-Encoding': 'identity',
+    })
+    with _urlreq.urlopen(req, timeout=12) as r:
+        return r.read().decode('euc-jp', errors='replace')
+
+
+def fetch_horse_last_race(horse_id: str) -> dict | None:
+    """netkeiba db 馬ページから最新レース情報を取得して返す"""
+    try:
+        html = _fetch_horse_page_html(horse_id)
+    except Exception as e:
+        print(f'  [WARN] netkeiba馬ページ取得失敗 {horse_id}: {e}')
+        return None
+
+    try:
+        from bs4 import BeautifulSoup as _BS
+    except ImportError:
+        print('  [WARN] bs4未インストール')
+        return None
+
+    soup = _BS(html, 'html.parser')
+    tbl = soup.find('table', class_='db_h_race_results')
+    if tbl is None:
+        return None
+
+    header_row = tbl.find('tr')
+    if not header_row:
+        return None
+    headers = [th.get_text(strip=True) for th in header_row.find_all(['th', 'td'])]
+    idx = {h: i for i, h in enumerate(headers)}
+
+    for row in tbl.find_all('tr')[1:]:
+        cells = row.find_all(['td', 'th'])
+        if len(cells) < 5:
+            continue
+        ct = [c.get_text(strip=True) for c in cells]
+
+        date_str  = ct[idx['日付']]  if '日付'  in idx and idx['日付']  < len(ct) else ''
+        chakujun  = ct[idx['着順']]  if '着順'  in idx and idx['着順']  < len(ct) else ''
+        chakusa   = ct[idx['着差']]  if '着差'  in idx and idx['着差']  < len(ct) else ''
+
+        # 日付変換: '2026/04/12' → 20260412
+        try:
+            date_num = int(date_str.replace('/', ''))
+        except Exception:
+            continue  # 日付が取れない行はスキップ
+
+        # 着差→秒変換
+        try:
+            chakusa_sec = float(chakusa)
+        except (ValueError, TypeError):
+            chakusa_sec = _CHAKUSA_MAP.get(str(chakusa).strip(), np.nan)
+
+        # 着順
+        try:
+            chakujun_num = int(re.sub(r'[^\d]', '', chakujun))
+        except (ValueError, TypeError):
+            chakujun_num = None
+
+        return {
+            '前走日付':      date_num,
+            '前走着差タイム': chakusa_sec,
+            '前走着順':      chakujun_num,
+        }
+
+    return None
+
+
+def patch_overseas_features(base_dir: str, card_df, date_num: int) -> None:
+    """
+    run_feature_engineering() 後に呼ぶ。
+    前走着差タイムがNaNの今日の馬を特定し、netkeibaスクレイピングで補完してparquetを更新する。
+    """
+    import time as _t
+    feat_pq = os.path.join(base_dir, 'data', 'processed', 'all_venues_features.parquet')
+    if not os.path.exists(feat_pq):
+        return
+
+    try:
+        df = pd.read_parquet(feat_pq)
+    except Exception as e:
+        print(f'[WARN] patch_overseas_features: parquet読み込み失敗: {e}')
+        return
+
+    df['_date_num'] = pd.to_numeric(df['日付'], errors='coerce')
+    today_mask = df['_date_num'] == date_num
+
+    if '前走着差タイム' not in df.columns or not today_mask.any():
+        df.drop(columns=['_date_num'], inplace=True, errors='ignore')
+        return
+
+    nan_mask = today_mask & df['前走着差タイム'].isna()
+    target_horses = df.loc[nan_mask, '馬名S'].unique()
+
+    if len(target_horses) == 0:
+        print('patch_overseas_features: 前走着差タイムNaN馬なし → スキップ')
+        df.drop(columns=['_date_num'], inplace=True, errors='ignore')
+        return
+
+    print(f'patch_overseas_features: {len(target_horses)}頭を補完中 ...')
+
+    if card_df is None or '馬ID' not in card_df.columns:
+        print('[WARN] patch_overseas_features: card_dfに馬ID列なし → スキップ')
+        df.drop(columns=['_date_num'], inplace=True, errors='ignore')
+        return
+
+    horse_id_map = (card_df.dropna(subset=['馬ID'])
+                    .drop_duplicates('馬名S')
+                    .set_index('馬名S')['馬ID'])
+
+    patched = 0
+    for horse_name in target_horses:
+        horse_id = horse_id_map.get(horse_name, '')
+        if not horse_id:
+            print(f'  {horse_name}: 馬IDなし → スキップ')
+            continue
+
+        info = fetch_horse_last_race(str(horse_id))
+        if not info:
+            print(f'  {horse_name}: netkeibaデータ取得失敗')
+            continue
+
+        row_idx = df.index[nan_mask & (df['馬名S'] == horse_name)]
+        for col, val in info.items():
+            if col in df.columns and val is not None:
+                if not (isinstance(val, float) and np.isnan(val)):
+                    df.loc[row_idx, col] = val
+
+        print(f'  {horse_name}: 前走日付={info.get("前走日付")}, '
+              f'着差={info.get("前走着差タイム")}秒, 着順={info.get("前走着順")}')
+        patched += 1
+        _t.sleep(0.5)
+
+    df.drop(columns=['_date_num'], inplace=True, errors='ignore')
+
+    if patched > 0:
+        df.to_parquet(feat_pq, index=False)
+        print(f'patch_overseas_features: {patched}頭補完 → parquet更新')
+    else:
+        print('patch_overseas_features: 補完対象なし')
+
+
 def run_feature_engineering(base_dir, extra_df):
     """card_extra.csv に変換済みデータを書き、01_make_features.py を実行"""
     # 01_make_features.py が読む正規パス: data/raw/misc/card_extra.csv
     card_path = os.path.join(base_dir, 'data', 'raw', 'misc', 'card_extra.csv')
     os.makedirs(os.path.dirname(card_path), exist_ok=True)
+
+    # 頭数を付与（01_make_features.py が推定_脚質率等の展開系特徴量に使う）
+    if '頭数' not in extra_df.columns:
+        extra_df = extra_df.copy()
+        grp_cols = [c for c in ['開催', 'Ｒ'] if c in extra_df.columns]
+        if grp_cols:
+            extra_df['頭数'] = extra_df.groupby(grp_cols)['馬名S'].transform('count').astype(float)
 
     # 既存の card_extra.csv と日付単位でマージ（他日付分を消さない）
     new_dates = set(pd.to_numeric(extra_df['日付'], errors='coerce').dropna())
@@ -755,6 +920,7 @@ def predict_date(base_dir, target_date_num, card_df=None):
         sub['clogit_rank']   = np.nan
         sub['clogit_calib']  = np.nan  # raw softmax確率（isotonic丸め前）
         sub['clogit_factor'] = np.nan  # 市場補正係数（再計算用）
+        sub['clogit_buy']    = False   # オッズ帯フィルタ通過フラグ
         _clogit_raw_saved  = None   # placing予測で再利用するためのraw softmax
         _clogit_surf_saved = None   # placing予測で使うsurface key
         if _clogit_pkg is not None:
@@ -810,6 +976,12 @@ def predict_date(base_dir, target_date_num, card_df=None):
                     _art_key = _surf
                 if _art_key in _clogit_pkg['artifacts']:
                     _art = _clogit_pkg['artifacts'][_art_key]
+                    # _isnan 指示変数を先に生成（NaN補完の前に行う）
+                    for _fc in _art['feat_cols']:
+                        if _fc.endswith('_isnan'):
+                            _base = _fc[:-6]
+                            if _base in _s.columns and _fc not in _s.columns:
+                                _s[_fc] = _s[_base].isna().astype(float)
                     # feat_cols の欠損列を NaN で補完
                     for _fc in _art['feat_cols']:
                         if _fc not in _s.columns:
@@ -827,6 +999,13 @@ def predict_date(base_dir, target_date_num, card_df=None):
                         sub.loc[_oi, '_nan_count']    = int(_nan_counts[_i])
                         sub.loc[_oi, '_nan_total']    = _total_feats
                         sub.loc[_oi, '_nan_features'] = _nan_names[_i]
+                    # 馬場状態列を数値変換（ダートモデルはBaba_MAPでトレーニング済み）
+                    _baba_map = {'良': 0, '稍': 1, '稍重': 1, '重': 2, '不': 3, '不良': 3}
+                    for _bc in _art['feat_cols']:
+                        if '馬場状態' in _bc and _bc in _s.columns:
+                            _enc = _s[_bc].map(_baba_map)
+                            if _enc.notna().any():
+                                _s[_bc] = _enc
                     _X, _, _gs, _n, *_ = _clogit_prepare(
                         _s, _art['feat_cols'],
                         scaler=_art['scaler'], poly2=_art['poly2'],
@@ -848,6 +1027,14 @@ def predict_date(base_dir, target_date_num, card_df=None):
                         sub.loc[_oi, 'clogit_calib']  = _raw[_i]   # raw softmax（isotonic丸め前）
                         sub.loc[_oi, 'clogit_factor'] = _factor[_i]
                     sub['clogit_rank'] = sub['clogit_score'].rank(ascending=False, method='first')
+                    # オッズ帯フィルタ: 芝短・芝長のみ適用（OOS両期間プラス確認済み）
+                    # ダ長/ダ短/芝中 はフィルタ適用なし（◎買シグナルは出さない）
+                    _r1 = sub['clogit_rank'] == 1
+                    if _art_key in ('芝短', '芝長') and '単勝オッズ' in sub.columns:
+                        _odds_buy = pd.to_numeric(sub['単勝オッズ'], errors='coerce')
+                        sub['clogit_buy'] = _r1 & (_odds_buy >= 6.0)
+                    else:
+                        sub['clogit_buy'] = False  # ダ長/ダ短/芝中: 買いシグナルなし
             except Exception as _ce:
                 pass  # clogit失敗時は既存モデルのみ表示
 
@@ -885,7 +1072,16 @@ def predict_date(base_dir, target_date_num, card_df=None):
         disp['現行_ランカー'] = sub['cur_ランカー順位'].map(lambda x: f'{int(x)}位' if pd.notna(x) else '-')
         disp['sub_差']       = sub['sub_偏差値の差'].map(lambda x: f'{x:+.1f}' if pd.notna(x) else 'モデルなし')
         disp['sub_ランカー']  = sub['sub_ランカー順位'].map(lambda x: f'{int(x)}位' if pd.notna(x) else '-')
-        disp['clogit']       = sub['clogit_rank'].map(lambda x: f'★{int(x)}位' if pd.notna(x) and x == 1 else (f'{int(x)}位' if pd.notna(x) else '-'))
+        def _clogit_fmt(row):
+            rank = row.get('clogit_rank')
+            buy  = row.get('clogit_buy', False)
+            if pd.notna(rank):
+                r = int(rank)
+                if r == 1:
+                    return '★1位[◎買]' if buy else '★1位'
+                return f'{r}位'
+            return '-'
+        disp['clogit'] = sub.apply(_clogit_fmt, axis=1)
         if '単勝オッズ' in sub.columns:
             disp['オッズ'] = sub['単勝オッズ'].map(lambda x: f'{x:.1f}' if pd.notna(x) else '-')
         print(disp.to_string(index=False))
@@ -1070,6 +1266,17 @@ def generate_html(result, card_df, target_date_num, out_path):
         return ''
     df['_nomi_印'] = [nomi_mark_of(i) for i in range(len(df))]
 
+    # ROI買い推奨マスク（clogit_buyフラグ: 芝短/芝長 top1 & 単勝≥6倍）
+    mask_roi_buy = df['clogit_buy'].astype(bool) if 'clogit_buy' in df.columns else pd.Series(False, index=df.index)
+    # 芝短/芝長のROI top1候補（オッズ未確定含む）
+    _clogit_r1 = pd.to_numeric(df.get('clogit_rank', pd.Series(np.nan, index=df.index)), errors='coerce') == 1
+    _is_shiba_filter_seg = False
+    if '距離' in df.columns and '芝・ダ' in df.columns:
+        _surf_col = df['距離'].astype(str).str.strip().str[:1]
+        _dist_col = pd.to_numeric(df['距離'].astype(str).str.extract(r'(\d+)')[0], errors='coerce')
+        _is_shiba_filter_seg = (_surf_col == '芝') & ((_dist_col <= 1400) | (_dist_col > 2000))
+    mask_roi_watch = _clogit_r1 & _is_shiba_filter_seg & ~mask_roi_buy
+
     # 旧フラグ（行ハイライト用に残す）
     cur_nota  = cur_diff >= 10
     sub_nota  = sub_diff >= 10
@@ -1132,6 +1339,8 @@ def generate_html(result, card_df, target_date_num, out_path):
       .b-both { background:#8e44ad; color:white; }
       .b-cur  { background:#27ae60; color:white; }
       .b-sub  { background:#2980b9; color:white; }
+      .b-buy  { background:#c0392b; color:white; font-weight:bold; }
+      .roi-buy td { background:#fef9e7 !important; outline:2px solid #c0392b; }
       input.memo { width:120px; border:1px solid #ccc; border-radius:3px; padding:1px 3px; font-size:10px; }
       /* 両モデル一致カード */
       .both-list { display:flex; flex-wrap:wrap; gap:8px; padding:4px; background:white; }
@@ -1393,6 +1602,97 @@ def generate_html(result, card_df, target_date_num, out_path):
       {_nomi_body}
     </div>"""
 
+    # ── ROI買い推奨カード生成 ──
+    def make_roi_buy_cards(mask):
+        rows = df[mask].copy()
+        if rows.empty:
+            return '<p style="padding:8px;background:white;color:#999;font-size:10px">該当なし（芝短・芝長でROIモデルtop1 & 単勝≥6倍の馬なし）</p>'
+        rk = [c for c in ['開催','Ｒ','レース名'] if c in rows.columns]
+        rows = rows.sort_values(rk)
+        items = []
+        for _, r in rows.iterrows():
+            venue  = extract_venue(r.get('開催',''))
+            r_n    = int(r['Ｒ']) if 'Ｒ' in rows.columns and pd.notna(r.get('Ｒ')) else ''
+            r_name = r.get('レース名','')
+            try:
+                banum = int(float(r['dc_馬番'])) if pd.notna(r.get('dc_馬番')) else '-'
+            except (ValueError, TypeError):
+                banum = r.get('dc_馬番', '-')
+            horse   = r.get('馬名S','')
+            jockey  = r.get('dc_騎手', r.get('騎手',''))
+            odds_v  = r.get('dc_単勝オッズ') if pd.notna(r.get('dc_単勝オッズ')) else r.get('単勝オッズ')
+            cr_s    = rank_str(r.get('cur_ランカー順位'))
+            sr_s    = rank_str(r.get('sub_ランカー順位'))
+            sd_v    = fmt(r.get('sub_偏差値の差'), '+.1f')
+            items.append(f"""
+            <div class="both-card" style="border-color:#c0392b;background:#fef9e7">
+              <div class="both-race">{venue} {r_n}R　{r_name}</div>
+              <div class="both-horse">
+                <span class="both-banum">{banum}番</span>
+                <span class="both-name">{horse}</span>
+                <span class="both-jockey">{jockey}</span>
+                <span class="both-odds" style="color:#c0392b;font-weight:bold">オッズ {fmt(odds_v,'.1f')}</span>
+              </div>
+              <div class="both-eval">
+                <span class="badge b-buy" style="font-size:12px;padding:2px 6px">◎ ROI買い推奨</span>
+                <span style="font-size:10px;color:#555;margin-top:3px">　距離{cr_s} / クラス{sr_s} / sub_diff {sd_v}</span>
+              </div>
+            </div>""")
+        return '<div class="both-list">' + ''.join(items) + '</div>'
+
+    # 「オッズ待ち」候補カード（芝短/芝長 top1 で odds未確定）
+    def make_roi_watch_cards(mask):
+        rows = df[mask].copy()
+        if rows.empty:
+            return ''
+        rk = [c for c in ['開催','Ｒ','レース名'] if c in rows.columns]
+        rows = rows.sort_values(rk)
+        items = []
+        for _, r in rows.iterrows():
+            venue  = extract_venue(r.get('開催',''))
+            r_n    = int(r['Ｒ']) if 'Ｒ' in rows.columns and pd.notna(r.get('Ｒ')) else ''
+            r_name = r.get('レース名','')
+            try:
+                banum = int(float(r['dc_馬番'])) if pd.notna(r.get('dc_馬番')) else '-'
+            except (ValueError, TypeError):
+                banum = r.get('dc_馬番', '-')
+            horse   = r.get('馬名S','')
+            jockey  = r.get('dc_騎手', r.get('騎手',''))
+            odds_v  = r.get('dc_単勝オッズ') if pd.notna(r.get('dc_単勝オッズ')) else r.get('単勝オッズ')
+            odds_str = fmt(odds_v, '.1f') if pd.notna(odds_v) else '未確定'
+            items.append(f"""
+            <div class="both-card" style="border-color:#e67e22;background:#fef5ec">
+              <div class="both-race">{venue} {r_n}R　{r_name}</div>
+              <div class="both-horse">
+                <span class="both-banum">{banum}番</span>
+                <span class="both-name">{horse}</span>
+                <span class="both-jockey">{jockey}</span>
+                <span class="both-odds" style="color:#e67e22">オッズ {odds_str}</span>
+              </div>
+              <div class="both-eval">
+                <span class="badge" style="background:#e67e22;color:white;font-size:12px;padding:2px 6px">要オッズ確認</span>
+                <span style="font-size:10px;color:#888;margin-top:2px">　ROIモデル1位 / 当日オッズ≥6倍なら買い</span>
+              </div>
+            </div>""")
+        return '<div class="both-list">' + ''.join(items) + '</div>'
+
+    # ── ROI買い推奨ページ ──
+    _roi_buy_count  = int(mask_roi_buy.sum())
+    _roi_watch_count = int(mask_roi_watch.sum()) if hasattr(mask_roi_watch, 'sum') else 0
+    page_roi = f"""<div class="page" style="background:#fef9e7">
+      <h1 style="color:#c0392b">競馬AI予測レポート　{date_str}</h1>
+      <h2 style="background:#c0392b">【ROI買い推奨】芝短・芝長: ROIモデルtop1 &amp; 単勝≥6倍</h2>
+      <p style="font-size:9px;color:#555;margin:2px 0 6px">
+        ※ オッズ帯フィルタ（芝短/芝長のみ）: OOS 2323-24・2025 両期間プラス確認済み<br>
+        　 芝短: 2323-24=+35.83% / 2025=+21.99% / 25+26=+35.10%（272R）<br>
+        　 芝長: 2323-24=+93.90% / 2025=+28.10% / 25+26=+21.09%（184R）
+      </p>
+      <p style="font-size:10px;font-weight:bold;color:#c0392b;margin:4px 8px">◎買い確定: {_roi_buy_count}頭</p>
+      {make_roi_buy_cards(mask_roi_buy)}
+      {'<p style="font-size:11px;font-weight:bold;color:#e67e22;margin:12px 8px 4px">要オッズ確認（芝短/芝長 ROI top1 — オッズ確定後に6倍以上なら買い）: ' + str(_roi_watch_count) + '頭</p>' if _roi_watch_count > 0 else ''}
+      {make_roi_watch_cards(mask_roi_watch) if _roi_watch_count > 0 else ''}
+    </div>"""
+
     # ── Page1: 激熱専用 ──
     page1 = f"""<div class="page sec-hot">
       <h1>競馬AI予測レポート　{date_str}</h1>
@@ -1570,9 +1870,25 @@ def generate_html(result, card_df, target_date_num, out_path):
             # ※印（再チェック馬）
             nomi_disp = (f'<span style="font-size:10px;font-weight:bold;color:#c0392b">{nomi_mark}</span>'
                          if nomi_mark else '')
+            # ROIモデル列
+            _c_rank = r.get('clogit_rank')
+            _c_buy  = bool(r.get('clogit_buy', False))
+            if _c_buy:
+                roi_cell = f'<td><span class="badge b-buy">◎買</span></td>'
+                row_cls  = ' roi-buy' if not row_bg else ''
+            elif pd.notna(_c_rank) and int(_c_rank) == 1:
+                roi_cell = f'<td style="color:#e67e22;font-weight:bold">1位</td>'
+                row_cls  = ''
+            elif pd.notna(_c_rank):
+                roi_cell = f'<td style="color:#aaa">{int(_c_rank)}位</td>'
+                row_cls  = ''
+            else:
+                roi_cell = f'<td style="color:#ccc">-</td>'
+                row_cls  = ''
+            _row_style = row_bg if row_bg else (f'background:#fef9e7' if _c_buy else '')
             # メイン行
             rows_html.append(
-                f'<tr style="{row_bg}">'
+                f'<tr style="{_row_style}">'
                 f'<td>{r.get("dc_枠番","-")}</td>'
                 f'<td>{r.get("dc_馬番","-")}</td>'
                 f'<td class="{mark_cls}" style="font-size:13px;font-weight:bold;min-width:28px">{mark}{nomi_disp}</td>'
@@ -1585,10 +1901,11 @@ def generate_html(result, card_df, target_date_num, out_path):
                 f'<td>{rank_str(r.get("cur_ランカー順位"))}</td>'
                 f'<td>{rank_str(r.get("sub_ランカー順位"))}</td>'
                 f'<td>{fmt(r.get("sub_偏差値の差"),"+.1f")}</td>'
+                f'{roi_cell}'
                 f'</tr>'
                 # 詳細行（7px・全列結合）
-                f'<tr style="{row_bg}">'
-                f'<td colspan="10" style="font-size:7px;color:#666;text-align:left;padding:1px 6px;border-top:none">{detail}</td>'
+                f'<tr style="{_row_style}">'
+                f'<td colspan="11" style="font-size:7px;color:#666;text-align:left;padding:1px 6px;border-top:none">{detail}</td>'
                 f'</tr>'
             )
 
@@ -1601,6 +1918,7 @@ def generate_html(result, card_df, target_date_num, out_path):
               <th style="color:#58d68d">距離<br>ランカー</th>
               <th style="color:#5dade2">クラス<br>ランカー</th>
               <th>sub<br>diff</th>
+              <th style="color:#e74c3c">ROI<br>モデル</th>
             </tr></thead>
             <tbody>{''.join(rows_html)}</tbody>
           </table>
@@ -1614,6 +1932,7 @@ def generate_html(result, card_df, target_date_num, out_path):
   {css}
 </head>
 <body>
+  {page_roi}
   {page1}
   {page_nomi}
   {page2}
@@ -1784,6 +2103,9 @@ def main():
             run_feature_engineering(base_dir, card_df)
         else:
             print("特徴量再生成スキップ")
+
+        # 3b. 海外帰り馬の前走NaN補完
+        patch_overseas_features(base_dir, card_df, target_date)
 
         # 4. 予測（両モデル）
         result = predict_date(base_dir, target_date, card_df)
