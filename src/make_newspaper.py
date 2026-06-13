@@ -327,6 +327,20 @@ def make_newspaper(date_str=None):
   .td-nan   { background: #ffe0e0 !important; color: #c0392b; font-weight: bold; font-size: 8px; }
   .td-none  { color: #ccc; }
 
+  /* ── 詳細展開パネル ─────────────────────────────── */
+  .detail-row td { padding: 6px 10px; background: #f9f9f9 !important;
+                   border: 1px solid #e8e8e8; outline: none; }
+  .detail-panel { display: flex; flex-wrap: wrap; gap: 4px; }
+  .feat-chip { display: inline-flex; flex-direction: column; align-items: center;
+               padding: 3px 7px; border-radius: 5px; font-size: 9px;
+               min-width: 50px; border: 1px solid rgba(0,0,0,0.08);
+               cursor: default; }
+  .feat-name { font-size: 8px; color: rgba(0,0,0,0.5); line-height: 1; margin-bottom: 1px; }
+  .feat-val  { font-weight: bold; font-size: 10px; line-height: 1.3; }
+  .detail-hint { font-size: 8px; color: #bbb; margin-left: 3px; transition: color .15s; }
+  tr.expandable:hover td { background: #fafafa; }
+  tr.expandable:hover .detail-hint { color: #777; }
+
   /* ── レース内側タブ ─────────────────────────────── */
   .race-tab-bar { display: flex; flex-wrap: wrap; gap: 4px; padding: 10px 12px 0;
                   background: #f0f4f8; border-bottom: 2px solid #d0d8e0; }
@@ -452,9 +466,11 @@ def make_newspaper(date_str=None):
                 chips.append(f'<span class="nan-chip {cls}">{f}: {n}/{len(grp)}頭</span>')
             nan_alert_html = f'<div class="nan-alert">⚠ NaN特徴量:　{"　".join(chips)}</div>'
 
-        # 行HTML（特徴量列なし・シンプル6列）
+        # 行HTML（シンプル6列 + クリックで詳細展開）
         rows = []
-        for _, r in grp.iterrows():
+        vk_safe = rd['kaikai'].replace(' ', '_')
+        rn_safe = rd['r_num'].replace(' ', '_')
+        for hi, (_, r) in enumerate(grp.iterrows()):
             c_buy   = bool(r.get('clogit_buy', False))
             c_calib = r.get('clogit_calib')
             horse   = r.get('馬名S', '')
@@ -485,14 +501,37 @@ def make_newspaper(date_str=None):
             else:
                 buy_td = '<td class="td-none">-</td>'
 
+            # 詳細パネル（特徴量チップ）
+            detail_id = f'det-{vk_safe}-{rn_safe}-{hi}'
+            chips = []
+            for f in display_feats:
+                val = r.get(f)
+                pct = feat_pct.get(f, {}).get(r.name, np.nan)
+                fv  = fmt_val(f, val)
+                if fv is None:
+                    bg, fc, fv_disp = '#f0f0f0', '#aaa', 'NaN'
+                else:
+                    bg, fc, fv_disp = percentile_color(pct), '#222', fv
+                sname = short_feat(f)
+                chips.append(
+                    f'<span class="feat-chip" style="background:{bg};color:{fc}">'
+                    f'<span class="feat-name">{sname}</span>'
+                    f'<span class="feat-val">{fv_disp}</span>'
+                    f'</span>'
+                )
+            detail_html = f'<div class="detail-panel">{"".join(chips)}</div>'
+
             rows.append(
-                f'<tr class="{row_cls}">'
+                f'<tr class="{row_cls} expandable" onclick="toggleDetail(\'{detail_id}\')">'
                 f'<td class="td-rank">{rank_s}</td>'
                 f'{buy_td}'
-                f'<td class="td-horse">{bango}.{horse}</td>'
+                f'<td class="td-horse">{bango}.{horse}<span class="detail-hint">▾</span></td>'
                 f'<td class="td-jky">{jockey}</td>'
                 f'<td class="td-odds">{odds_s}</td>'
                 f'<td class="td-prob">{prob_s}</td>'
+                f'</tr>'
+                f'<tr id="{detail_id}" class="detail-row" style="display:none">'
+                f'<td colspan="6">{detail_html}</td>'
                 f'</tr>'
             )
 
@@ -594,6 +633,18 @@ function switchRace(vid, rid, btn) {{
   pane.querySelectorAll('.race-tab-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('pane-' + rid).classList.add('active');
   btn.classList.add('active');
+}}
+function toggleDetail(id) {{
+  var el = document.getElementById(id);
+  if (!el) return;
+  var showing = el.style.display !== 'none';
+  el.style.display = showing ? 'none' : '';
+  // ▾ ▴ の切替
+  var btn = el.previousElementSibling;
+  if (btn) {{
+    var hint = btn.querySelector('.detail-hint');
+    if (hint) hint.textContent = showing ? '▾' : '▴';
+  }}
 }}
 </script>
 </body>
