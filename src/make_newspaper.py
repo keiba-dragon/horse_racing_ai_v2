@@ -630,7 +630,10 @@ def make_newspaper(date_str=None):
   html { overflow-x: hidden; }
   body { font-family: 'Yu Gothic', 'Hiragino Sans', 'Meiryo', sans-serif;
          font-size: 10px; background: #eef1f5; color: #222;
-         overflow-x: hidden; max-width: 100vw; }
+         overflow-x: hidden; }
+  /* 全コンテンツを最大480pxに制限（200%ズームがちょうどよい = 100%では半分幅が最適） */
+  .page-title, .topbar, .tab-bar, .tab-pane, .footer { max-width: 480px; }
+  .page-title, .topbar, .tab-bar, .footer { margin: 0; }
 
   /* ── トップバー ─────────────────────────────────── */
   .topbar { background: #1a237e; color: #fff; padding: 3px 10px;
@@ -639,12 +642,12 @@ def make_newspaper(date_str=None):
   .topbar a:hover { text-decoration: underline; }
 
   /* ── ページタイトル ──────────────────────────────── */
-  .page-title { font-size: 13px; font-weight: bold; padding: 6px 10px;
+  .page-title { font-size: 12px; font-weight: bold; padding: 5px 8px;
                 background: #1a252f; color: white;
-                display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-  .page-title .subtitle { font-size: 9px; color: #aaa; font-weight: normal; }
+                display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .page-title .subtitle { font-size: 8px; color: #aaa; font-weight: normal; }
   .report-btn { background: #1a237e; color: #fff; text-decoration: none;
-                font-size: 10px; font-weight: 600; padding: 3px 8px;
+                font-size: 9px; font-weight: 600; padding: 2px 6px;
                 border-radius: 4px; border: 1px solid rgba(255,255,255,.3); }
   .report-btn:hover { opacity: .85; }
 
@@ -652,8 +655,8 @@ def make_newspaper(date_str=None):
   .tab-bar { display: flex; background: #fff; border-bottom: 2px solid #c8d0d8;
              position: sticky; top: 0; z-index: 50;
              box-shadow: 0 1px 4px rgba(0,0,0,0.08); overflow-x: auto; }
-  .tab-btn { padding: 6px 14px; border: none; background: none; cursor: pointer;
-             font-size: 11px; font-weight: 600; color: #666; white-space: nowrap;
+  .tab-btn { padding: 5px 10px; border: none; background: none; cursor: pointer;
+             font-size: 10px; font-weight: 600; color: #666; white-space: nowrap;
              border-bottom: 3px solid transparent; margin-bottom: -2px; }
   .tab-btn:hover { color: #1a237e; background: #f0f4ff; }
   .tab-btn.active { color: #1a237e; border-bottom-color: #1a237e; background: #f0f4ff; }
