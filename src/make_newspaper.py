@@ -424,11 +424,12 @@ def fetch_horse_weights(race_ids: list) -> dict:
 
 
 def fetch_race_results(race_ids: list) -> dict:
-    """result.htmlからレース結果（着順・払戻金）を取得。未確定レースはスキップ。
+    """result.htmlからレース結果（着順・払戻金・オッズ）を取得。未確定レースはスキップ。
     Returns: {(venue_code, r_num_int): {
         'order':   {umaban_02d: actual_rank_int},
         'tansho':  [(umaban_02d, payout_int)],
         'fukusho': [(umaban_02d, payout_int)],
+        'odds':    {umaban_02d: odds_float},
     }}
     """
     results = {}
@@ -436,6 +437,7 @@ def fetch_race_results(race_ids: list) -> dict:
     row_pat   = re.compile(r'<tr[^>]*class="[^"]*HorseList[^"]*"[^>]*>(.*?)</tr>', re.DOTALL)
     jyuni_pat = re.compile(r'class="Result_Num"[^>]*>(.*?)</td>', re.DOTALL)
     uma_pat   = re.compile(r'class="Num Txt_C"[^>]*>(.*?)</td>', re.DOTALL)
+    odds_pat  = re.compile(r'class="Odds\s+Txt_C"[^>]*>\s*([\d.]+)', re.DOTALL)
     for race_id in race_ids:
         venue_code = race_id[4:6]
         r_num_int  = int(race_id[10:12])
@@ -448,17 +450,27 @@ def fetch_race_results(race_ids: list) -> dict:
             # 確定チェック
             if 'Result_Num' not in html:
                 continue
-            # 着順 → 馬番 マッピング
+            # 着順・オッズ → 馬番 マッピング
             order = {}
+            race_odds = {}
             for m in row_pat.finditer(html):
                 row = m.group(1)
                 j_m = jyuni_pat.search(row)
                 u_m = uma_pat.search(row)
-                if j_m and u_m:
-                    rank_s = re.sub(r'<[^>]+>', '', j_m.group(1)).strip()
+                o_m = odds_pat.search(row)
+                if u_m:
                     uma_s2 = re.sub(r'<[^>]+>', '', u_m.group(1)).strip()
-                    if rank_s.isdigit() and uma_s2.isdigit():
-                        order[uma_s2.zfill(2)] = int(rank_s)
+                    if uma_s2.isdigit():
+                        uma_key = uma_s2.zfill(2)
+                        if j_m:
+                            rank_s = re.sub(r'<[^>]+>', '', j_m.group(1)).strip()
+                            if rank_s.isdigit():
+                                order[uma_key] = int(rank_s)
+                        if o_m:
+                            try:
+                                race_odds[uma_key] = float(o_m.group(1))
+                            except ValueError:
+                                pass
             if not order:
                 continue
             # 払戻: Tansho / Fukusho 行
@@ -478,7 +490,7 @@ def fetch_race_results(race_ids: list) -> dict:
                         if pay_v:
                             lst.append((uma_n.zfill(2), pay_v))
             results[(venue_code, r_num_int)] = {
-                'order': order, 'tansho': tansho, 'fukusho': fukusho}
+                'order': order, 'tansho': tansho, 'fukusho': fukusho, 'odds': race_odds}
             n_done += 1
             time.sleep(0.2)
         except Exception:
@@ -546,6 +558,31 @@ def make_newspaper(date_str=None):
     # ── 騎手統計 NaN 補完 ─────────────────────────────────────────
     data_file = os.path.join(BASE_DIR, 'data', 'processed', 'all_venues_features.parquet')
     result = patch_jockey_stats(result.copy(), card_df, data_file)
+
+    # ── 馬体重 NaN 補完（horse_weightsから）──────────────────────────
+    bango_col_r = 'dc_馬番' if 'dc_馬番' in result.columns else ('馬番' if '馬番' in result.columns else None)
+    if horse_weights and bango_col_r and '開催' in result.columns and 'Ｒ' in result.columns:
+        n_wt_filled = 0
+        for idx, row in result.iterrows():
+            if pd.notna(row.get('馬体重')):
+                continue
+            kaikai = str(row.get('開催', ''))
+            try:
+                r_num_int2 = int(float(row.get('Ｒ', 0)))
+                uma_s2 = str(int(float(row.get(bango_col_r, 0)))).zfill(2)
+            except (ValueError, TypeError):
+                continue
+            _vm2 = re.search(r'[^\d]+', kaikai)
+            _vcode2 = VENUE_LETTER_TO_CODE.get(_vm2.group().strip() if _vm2 else '', '')
+            wt_str2 = horse_weights.get((_vcode2, r_num_int2), {}).get(uma_s2, '')
+            m_wt = re.match(r'(\d{3,})\(([+\-]?\d+)\)', str(wt_str2))
+            if m_wt:
+                result.at[idx, '馬体重'] = int(m_wt.group(1))
+                if '馬体重増減' in result.columns:
+                    result.at[idx, '馬体重増減'] = int(m_wt.group(2))
+                n_wt_filled += 1
+        if n_wt_filled:
+            print(f'馬体重補完（horse_weights）: {n_wt_filled}頭')
 
     # ── グループ化 ────────────────────────────────────────────────
     race_keys = [c for c in ['開催', 'Ｒ', 'レース名', '距離', '芝・ダ'] if c in result.columns]
@@ -931,7 +968,9 @@ def make_newspaper(date_str=None):
                 uma_s = str(int(float(bango))).zfill(2)
             except (ValueError, TypeError):
                 uma_s = '00'
-            ov = race_live_odds.get(uma_s) or ci.get('単勝オッズ', r.get('単勝オッズ', ''))
+            ov = (race_live_odds.get(uma_s)
+                  or (race_res.get('odds', {}).get(uma_s) if race_res else None)
+                  or ci.get('単勝オッズ', r.get('単勝オッズ', '')))
             odds_s  = f'{float(ov):.1f}' if ov not in ('', None) and str(ov) not in ('nan', '') else '-'
             jockey  = str(ci.get('騎手', r.get('dc_騎手', r.get('騎手', '')))).strip()[:5]
             prob_s  = f'{c_calib:.1%}' if pd.notna(c_calib) else '-'
@@ -1039,6 +1078,7 @@ def make_newspaper(date_str=None):
     <a class="seg-report-link" href="{acc_report_href}" target="_blank">📊 モデル</a>
   </div>
   {payout_banner}
+  {nan_alert_html}
   <div class="table-wrap">
   <table class="race-table">
     <thead><tr>

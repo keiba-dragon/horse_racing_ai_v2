@@ -315,6 +315,22 @@ def patch_overseas_features(base_dir: str, card_df, date_num: int) -> None:
                 if not (isinstance(val, float) and np.isnan(val)):
                     df.loc[row_idx, col] = val
 
+        # 前走日付から間隔（週数）を計算して補完
+        prev_date = info.get('前走日付')
+        if prev_date is not None and not (isinstance(prev_date, float) and np.isnan(prev_date)):
+            try:
+                import datetime as _dt
+                def _dnum_to_date(d):
+                    d = int(d)
+                    return _dt.date(2000 + d // 10000, (d // 100) % 100, d % 100)
+                weeks = (_dnum_to_date(date_num) - _dnum_to_date(prev_date)).days / 7.0
+                if '間隔' in df.columns:
+                    for idx2 in row_idx:
+                        if pd.isna(df.at[idx2, '間隔']):
+                            df.at[idx2, '間隔'] = round(weeks, 1)
+            except Exception:
+                pass
+
         print(f'  {horse_name}: 前走日付={info.get("前走日付")}, '
               f'着差={info.get("前走着差タイム")}秒, 着順={info.get("前走着順")}')
         patched += 1
