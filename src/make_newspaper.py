@@ -518,8 +518,10 @@ def make_newspaper(date_str=None):
     # ── CSS ──────────────────────────────────────────────────────
     css = """<style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { overflow-x: hidden; }
   body { font-family: 'Yu Gothic', 'Hiragino Sans', 'Meiryo', sans-serif;
-         font-size: 10px; background: #eef1f5; color: #222; }
+         font-size: 10px; background: #eef1f5; color: #222;
+         overflow-x: hidden; max-width: 100vw; }
 
   /* ── トップバー ─────────────────────────────────── */
   .topbar { background: #1a237e; color: #fff; padding: 3px 10px;
@@ -550,7 +552,7 @@ def make_newspaper(date_str=None):
   .tab-btn.active .cnt { color: #5c6bc0; }
 
   /* ── タブコンテンツ ──────────────────────────────── */
-  .tab-pane { display: none; padding: 6px 4px 24px; }
+  .tab-pane { display: none; padding: 4px 2px 20px; overflow: hidden; max-width: 100%; }
   .tab-pane.active { display: block; }
 
   /* ── 買い目セクション ────────────────────────────── */
@@ -614,12 +616,14 @@ def make_newspaper(date_str=None):
   .row-r2 td  { background: #fef9ee !important; }
   .row-r3 td  { background: #f3faf5 !important; }
 
-  .td-rank  { font-weight: bold; width: 20px; }
-  .td-horse { text-align: left !important; font-weight: bold; font-size: 10px; }
-  .td-jky   { font-size: 8px; width: 30px; }
-  .td-odds  { width: 34px; }
-  .td-prob  { width: 34px; color: #16a085; font-weight: bold; }
-  .td-buy   { background: #c0392b !important; color: white !important; font-weight: bold; width: 20px; }
+  .td-rank  { font-weight: bold; width: 20px; min-width: 20px; max-width: 20px; }
+  .td-horse { text-align: left !important; font-weight: bold; font-size: 10px;
+              overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .td-jky   { font-size: 8px; width: 28px; min-width: 28px; max-width: 28px;
+              overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .td-odds  { width: 32px; min-width: 32px; max-width: 32px; }
+  .td-prob  { width: 32px; min-width: 32px; max-width: 32px; color: #16a085; font-weight: bold; }
+  .td-buy   { background: #c0392b !important; color: white !important; font-weight: bold; width: 18px; min-width: 18px; max-width: 18px; }
   .td-watch { background: #e67e22 !important; color: white !important; width: 20px; }
   .td-nan   { background: #ffe0e0 !important; color: #c0392b; font-weight: bold; font-size: 7px; }
   .td-none  { color: #ccc; }
@@ -648,7 +652,7 @@ def make_newspaper(date_str=None):
   .race-tab-btn:hover { background: #d0dcea; color: #1a237e; }
   .race-tab-btn.active { background: #fff; color: #1a237e; border: 2px solid #d0d8e0;
                           border-bottom-color: #fff; }
-  .race-tab-body { padding: 7px 8px 14px; background: #f0f4f8; }
+  .race-tab-body { padding: 4px 4px 10px; background: #f0f4f8; overflow: hidden; }
   .race-tab-pane { display: none; }
   .race-tab-pane.active { display: block; }
 
@@ -938,9 +942,9 @@ def make_newspaper(date_str=None):
     <span>🏇 競馬AI 予想新聞　{date_disp}</span>
     <span class="subtitle">{len(race_data)}レース / {len(result)}頭</span>
     <span class="subtitle" style="color:#90caf9">更新: {generated_at}</span>
-    <span style="margin-left:auto;display:flex;gap:8px;flex-shrink:0">
-      <a class="report-btn" href="accuracy_model_report_20260613.html">📊 予想モデルレポート</a>
-      <a class="report-btn" href="model_report_20260613.html" style="background:#1b5e20">📈 ROIモデルレポート</a>
+    <span style="margin-left:auto;display:flex;gap:6px;flex-shrink:1;flex-wrap:wrap;justify-content:flex-end">
+      <a class="report-btn" href="accuracy_model_report_20{tgt_date}.html">📊 予想</a>
+      <a class="report-btn" href="model_report_20{tgt_date}.html" style="background:#1b5e20">📈 ROI</a>
     </span>
   </div>
 
