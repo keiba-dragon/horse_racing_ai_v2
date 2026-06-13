@@ -627,13 +627,10 @@ def make_newspaper(date_str=None):
     # ── CSS ──────────────────────────────────────────────────────
     css = """<style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  html { overflow-x: hidden; }
-  body { font-family: 'Yu Gothic', 'Hiragino Sans', 'Meiryo', sans-serif;
-         font-size: 10px; background: #eef1f5; color: #222;
-         overflow-x: hidden; }
-  /* 全コンテンツを最大480pxに制限（200%ズームがちょうどよい = 100%では半分幅が最適） */
-  .page-title, .topbar, .tab-bar, .tab-pane, .footer { max-width: 480px; }
-  .page-title, .topbar, .tab-bar, .footer { margin: 0; }
+  html, body { font-family: 'Yu Gothic', 'Hiragino Sans', 'Meiryo', sans-serif;
+               font-size: 10px; background: #c8d0d8; color: #222; }
+  /* 新聞コンテナ: 最大420px */
+  .app { max-width: 420px; background: #eef1f5; min-height: 100vh; overflow-x: hidden; }
 
   /* ── トップバー ─────────────────────────────────── */
   .topbar { background: #1a237e; color: #fff; padding: 3px 10px;
@@ -1096,6 +1093,7 @@ def make_newspaper(date_str=None):
   {css}
 </head>
 <body>
+<div class="app">
   <div class="page-title">
     <span>🏇 競馬AI 予想新聞　{date_disp}</span>
     <span class="subtitle">{len(race_data)}レース / {len(result)}頭</span>
@@ -1114,6 +1112,7 @@ def make_newspaper(date_str=None):
     的中率最大化モデル (accuracy_model.pkl) | clogit + isotonic calibration | 芝短/芝長 オッズ帯フィルタ(≥6倍)
     <br>生成日時: {generated_at}
   </div>
+</div>
 
 <script>
 function switchTab(id, btn) {{
