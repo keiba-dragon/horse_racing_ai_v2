@@ -186,16 +186,26 @@ def patch_jockey_stats(result_df, card_df, data_file):
                       .groupby(pq['_jkn_full']).sum())
     # 正規化済みparquet名→元名 の逆引き（Ｍ．デム→Mデム等）
     pq_norm_map = {_norm_jkn(fn): fn for fn in all_pq_fullnames.index}
+    def _char_overlap(short, full):
+        """shortの全文字がfullに含まれる割合（略称が全名の部分集合かを測る）"""
+        return sum(1 for c in short if c in full) / len(short) if short else 0
+
     short_to_full = {}
     for short in today_shorts:
         short_n = _norm_jkn(short)
-        # 双方向prefix（正規化後）: card名がparquet名の前方一致 OR parquet名がcard名の前方一致
-        candidates = [(fn, cnt) for fn, cnt in all_pq_fullnames.items()
-                      if _norm_jkn(fn).startswith(short_n) or short_n.startswith(_norm_jkn(fn))]
+        # 候補1: 双方向prefix（正規化後）
+        candidates = {fn: cnt for fn, cnt in all_pq_fullnames.items()
+                      if _norm_jkn(fn).startswith(short_n) or short_n.startswith(_norm_jkn(fn))}
+        # 候補2: 姓2文字一致 + 全文字包含スコア1.00（略称が全名の部分集合）
+        if len(short) >= 2:
+            surname = short[:2]
+            for fn, cnt in all_pq_fullnames.items():
+                if fn.startswith(surname) and _char_overlap(short, fn) >= 1.0:
+                    candidates.setdefault(fn, cnt)
         if candidates:
-            # 統計データがある行数が多いものを優先、同数なら総行数
+            # 統計データ行数 → 総行数の順で最良候補を選択
             short_to_full[short] = max(
-                candidates,
+                candidates.items(),
                 key=lambda x: (pq_stat_counts.get(x[0], 0), x[1])
             )[0]
 
