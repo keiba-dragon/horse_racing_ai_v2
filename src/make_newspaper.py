@@ -6,9 +6,10 @@ make_newspaper.py v2 — 競馬AI 詳細新聞生成
   - 買い目サマリーを冒頭に大きく表示
   - 各レース: 特徴量ヒートマップ（レース内パーセンタイル色分け）+ NaN一覧
 """
-import os, sys, re, pickle, argparse
+import os, sys, re, pickle, argparse, time, urllib.request
 import numpy as np
 import pandas as pd
+from bs4 import BeautifulSoup
 
 sys.stdout.reconfigure(encoding='utf-8')
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -106,6 +107,64 @@ def percentile_color(pct):
     return f'rgb({r},{g},{b})'
 
 
+VENUE_LETTER_TO_CODE = {
+    '東': '05', '中': '06', '中京': '07', '名': '07',
+    '京': '08', '阪': '09', '新': '04', '福': '03',
+    '函': '02', '札': '01', '小': '10',
+}
+
+
+def fetch_live_odds(tgt_date: str) -> dict:
+    """netkeibaのAPIから単勝オッズ取得。
+    Returns: {(venue_code_2char, r_num_int): {umaban_str_02d: odds_float}}
+    """
+    import json
+    full_date = ('20' + str(tgt_date)) if len(str(tgt_date)) == 6 else str(tgt_date)
+    try:
+        req = urllib.request.Request(
+            f'https://race.netkeiba.com/top/race_list_sub.html?kaisai_date={full_date}',
+            headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, timeout=10) as r:
+            html = r.read().decode('euc-jp', errors='replace')
+        race_ids = list(dict.fromkeys(re.findall(r'race_id=(\d{12})', html)))
+    except Exception as e:
+        print(f'[WARN] オッズ: レースID取得失敗 {e}')
+        return {}
+
+    odds_by_race = {}   # {(venue_code, r_num_int): {umaban_02d: odds_float}}
+    total_horses = 0
+    for race_id in race_ids:
+        venue_code = race_id[4:6]
+        r_num_int  = int(race_id[10:12])
+        try:
+            api_url = (f'https://race.netkeiba.com/api/api_get_jra_odds.html'
+                       f'?race_id={race_id}&type=1&action=init')
+            req = urllib.request.Request(api_url, headers={
+                'User-Agent': 'Mozilla/5.0',
+                'Referer': f'https://race.netkeiba.com/odds/index.html?race_id={race_id}',
+            })
+            with urllib.request.urlopen(req, timeout=8) as r:
+                data = json.loads(r.read().decode('utf-8', errors='replace'))
+            raw = data.get('data', {}).get('odds', {}).get('1', {})
+            race_odds = {}
+            for uma_s, vals in raw.items():
+                try:
+                    v = float(vals[0])
+                    if v > 0:
+                        race_odds[uma_s.zfill(2)] = v
+                except (ValueError, IndexError, TypeError):
+                    pass
+            if race_odds:
+                odds_by_race[(venue_code, r_num_int)] = race_odds
+                total_horses += len(race_odds)
+            time.sleep(0.15)
+        except Exception:
+            continue
+
+    print(f'オッズ取得: {total_horses}頭 / {len(odds_by_race)}R ({len(race_ids)}R中)')
+    return odds_by_race
+
+
 def make_newspaper(date_str=None):
     from datetime import datetime
     generated_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -143,13 +202,19 @@ def make_newspaper(date_str=None):
         result['騎手会場_r100_勝率'] = result['騎手コース_r100_勝率']
         print('騎手会場_r100_勝率 ← 騎手コース_r100_勝率 で代替')
 
+    # ── ライブオッズ取得 ──────────────────────────────────────────
+    live_odds = fetch_live_odds(tgt_date)
+
     # ── カード情報（騎手・オッズ）────────────────────────────────
+    # live_oddsはAPIから取得済みの {(venue_code, r_num_int): {umaban_02d: odds_float}}
+    # オッズはレース別馬番ベースで後から注入するため、ここでは騎手のみ保持
     card_map = {}
     if not card_df.empty and '馬名S' in card_df.columns:
         for _, cr in card_df.drop_duplicates('馬名S').iterrows():
-            card_map[cr['馬名S']] = {
+            horse = cr['馬名S']
+            card_map[horse] = {
                 '騎手':     cr.get('騎手', cr.get('dc_騎手', '')),
-                '単勝オッズ': cr.get('単勝オッズ', ''),
+                '単勝オッズ': cr.get('単勝オッズ', cr.get('単オッズ', '')),
             }
 
     # ── グループ化 ────────────────────────────────────────────────
@@ -442,6 +507,16 @@ def make_newspaper(date_str=None):
         venue_s   = next((v for k, v in V_SHORT.items() if k in rd['kaikai']), rd['kaikai'][:2])
         dist_str  = f'{int(dist_m)}m' if pd.notna(dist_m) else '?m'
 
+        # ライブオッズ: kaikai から venue_code を抽出して該当レースを引く
+        _vm = re.search(r'[^\d]+', rd['kaikai'])
+        _vletter = _vm.group().strip() if _vm else ''
+        _vcode = VENUE_LETTER_TO_CODE.get(_vletter, '')
+        try:
+            _rn_int = int(rd['r_num'])
+        except (ValueError, TypeError):
+            _rn_int = 0
+        race_live_odds = live_odds.get((_vcode, _rn_int), {})
+
         # 表示特徴量（_isnanは別扱い）
         display_feats = [f for f in feats if not f.endswith('_isnan')]
         isnan_feats   = [f for f in feats if f.endswith('_isnan')]
@@ -483,11 +558,16 @@ def make_newspaper(date_str=None):
             acc_score = r.get('_acc_score', np.nan)
             sort_rank = r.get('_sort_rank', np.nan)
 
-            ci = card_map.get(horse, {})
-            ov = ci.get('単勝オッズ', r.get('単勝オッズ', ''))
+            ci    = card_map.get(horse, {})
+            bango = r.get('dc_馬番', r.get('馬番', ''))
+            # オッズ: APIライブ → card_df → result の優先順
+            try:
+                uma_s = str(int(float(bango))).zfill(2)
+            except (ValueError, TypeError):
+                uma_s = '00'
+            ov = race_live_odds.get(uma_s) or ci.get('単勝オッズ', r.get('単勝オッズ', ''))
             odds_s  = f'{float(ov):.1f}' if ov not in ('', None) and str(ov) not in ('nan', '') else '-'
             jockey  = str(ci.get('騎手', r.get('dc_騎手', r.get('騎手', '')))).strip()[:5]
-            bango   = r.get('dc_馬番', r.get('馬番', ''))
             prob_s  = f'{c_calib:.1%}' if pd.notna(c_calib) else '-'
 
             try: rank_i = int(float(sort_rank))
