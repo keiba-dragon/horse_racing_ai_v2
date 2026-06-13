@@ -634,6 +634,7 @@ def make_newspaper(date_str=None):
                cursor: default; }
   .feat-name { font-size: 7px; color: rgba(0,0,0,0.5); line-height: 1; margin-bottom: 1px; }
   .feat-val  { font-weight: bold; font-size: 9px; line-height: 1.2; }
+  .feat-pt   { font-size: 7px; color: rgba(0,0,0,0.45); line-height: 1; margin-top: 1px; }
   .detail-hint { font-size: 7px; color: #bbb; margin-left: 2px; transition: color .15s; }
   tr.expandable:hover td { background: #fafafa; }
   tr.expandable:hover .detail-hint { color: #777; }
@@ -836,13 +837,16 @@ def make_newspaper(date_str=None):
                 fv  = fmt_val(f, val)
                 if fv is None:
                     bg, fc, fv_disp = '#f0f0f0', '#aaa', 'NaN'
+                    pt_s = ''
                 else:
                     bg, fc, fv_disp = percentile_color(pct), '#222', fv
+                    pt_s = f'{int(round(pct * 100))}pt' if not pd.isna(pct) else ''
                 sname = short_feat(f)
                 chips.append(
                     f'<span class="feat-chip" style="background:{bg};color:{fc}">'
                     f'<span class="feat-name">{sname}</span>'
                     f'<span class="feat-val">{fv_disp}</span>'
+                    f'<span class="feat-pt">{pt_s}</span>'
                     f'</span>'
                 )
             detail_html = f'<div class="detail-panel">{"".join(chips)}</div>'
