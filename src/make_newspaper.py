@@ -629,8 +629,7 @@ def make_newspaper(date_str=None):
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { font-family: 'Yu Gothic', 'Hiragino Sans', 'Meiryo', sans-serif;
                font-size: 10px; background: #c8d0d8; color: #222; }
-  /* 新聞コンテナ: 最大640px */
-  .app { max-width: 640px; background: #eef1f5; min-height: 100vh; overflow-x: hidden; }
+  .app { background: #eef1f5; min-height: 100vh; overflow-x: hidden; }
 
   /* ── トップバー ─────────────────────────────────── */
   .topbar { background: #1a237e; color: #fff; padding: 3px 10px;
