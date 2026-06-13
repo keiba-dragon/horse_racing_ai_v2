@@ -550,7 +550,7 @@ def make_newspaper(date_str=None):
   .tab-btn.active .cnt { color: #5c6bc0; }
 
   /* ── タブコンテンツ ──────────────────────────────── */
-  .tab-pane { display: none; padding: 8px 8px 30px; }
+  .tab-pane { display: none; padding: 6px 4px 24px; }
   .tab-pane.active { display: block; }
 
   /* ── 買い目セクション ────────────────────────────── */
@@ -603,38 +603,38 @@ def make_newspaper(date_str=None):
 
   /* Race Table */
   .table-wrap { overflow-x: auto; }
-  table.race-table { border-collapse: collapse; width: 100%; font-size: 9px; }
-  table.race-table th { background: #2c3e50; color: white; padding: 3px 4px;
+  table.race-table { border-collapse: collapse; width: 100%; font-size: 9px; table-layout: fixed; }
+  table.race-table th { background: #2c3e50; color: white; padding: 2px 3px;
                         text-align: center; border: 1px solid #222;
-                        white-space: nowrap; font-size: 8px; font-weight: bold; }
-  table.race-table td { padding: 2px 4px; border: 1px solid #e0e0e0;
-                        text-align: center; white-space: nowrap; }
+                        font-size: 8px; font-weight: bold; overflow: hidden; }
+  table.race-table td { padding: 2px 3px; border: 1px solid #e0e0e0;
+                        text-align: center; overflow: hidden; }
   .row-buy td { background: #fde8e8 !important; outline: 2px solid #c0392b; }
   .row-r1 td  { background: #fef5f5 !important; }
   .row-r2 td  { background: #fef9ee !important; }
   .row-r3 td  { background: #f3faf5 !important; }
 
-  .td-rank  { font-weight: bold; min-width: 22px; }
-  .td-horse { text-align: left !important; font-weight: bold; min-width: 80px; font-size: 10px; }
-  .td-jky   { font-size: 8px; min-width: 32px; }
-  .td-odds  { min-width: 32px; }
-  .td-prob  { min-width: 36px; color: #16a085; font-weight: bold; }
-  .td-buy   { background: #c0392b !important; color: white !important; font-weight: bold; min-width: 22px; }
-  .td-watch { background: #e67e22 !important; color: white !important; min-width: 22px; }
+  .td-rank  { font-weight: bold; width: 20px; }
+  .td-horse { text-align: left !important; font-weight: bold; font-size: 10px; }
+  .td-jky   { font-size: 8px; width: 30px; }
+  .td-odds  { width: 34px; }
+  .td-prob  { width: 34px; color: #16a085; font-weight: bold; }
+  .td-buy   { background: #c0392b !important; color: white !important; font-weight: bold; width: 20px; }
+  .td-watch { background: #e67e22 !important; color: white !important; width: 20px; }
   .td-nan   { background: #ffe0e0 !important; color: #c0392b; font-weight: bold; font-size: 7px; }
   .td-none  { color: #ccc; }
 
   /* ── 詳細展開パネル ─────────────────────────────── */
   .detail-row td { padding: 4px 8px; background: #f9f9f9 !important;
                    border: 1px solid #e8e8e8; outline: none; }
-  .detail-panel { display: flex; flex-wrap: wrap; gap: 3px; }
+  .detail-panel { display: flex; flex-wrap: wrap; gap: 2px; }
   .feat-chip { display: inline-flex; flex-direction: column; align-items: center;
-               padding: 2px 5px; border-radius: 4px; font-size: 8px;
-               min-width: 44px; border: 1px solid rgba(0,0,0,0.08);
+               padding: 2px 4px; border-radius: 3px; font-size: 8px;
+               min-width: 38px; border: 1px solid rgba(0,0,0,0.08);
                cursor: default; }
-  .feat-name { font-size: 7px; color: rgba(0,0,0,0.5); line-height: 1; margin-bottom: 1px; }
-  .feat-val  { font-weight: bold; font-size: 9px; line-height: 1.2; }
-  .feat-pt   { font-size: 7px; color: rgba(0,0,0,0.45); line-height: 1; margin-top: 1px; }
+  .feat-name { font-size: 6px; color: rgba(0,0,0,0.5); line-height: 1; margin-bottom: 1px; }
+  .feat-val  { font-weight: bold; font-size: 8px; line-height: 1.2; }
+  .feat-pt   { font-size: 6px; color: rgba(0,0,0,0.45); line-height: 1; margin-top: 1px; }
   .detail-hint { font-size: 7px; color: #bbb; margin-left: 2px; transition: color .15s; }
   tr.expandable:hover td { background: #fafafa; }
   tr.expandable:hover .detail-hint { color: #777; }
