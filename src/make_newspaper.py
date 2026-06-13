@@ -987,7 +987,8 @@ function toggleDetail(id) {{
     # ── 出力 ──────────────────────────────────────────────────
     out_dir  = os.path.join(BASE_DIR, 'docs')
     os.makedirs(out_dir, exist_ok=True)
-    out_path = os.path.join(out_dir, f'newspaper_{tgt_date}.html')
+    fname_date = f'20{tgt_date}' if len(str(tgt_date)) == 6 else str(tgt_date)
+    out_path = os.path.join(out_dir, f'newspaper_{fname_date}.html')
     with open(out_path, 'w', encoding='utf-8') as f:
         f.write(html)
     print(f'HTML出力: {out_path}')
@@ -995,7 +996,7 @@ function toggleDetail(id) {{
     gdrive = r'G:\マイドライブ\競馬AI\予想レポート'
     if os.path.isdir(gdrive):
         import shutil
-        gd_path = os.path.join(gdrive, f'newspaper_{tgt_date}.html')
+        gd_path = os.path.join(gdrive, f'newspaper_{fname_date}.html')
         shutil.copy2(out_path, gd_path)
         print(f'Gdrive出力: {gd_path}')
 
