@@ -115,7 +115,11 @@ VENUE_LETTER_TO_CODE = {
 
 
 _MARK_RE = re.compile(r'[☆▲△▼○●◎◇◆★]')
+_DOT_RE  = re.compile(r'[．.]')
 def _norm_name(s): return _MARK_RE.sub('', str(s)).strip()
+def _norm_jkn(s):
+    import unicodedata
+    return _DOT_RE.sub('', unicodedata.normalize('NFKC', _norm_name(s)))
 
 def _extract_venue(kaikai):
     m = re.search(r'\d+([^\d]+)', str(kaikai))
@@ -175,16 +179,19 @@ def patch_jockey_stats(result_df, card_df, data_file):
 
     pq['_jkn_full'] = pq['騎手'].apply(_norm_name)
 
-    # 略称 → 全名 のマッピング（双方向prefix + 最多レース数で決定）
+    # 略称 → 全名 のマッピング（双方向prefix + ドット除去正規化 + 最多レース数で決定）
     all_pq_fullnames = pq['_jkn_full'].value_counts()
     # 統計が存在する行数（NaN以外）を優先スコアとして事前計算
     pq_stat_counts = (pq[target_cols].notna().any(axis=1)
                       .groupby(pq['_jkn_full']).sum())
+    # 正規化済みparquet名→元名 の逆引き（Ｍ．デム→Mデム等）
+    pq_norm_map = {_norm_jkn(fn): fn for fn in all_pq_fullnames.index}
     short_to_full = {}
     for short in today_shorts:
-        # 双方向prefix: card名がparquet名の前方一致 OR parquet名がcard名の前方一致
+        short_n = _norm_jkn(short)
+        # 双方向prefix（正規化後）: card名がparquet名の前方一致 OR parquet名がcard名の前方一致
         candidates = [(fn, cnt) for fn, cnt in all_pq_fullnames.items()
-                      if str(fn).startswith(short) or short.startswith(str(fn))]
+                      if _norm_jkn(fn).startswith(short_n) or short_n.startswith(_norm_jkn(fn))]
         if candidates:
             # 統計データがある行数が多いものを優先、同数なら総行数
             short_to_full[short] = max(
@@ -206,15 +213,18 @@ def patch_jockey_stats(result_df, card_df, data_file):
         if jrows.empty:
             continue
         for cosu in result_df.loc[result_df['_jkn_short'] == short, '_kosu'].dropna().unique():
-            rows = jrows[jrows['今回_コース種別'] == cosu]
-            if rows.empty:
-                surf = cosu.split('_')[-1] if '_' in cosu else cosu
-                rows = jrows[jrows['今回_コース種別'].str.endswith('_' + surf, na=False)]
-            if rows.empty:
-                rows = jrows
-            # NaN以外の最初の行
-            for _, rw in rows.iterrows():
-                entry = {c: float(rw[c]) for c in target_cols if pd.notna(rw.get(c))}
+            # 優先順: 完全一致 → 同surface → 全行（データがある行が見つかるまで拡大）
+            surf = cosu.split('_')[-1] if '_' in cosu else cosu
+            for candidate_rows in [
+                jrows[jrows['今回_コース種別'] == cosu],
+                jrows[jrows['今回_コース種別'].str.endswith('_' + surf, na=False)],
+                jrows,
+            ]:
+                entry = {}
+                for _, rw in candidate_rows.iterrows():
+                    entry = {c: float(rw[c]) for c in target_cols if pd.notna(rw.get(c))}
+                    if entry:
+                        break
                 if entry:
                     stats_map[(short, cosu)] = entry
                     break
