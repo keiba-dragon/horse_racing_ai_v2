@@ -134,6 +134,13 @@ def make_newspaper(date_str=None):
     acc_model  = pickle.load(open(model_path, 'rb'))
     seg_feats  = {k: v['feat_cols'] for k, v in acc_model.items()}
 
+    # ── 騎手会場_r100_勝率: 騎手コース_r100_勝率で代替 ──────────────
+    # 予測パイプラインはjockey名列を持たないため parquet照合不可
+    # 騎手コース勝率（同コース・同馬場条件）を近似値として使用
+    if '騎手会場_r100_勝率' not in result.columns and '騎手コース_r100_勝率' in result.columns:
+        result['騎手会場_r100_勝率'] = result['騎手コース_r100_勝率']
+        print('騎手会場_r100_勝率 ← 騎手コース_r100_勝率 で代替')
+
     # ── カード情報（騎手・オッズ）────────────────────────────────
     card_map = {}
     if not card_df.empty and '馬名S' in card_df.columns:
@@ -315,6 +322,19 @@ def make_newspaper(date_str=None):
   .td-watch { background: #e67e22 !important; color: white !important; min-width: 28px; }
   .td-nan   { background: #ffe0e0 !important; color: #c0392b; font-weight: bold; font-size: 8px; }
   .td-none  { color: #ccc; }
+
+  /* ── レース内側タブ ─────────────────────────────── */
+  .race-tab-bar { display: flex; flex-wrap: wrap; gap: 4px; padding: 10px 12px 0;
+                  background: #f0f4f8; border-bottom: 2px solid #d0d8e0; }
+  .race-tab-btn { padding: 5px 12px; border: none; background: #e0e8f0;
+                  border-radius: 6px 6px 0 0; cursor: pointer;
+                  font-size: 12px; font-weight: 600; color: #555; margin-bottom: -2px; }
+  .race-tab-btn:hover { background: #d0dcea; color: #1a237e; }
+  .race-tab-btn.active { background: #fff; color: #1a237e; border: 2px solid #d0d8e0;
+                          border-bottom-color: #fff; }
+  .race-tab-body { padding: 10px 12px 20px; background: #f0f4f8; }
+  .race-tab-pane { display: none; }
+  .race-tab-pane.active { display: block; }
 
   .footer { font-size: 8px; color: #aaa; text-align: right; padding: 8px 12px 20px; }
 </style>"""
@@ -505,7 +525,7 @@ def make_newspaper(date_str=None):
         if venue_key not in venue_order:
             venue_order.append(venue_key)
 
-        race_groups[venue_key].append(f'''
+        race_groups[venue_key].append((rd['r_num'], rd['race_name'], f'''
 <div class="race-block">
   <div class="race-header" style="border-left-color:{seg_color}">
     <span class="race-venue">{venue_s}</span>
@@ -527,23 +547,39 @@ def make_newspaper(date_str=None):
     <tbody>{"".join(rows)}</tbody>
   </table>
   </div>
-</div>''')
+</div>'''))
 
     # ═══════════════════════════════════════════════════════════
-    # HTML組立（タブ構成）
+    # HTML組立（タブ構成: 外=買い目/会場  内=レース別）
     # ═══════════════════════════════════════════════════════════
 
-    # タブボタン生成
+    def build_venue_pane(vk, races):
+        """races = [(r_num, race_name, html), ...]"""
+        vid = f'v-{vk.replace(" ", "_")}'
+        # 内側タブボタン
+        inner_btns = ''
+        inner_panes = ''
+        for i, (rnum, rname, rhtml) in enumerate(races):
+            rid = f'{vid}-r{rnum}'
+            act = 'active' if i == 0 else ''
+            has_buy = 'clogit_buy' in rhtml and '◎買' in rhtml
+            buy_dot = ' <span style="color:#c0392b;font-weight:bold">●</span>' if has_buy else ''
+            inner_btns  += f'<button class="race-tab-btn {act}" onclick="switchRace(\'{vid}\',\'{rid}\',this)">{rnum}R{buy_dot}</button>'
+            inner_panes += f'<div id="pane-{rid}" class="race-tab-pane {act}">{rhtml}</div>'
+        return f'<div class="race-tab-bar">{inner_btns}</div><div class="race-tab-body">{inner_panes}</div>'
+
     n_buy = len(buy_cards)
     tab_buttons = f'<button class="tab-btn active" onclick="switchTab(\'buy\', this)">◎ 買い目 <span class="cnt">({n_buy}件)</span></button>'
     tab_panes   = f'<div id="pane-buy" class="tab-pane active">{buy_html}</div>'
 
     for vk in venue_order:
-        blocks = race_groups[vk]
+        races = race_groups[vk]
         venue_full = next((v for k, v in V_FULL.items() if k in vk), vk[:3])
         tab_id = f'v-{vk.replace(" ", "_")}'
-        tab_buttons += f'<button class="tab-btn" onclick="switchTab(\'{tab_id}\', this)">{venue_full} <span class="cnt">({len(blocks)}R)</span></button>'
-        tab_panes   += f'<div id="pane-{tab_id}" class="tab-pane">{"".join(blocks)}</div>'
+        buy_cnt = sum(1 for _, _, h in races if '◎買' in h)
+        buy_marker = f' <span style="color:#c0392b;font-size:10px">({buy_cnt}買)</span>' if buy_cnt else ''
+        tab_buttons += f'<button class="tab-btn" onclick="switchTab(\'{tab_id}\', this)">{venue_full}{buy_marker} <span class="cnt">({len(races)}R)</span></button>'
+        tab_panes   += f'<div id="pane-{tab_id}" class="tab-pane">{build_venue_pane(vk, races)}</div>'
 
     html = f"""<!DOCTYPE html>
 <html lang="ja">
@@ -577,6 +613,14 @@ function switchTab(id, btn) {{
   document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('pane-' + id).classList.add('active');
+  btn.classList.add('active');
+}}
+function switchRace(vid, rid, btn) {{
+  // 同じ会場内のレースタブだけ切替
+  const pane = document.getElementById('pane-' + vid);
+  pane.querySelectorAll('.race-tab-pane').forEach(p => p.classList.remove('active'));
+  pane.querySelectorAll('.race-tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('pane-' + rid).classList.add('active');
   btn.classList.add('active');
 }}
 </script>
