@@ -114,6 +114,121 @@ VENUE_LETTER_TO_CODE = {
 }
 
 
+_MARK_RE = re.compile(r'[☆▲△▼○●◎◇◆★]')
+def _norm_name(s): return _MARK_RE.sub('', str(s)).strip()
+
+def _extract_venue(kaikai):
+    m = re.search(r'\d+([^\d]+)', str(kaikai))
+    return m.group(1) if m else str(kaikai)
+
+
+def patch_jockey_stats(result_df, card_df, data_file):
+    """parquetから騎手の直近統計をresult_dfのNaN列に補完する。
+    card_dfは略称(丸山)、parquetは全名(丸山元気)なので前方一致でマッピング。
+    """
+    JOCKEY_STAT_COLS = [
+        '騎手コース_r100_勝率', '騎手馬場_r100_勝率',
+        '騎手距離_r100_勝率', '騎手会場_r100_勝率',
+    ]
+    target_cols = [c for c in JOCKEY_STAT_COLS if c in result_df.columns]
+    if not target_cols:
+        return result_df
+
+    # card_dfから 馬名S → 騎手略称 マッピング
+    horse_jkn_map = {}
+    if card_df is not None and not card_df.empty and '馬名S' in card_df.columns and '騎手' in card_df.columns:
+        for _, cr in card_df.drop_duplicates('馬名S').iterrows():
+            horse_jkn_map[str(cr['馬名S'])] = _norm_name(cr.get('騎手', ''))
+
+    horse_col = '馬名S' if '馬名S' in result_df.columns else None
+    result_df['_jkn_short'] = result_df[horse_col].map(horse_jkn_map).fillna('') if horse_col else ''
+    if '開催' in result_df.columns and '芝・ダ' in result_df.columns:
+        result_df['_kosu'] = (result_df['開催'].apply(_extract_venue)
+                              + '_' + result_df['芝・ダ'].astype(str).str.strip())
+    else:
+        result_df['_kosu'] = ''
+
+    today_shorts = set(result_df['_jkn_short'].dropna()) - {'', 'nan'}
+    if not today_shorts:
+        result_df.drop(columns=['_jkn_short', '_kosu'], errors='ignore', inplace=True)
+        return result_df
+
+    # parquetに存在する列だけ読み込む
+    base_cols = ['騎手', '今回_コース種別', '日付_num']
+    valid_stat_cols = []
+    for c in target_cols:
+        try:
+            pd.read_parquet(data_file, columns=[c])
+            valid_stat_cols.append(c)
+        except Exception:
+            pass
+    if not valid_stat_cols:
+        result_df.drop(columns=['_jkn_short', '_kosu'], errors='ignore', inplace=True)
+        return result_df
+    try:
+        pq = pd.read_parquet(data_file, columns=base_cols + valid_stat_cols)
+    except Exception as e:
+        print(f'[WARN] 騎手統計parquet読み込み失敗: {e}')
+        result_df.drop(columns=['_jkn_short', '_kosu'], errors='ignore', inplace=True)
+        return result_df
+    target_cols = valid_stat_cols
+
+    pq['_jkn_full'] = pq['騎手'].apply(_norm_name)
+
+    # 略称 → 全名 のマッピング（前方一致 + 最多レース数で決定）
+    all_pq_fullnames = pq['_jkn_full'].value_counts()
+    short_to_full = {}
+    for short in today_shorts:
+        # 前方一致で全候補を探し、最多レース数のものを採用（完全一致でも短縮名に件数が少ないものがあるため）
+        candidates = [(fn, cnt) for fn, cnt in all_pq_fullnames.items()
+                      if str(fn).startswith(short)]
+        if candidates:
+            short_to_full[short] = max(candidates, key=lambda x: x[1])[0]
+
+    # 全名でフィルタ
+    target_fullnames = set(short_to_full.values())
+    pq_f = pq[pq['_jkn_full'].isin(target_fullnames)].sort_values('日付_num', ascending=False)
+    # 略称→全名の逆引き
+    full_to_short = {v: k for k, v in short_to_full.items()}
+
+    # (short, kosu) → {stat: val}  最新行からlookup
+    stats_map = {}
+    for fullname in target_fullnames:
+        short = full_to_short.get(fullname, fullname)
+        jrows = pq_f[pq_f['_jkn_full'] == fullname]
+        if jrows.empty:
+            continue
+        for cosu in result_df.loc[result_df['_jkn_short'] == short, '_kosu'].dropna().unique():
+            rows = jrows[jrows['今回_コース種別'] == cosu]
+            if rows.empty:
+                surf = cosu.split('_')[-1] if '_' in cosu else cosu
+                rows = jrows[jrows['今回_コース種別'].str.endswith('_' + surf, na=False)]
+            if rows.empty:
+                rows = jrows
+            # NaN以外の最初の行
+            for _, rw in rows.iterrows():
+                entry = {c: float(rw[c]) for c in target_cols if pd.notna(rw.get(c))}
+                if entry:
+                    stats_map[(short, cosu)] = entry
+                    break
+
+    # NaN補完
+    filled = 0
+    for idx, row in result_df.iterrows():
+        short = row['_jkn_short'] if '_jkn_short' in row else ''
+        cosu  = row['_kosu'] if '_kosu' in row else ''
+        entry = stats_map.get((short, cosu)) or stats_map.get((short, '')) or {}
+        for c, v in entry.items():
+            if pd.isna(result_df.at[idx, c]):
+                result_df.at[idx, c] = v
+                filled += 1
+
+    matched = sum(1 for s in today_shorts if s in short_to_full)
+    print(f'騎手統計補完: {filled}セル補完 / 略称マッチ {matched}/{len(today_shorts)}人 / {len(stats_map)}ペア')
+    result_df.drop(columns=['_jkn_short', '_kosu'], errors='ignore', inplace=True)
+    return result_df
+
+
 def fetch_live_odds(tgt_date: str) -> dict:
     """netkeibaのAPIから単勝オッズ取得。
     Returns: {(venue_code_2char, r_num_int): {umaban_str_02d: odds_float}}
@@ -216,6 +331,10 @@ def make_newspaper(date_str=None):
                 '騎手':     cr.get('騎手', cr.get('dc_騎手', '')),
                 '単勝オッズ': cr.get('単勝オッズ', cr.get('単オッズ', '')),
             }
+
+    # ── 騎手統計 NaN 補完 ─────────────────────────────────────────
+    data_file = os.path.join(BASE_DIR, 'data', 'processed', 'all_venues_features.parquet')
+    result = patch_jockey_stats(result.copy(), card_df, data_file)
 
     # ── グループ化 ────────────────────────────────────────────────
     race_keys = [c for c in ['開催', 'Ｒ', 'レース名', '距離', '芝・ダ'] if c in result.columns]
