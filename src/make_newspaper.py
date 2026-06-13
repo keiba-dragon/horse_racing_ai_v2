@@ -737,17 +737,17 @@ def make_newspaper(date_str=None):
   .td-none  { color: #ccc; }
 
   /* ── 詳細展開パネル ─────────────────────────────── */
-  .detail-row td { padding: 6px 10px; background: #f9f9f9 !important;
+  .detail-row td { padding: 10px 12px; background: #f9f9f9 !important;
                    border: 1px solid #e8e8e8; outline: none; }
-  .detail-panel { display: flex; flex-wrap: wrap; gap: 3px; }
+  .detail-panel { display: flex; flex-wrap: wrap; gap: 8px; }
   .feat-chip { display: inline-flex; flex-direction: column; align-items: center;
-               padding: 4px 8px; border-radius: 3px; font-size: 14px;
-               min-width: 62px; border: 1px solid rgba(0,0,0,0.08);
+               padding: 8px 12px; border-radius: 6px; font-size: 18px;
+               min-width: 80px; border: 1px solid rgba(0,0,0,0.12);
                cursor: default; }
-  .feat-name { font-size: 11px; color: rgba(0,0,0,0.5); line-height: 1; margin-bottom: 1px; }
-  .feat-val  { font-weight: bold; font-size: 14px; line-height: 1.2; }
-  .feat-pt   { font-size: 11px; color: rgba(0,0,0,0.45); line-height: 1; margin-top: 1px; }
-  .detail-hint { font-size: 13px; color: #bbb; margin-left: 2px; transition: color .15s; }
+  .feat-name { font-size: 13px; color: rgba(0,0,0,0.55); line-height: 1.2; margin-bottom: 3px; }
+  .feat-val  { font-weight: bold; font-size: 20px; line-height: 1.2; }
+  .feat-pt   { font-size: 13px; color: rgba(0,0,0,0.45); line-height: 1; margin-top: 3px; }
+  .detail-hint { font-size: 14px; color: #bbb; margin-left: 3px; transition: color .15s; }
   tr.expandable:hover td { background: #fafafa; }
   tr.expandable:hover .detail-hint { color: #777; }
   /* ── 馬体重チップ ─── */
