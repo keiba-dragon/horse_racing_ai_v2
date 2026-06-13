@@ -16,14 +16,14 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 SEG_LABEL = {
-    'ダ':   'ダ長（ダ>1400m）',
+    'ダ長': 'ダ長（ダ>1400m）',
     'ダ短': 'ダ短（ダ≤1400m）',
     '芝短': '芝短（芝≤1400m）',
     '芝中': '芝中（芝1401-2000m）',
     '芝長': '芝長（芝>2000m）',
 }
 SEG_COLOR = {
-    'ダ':   '#2980b9',
+    'ダ長': '#2980b9',
     'ダ短': '#1a6fa0',
     '芝短': '#27ae60',
     '芝中': '#16a085',
@@ -51,7 +51,7 @@ def get_seg_key(surf, dist_m):
         elif dist_m <= 2000: return '芝中'
         else:               return '芝長'
     elif surf == 'ダ':
-        return 'ダ短' if dist_m <= 1400 else 'ダ'
+        return 'ダ短' if dist_m <= 1400 else 'ダ長'
     return None
 
 
@@ -129,11 +129,10 @@ def make_newspaper(date_str=None):
     card_df  = cache.get('card_df', pd.DataFrame())
     tgt_date = cache.get('target_date', '??')
 
-    # ── モデル読み込み ────────────────────────────────────────────
-    model_path = os.path.join(BASE_DIR, 'models', 'final_model.pkl')
-    raw_model  = pickle.load(open(model_path, 'rb'))
-    arts       = raw_model.get('artifacts', raw_model)
-    seg_feats  = {k: v['feat_cols'] for k, v in arts.items() if k != '芝'}
+    # ── モデル読み込み（的中率最大化モデル）────────────────────────
+    model_path = os.path.join(BASE_DIR, 'models', 'accuracy_model.pkl')
+    acc_model  = pickle.load(open(model_path, 'rb'))
+    seg_feats  = {k: v['feat_cols'] for k, v in acc_model.items()}
 
     # ── カード情報（騎手・オッズ）────────────────────────────────
     card_map = {}
@@ -170,10 +169,40 @@ def make_newspaper(date_str=None):
         seg_key = get_seg_key(surf, dist_m)
         feats   = seg_feats.get(seg_key, []) if seg_key else []
 
-        grp['_sort_rank'] = pd.to_numeric(
-            grp['clogit_rank'] if 'clogit_rank' in grp.columns else pd.Series(np.nan, index=grp.index),
-            errors='coerce'
-        )
+        # accuracy_model でスコア計算してランク付け
+        if seg_key and seg_key in acc_model:
+            art = acc_model[seg_key]
+            feat_cols = art['feat_cols']
+            scaler    = art['scaler']
+            coef      = art['coef']
+            rows = []
+            for _, row in grp.iterrows():
+                fv = []
+                for f in feat_cols:
+                    if f.endswith('_isnan'):
+                        base_f = f[:-6]
+                        fv.append(1.0 if pd.isna(row.get(base_f)) else 0.0)
+                    else:
+                        v = row.get(f, np.nan)
+                        try:
+                            fv.append(float(v) if not pd.isna(v) else 0.0)
+                        except (ValueError, TypeError):
+                            fv.append(0.0)
+                rows.append(fv)
+            X = np.array(rows, dtype=float)
+            try:
+                scores = scaler.transform(X) @ coef
+            except Exception:
+                scores = np.zeros(len(grp))
+            grp = grp.copy()
+            grp['_acc_score'] = scores
+            grp['_sort_rank'] = grp['_acc_score'].rank(ascending=False, method='first')
+        else:
+            grp['_acc_score'] = np.nan
+            grp['_sort_rank'] = pd.to_numeric(
+                grp['clogit_rank'] if 'clogit_rank' in grp.columns
+                else pd.Series(np.nan, index=grp.index), errors='coerce'
+            )
         grp = grp.sort_values('_sort_rank', na_position='last')
 
         race_data.append(dict(
@@ -490,6 +519,11 @@ def make_newspaper(date_str=None):
   {css}
 </head>
 <body>
+  <div style="background:#1a237e;color:#fff;padding:6px 20px;font-size:0.82rem;display:flex;gap:20px;align-items:center">
+    <span>🏇 競馬AI v2</span>
+    <a href="accuracy_model_report_20260613.html" style="color:#90caf9;text-decoration:none">📊 的中率モデルレポート</a>
+    <a href="model_report_20260613.html" style="color:#a5d6a7;text-decoration:none">📈 ROIモデルレポート</a>
+  </div>
   <h1 class="page-title">
     競馬AI 予想新聞　{date_disp}
     <span class="subtitle">{len(race_data)}レース / {len(result)}頭　|　セル色=レース内パーセンタイル（青=低・橙=高）</span>
@@ -500,7 +534,7 @@ def make_newspaper(date_str=None):
   {"".join(race_blocks)}
 
   <div class="footer">
-    make_newspaper.py v2 | ROI model: clogit + isotonic calibration
+    make_newspaper.py v2 | 的中率最大化モデル (accuracy_model.pkl) | clogit + isotonic calibration
     | 芝短/芝長のみ オッズ帯フィルタ(≥6倍) 適用
   </div>
 </body>

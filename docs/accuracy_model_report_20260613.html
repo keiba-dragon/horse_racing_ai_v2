@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>競馬AI v2 的中率モデルレポート 2026-06-13</title>
+<style>
+:root{--green:#1b5e20;--bg:#f0f2f5;}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI','Yu Gothic',sans-serif;background:var(--bg);color:#212121;font-size:14px;line-height:1.6}
+nav{background:#1b5e20;color:#fff;padding:0 24px;height:52px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+nav a{color:#a5d6a7;text-decoration:none;font-size:0.85rem}
+.hero{background:linear-gradient(135deg,#1b5e20 0%,#2e7d32 50%,#388e3c 100%);color:#fff;padding:40px 24px;text-align:center}
+.hero h1{font-size:1.8rem;font-weight:800;margin-bottom:8px}
+.hero .sub{font-size:0.9rem;opacity:.8;margin-bottom:20px}
+.mission-badge{display:inline-block;background:rgba(255,255,255,.15);border:2px solid rgba(255,255,255,.4);border-radius:50px;padding:8px 24px;font-size:1rem;font-weight:700}
+.container{max-width:1100px;margin:0 auto;padding:28px 20px 60px}
+.section{background:#fff;border-radius:10px;padding:22px 24px;margin-bottom:24px;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+.section-title{font-size:1rem;font-weight:700;color:#1b5e20;border-bottom:2px solid #e8f5e9;padding-bottom:8px;margin-bottom:16px}
+.kpi-grid{display:flex;flex-wrap:wrap;gap:14px}
+.kpi-card{background:#f8f9fa;border-radius:10px;padding:14px 18px;min-width:160px;flex:1;text-align:center;border:1px solid #e0e0e0}
+.kpi-seg{font-size:0.78rem;color:white;padding:2px 10px;border-radius:10px;display:inline-block;margin-bottom:6px}
+.kpi-val{font-size:1.9rem;font-weight:800;margin:4px 0}
+.kpi-label{font-size:0.75rem;color:#666}
+.kpi-sub{font-size:0.72rem;color:#999;margin-top:2px}
+table.summary{border-collapse:collapse;width:100%;font-size:0.88rem}
+table.summary th{background:#1b5e20;color:#fff;padding:8px 10px;text-align:center}
+table.summary td{padding:8px 10px;border-bottom:1px solid #eee;text-align:center}
+table.summary tr:hover td{background:#f5f5f5}
+.tab-btns{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:16px}
+.tab-btn{padding:7px 14px;border:none;border-radius:6px 6px 0 0;background:#e8f5e9;cursor:pointer;font-size:0.82rem;font-weight:600;border-top:3px solid transparent}
+.tab-btn.active{background:#fff;border-bottom:none;font-weight:700}
+.tab-content{display:none;padding:16px;background:#fff;border:1px solid #e0e0e0;border-radius:0 8px 8px 8px}
+.tab-content.active{display:block}
+.seg-header{padding:10px 14px;background:#f8f9fa;border-radius:6px;margin-bottom:12px;line-height:1.7}
+.feat-chip{display:inline-block;background:#e8f5e9;color:#1b5e20;font-size:0.78rem;padding:2px 8px;border-radius:10px;margin:2px 3px}
+.nan-chip{background:#fff3e0;color:#e65100}
+.di-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.di-item{background:#f8f9fa;padding:12px 14px;border-radius:6px;border-left:3px solid #4caf50}
+.di-label{font-size:0.78rem;color:#666;margin-bottom:2px}
+.di-val{font-size:0.88rem;font-weight:600}
+small{font-size:0.8em;color:#888;margin-left:4px}
+.notice-box{background:#e8f5e9;border:2px solid #4caf50;border-radius:8px;padding:14px 18px;margin-bottom:20px}
+</style>
+</head>
+<body>
+<nav>
+  <span style="font-weight:700">🏇 競馬AI v2 — 的中率モデルレポート</span>
+  <span style="display:flex;gap:16px">
+    <a href="newspaper_260613.html">📰 新聞（6/13）</a>
+    <a href="model_report_20260613.html">📈 ROIモデルレポート</a>
+    <span style="opacity:.7;font-size:0.82rem">更新: 2026-06-13</span>
+  </span>
+</nav>
+<div class="hero">
+  <h1>競馬AI v2 的中率最大化モデル レポート</h1>
+  <div class="sub">clogit + isotonic calibration | 5セグメント | OOS 2023-2026 | 新聞予想で使用中</div>
+  <div class="mission-badge">🎯 予想新聞はこのモデルのスコア順</div>
+</div>
+<div class="container">
+
+  <div class="notice-box">
+    <strong>このモデルが新聞の予想を担当しています</strong><br>
+    ROIモデル（<a href="model_report_20260613.html" style="color:#1565c0">ROIレポート</a>）は指標1位全買いROIの最大化を目的とします。<br>
+    的中率モデル（このレポート）は1着的中率の最大化を目的とし、<code>accuracy_model.pkl</code> として保存されています。
+    新聞の馬順・特徴量ヒートマップはこちらのモデルスコアに基づきます。
+  </div>
+
+  <div class="section">
+    <div class="section-title">OOS 的中率（指標1位全買い）</div>
+    <div class="kpi-grid">
+<div class="kpi-card">
+  <div class="kpi-seg" style="background:#2980b9">ダ長</div>
+  <div class="kpi-val" style="color:#e65100">29.3%</div>
+  <div class="kpi-label">OOS 的中率</div>
+  <div class="kpi-sub">（1番人気比 -4.7pt）</div>
+  <div class="kpi-sub" style="margin-top:4px">ROI: <span style="color:#c62828">-19.09%</span></div>
+</div>
+<div class="kpi-card">
+  <div class="kpi-seg" style="background:#1a6fa0">ダ短</div>
+  <div class="kpi-val" style="color:#e65100">28.6%</div>
+  <div class="kpi-label">OOS 的中率</div>
+  <div class="kpi-sub">（1番人気比 -6.3pt）</div>
+  <div class="kpi-sub" style="margin-top:4px">ROI: <span style="color:#c62828">-12.70%</span></div>
+</div>
+<div class="kpi-card">
+  <div class="kpi-seg" style="background:#27ae60">芝短</div>
+  <div class="kpi-val" style="color:#e65100">25.1%</div>
+  <div class="kpi-label">OOS 的中率</div>
+  <div class="kpi-sub">（1番人気比 -3.6pt）</div>
+  <div class="kpi-sub" style="margin-top:4px">ROI: <span style="color:#c62828">-18.48%</span></div>
+</div>
+<div class="kpi-card">
+  <div class="kpi-seg" style="background:#16a085">芝中</div>
+  <div class="kpi-val" style="color:#e65100">29.3%</div>
+  <div class="kpi-label">OOS 的中率</div>
+  <div class="kpi-sub"></div>
+  <div class="kpi-sub" style="margin-top:4px">ROI: <span style="color:#c62828">-21.25%</span></div>
+</div>
+<div class="kpi-card">
+  <div class="kpi-seg" style="background:#8e44ad">芝長</div>
+  <div class="kpi-val" style="color:#2e7d32">31.1%</div>
+  <div class="kpi-label">OOS 的中率</div>
+  <div class="kpi-sub"></div>
+  <div class="kpi-sub" style="margin-top:4px">ROI: <span style="color:#c62828">-16.32%</span></div>
+</div></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">セグメント別 年別 的中率 / ROI サマリー</div>
+    <table class="summary">
+      <thead><tr>
+        <th>セグメント</th>
+        <th>2023-24 的中率</th><th>2023-24 ROI</th>
+        <th>2025 的中率</th><th>2025 ROI</th>
+        <th>2026 的中率</th><th>2026 ROI</th>
+      </tr></thead>
+      <tbody><tr>
+  <td style="font-weight:bold;color:#2980b9">ダ長</td>
+  <td style="color:#555">29.2%<small>(1841R)</small></td><td style="color:#c62828">-18.37%</td><td style="color:#2e7d32">30.8%<small>(924R)</small></td><td style="color:#c62828">-15.51%</td><td style="color:#555">26.2%<small>(397R)</small></td><td style="color:#c62828">-30.73%</td>
+</tr><tr>
+  <td style="font-weight:bold;color:#1a6fa0">ダ短</td>
+  <td style="color:#555">29.2%<small>(1352R)</small></td><td style="color:#c62828">-14.34%</td><td style="color:#555">29.3%<small>(668R)</small></td><td style="color:#c62828">-11.11%</td><td style="color:#555">24.1%<small>(291R)</small></td><td style="color:#c62828">-8.73%</td>
+</tr><tr>
+  <td style="font-weight:bold;color:#27ae60">芝短</td>
+  <td style="color:#555">28.8%<small>(866R)</small></td><td style="color:#c62828">-7.19%</td><td style="color:#555">21.7%<small>(434R)</small></td><td style="color:#c62828">-25.99%</td><td style="color:#555">17.2%<small>(204R)</small></td><td style="color:#c62828">-50.39%</td>
+</tr><tr>
+  <td style="font-weight:bold;color:#16a085">芝中</td>
+  <td style="color:#2e7d32">31.3%<small>(1669R)</small></td><td style="color:#c62828">-14.13%</td><td style="color:#555">28.6%<small>(857R)</small></td><td style="color:#c62828">-22.53%</td><td style="color:#555">22.8%<small>(426R)</small></td><td style="color:#c62828">-46.55%</td>
+</tr><tr>
+  <td style="font-weight:bold;color:#8e44ad">芝長</td>
+  <td style="color:#2e7d32">32.4%<small>(578R)</small></td><td style="color:#c62828">-14.03%</td><td style="color:#2e7d32">33.2%<small>(268R)</small></td><td style="color:#c62828">-10.45%</td><td style="color:#555">21.5%<small>(135R)</small></td><td style="color:#c62828">-37.78%</td>
+</tr></tbody>
+    </table>
+    <p style="font-size:0.78rem;color:#888;margin-top:8px">
+      * 的中率 = 指標1位馬が1着になる確率。1番人気の的中率（参考: ダ長34% / ダ短35% / 芝短29%）との比較<br>
+      * OOS = Out-of-Sample。train:2013-2021 / val:2022 / OOS:2023-2026
+    </p>
+  </div>
+
+  <div class="section" id="segments">
+    <div class="section-title">セグメント別 特徴量詳細</div>
+    <div class="tab-btns"><button class="tab-btn active" onclick="showTab('ダ長')" style="border-top:3px solid #2980b9">ダ長</button><button class="tab-btn " onclick="showTab('ダ短')" style="border-top:3px solid #1a6fa0">ダ短</button><button class="tab-btn " onclick="showTab('芝短')" style="border-top:3px solid #27ae60">芝短</button><button class="tab-btn " onclick="showTab('芝中')" style="border-top:3px solid #16a085">芝中</button><button class="tab-btn " onclick="showTab('芝長')" style="border-top:3px solid #8e44ad">芝長</button></div>
+    
+<div id="tab-ダ長" class="tab-content active">
+  <div class="seg-header" style="border-left:5px solid #2980b9">
+    <strong style="color:#2980b9">ダ長</strong> — ダ & 距離>1400m &amp; クラス_rank≠1.0（新馬除外）<br>
+    <span style="margin-right:12px">2023-24: <strong style="color:#555">29.2%</strong> 的中 / ROI <span style="color:#c62828">-18.37%</span> (1841R)</span><span style="margin-right:12px">2025: <strong style="color:#2e7d32">30.8%</strong> 的中 / ROI <span style="color:#c62828">-15.51%</span> (924R)</span><span style="margin-right:12px">2026: <strong style="color:#555">26.2%</strong> 的中 / ROI <span style="color:#c62828">-30.73%</span> (397R)</span>
+    <br><small style='color:#888'>da_long_acc_v8: 37特徴 acc_2325=0.3009 1番人気34.03%</small>
+  </div>
+  <div style="margin:10px 0 4px;font-size:0.82rem;color:#555">特徴量 (37個):</div>
+  <div><span class="feat-chip">馬番</span><span class="feat-chip">斤量</span><span class="feat-chip">近3走_複勝率</span><span class="feat-chip">騎手コース_r100_勝率</span><span class="feat-chip">1走前_クラス調整着順</span><span class="feat-chip">近5走_タイム指数_max</span><span class="feat-chip">馬距離_勝率</span><span class="feat-chip">種牡馬_勝率</span><span class="feat-chip">タイム指数_加速度</span><span class="feat-chip">近5走_タイム指数平均</span><span class="feat-chip">近5走_上り3F平均</span><span class="feat-chip">近5走_上り3F_std</span><span class="feat-chip">1走前_クラス差</span><span class="feat-chip">ブリンカー変更</span><span class="feat-chip">1走前_3角</span><span class="feat-chip">間隔</span><span class="feat-chip">距離変化_前走</span><span class="feat-chip">前走着差タイム</span><span class="feat-chip">騎手変更</span><span class="feat-chip">輸送有無</span><span class="feat-chip">コース枠_r200_勝率</span><span class="feat-chip">馬体重増減</span><span class="feat-chip">コース脚質_r200_勝率</span><span class="feat-chip">1走前_馬場状態</span><span class="feat-chip">1走前_脚質_num</span><span class="feat-chip">近10走_勝率</span><span class="feat-chip">2走前_クラス差</span><span class="feat-chip">道悪_平均着順_近5走</span><span class="feat-chip">コース馬場_r200_勝率</span><span class="feat-chip">種牡馬_ダ_勝率</span><span class="feat-chip">近3走_勝率</span><span class="feat-chip">コース枠_r200_複勝率</span><span class="feat-chip">馬_r20_勝率</span><span class="feat-chip">性別_num</span><span class="feat-chip">騎手会場_r100_勝率</span><span class="feat-chip">相手レベル_平均着順</span><span class="feat-chip">1走前_4角</span></div>
+  <div style="margin:6px 0 4px;font-size:0.82rem;color:#e67e22">NaN指示変数:</div><div><span class="feat-chip nan-chip">タイム指数_加速度_isnan</span><span class="feat-chip nan-chip">近5走_上り3F_std_isnan</span><span class="feat-chip nan-chip">1走前_馬場状態_isnan</span><span class="feat-chip nan-chip">道悪_平均着順_近5走_isnan</span></div>
+</div>
+<div id="tab-ダ短" class="tab-content ">
+  <div class="seg-header" style="border-left:5px solid #1a6fa0">
+    <strong style="color:#1a6fa0">ダ短</strong> — ダ & 距離≤1400m &amp; クラス_rank≠1.0（新馬除外）<br>
+    <span style="margin-right:12px">2023-24: <strong style="color:#555">29.2%</strong> 的中 / ROI <span style="color:#c62828">-14.34%</span> (1352R)</span><span style="margin-right:12px">2025: <strong style="color:#555">29.3%</strong> 的中 / ROI <span style="color:#c62828">-11.11%</span> (668R)</span><span style="margin-right:12px">2026: <strong style="color:#555">24.1%</strong> 的中 / ROI <span style="color:#c62828">-8.73%</span> (291R)</span>
+    <br><small style='color:#888'>da_short_acc_rand: 38特徴 acc_2325=0.3089 1番人気34.90%</small>
+  </div>
+  <div style="margin:10px 0 4px;font-size:0.82rem;color:#555">特徴量 (38個):</div>
+  <div><span class="feat-chip">馬番</span><span class="feat-chip">斤量</span><span class="feat-chip">芝ダ一致_平均着順_近5走</span><span class="feat-chip">1走前_タイム指数</span><span class="feat-chip">近5走_クラス調整_平均着順</span><span class="feat-chip">輸送有無</span><span class="feat-chip">馬コース_r20_勝率</span><span class="feat-chip">近3走_体重増減合計</span><span class="feat-chip">性別_num</span><span class="feat-chip">1走前_クラス差</span><span class="feat-chip">コース枠_r200_勝率</span><span class="feat-chip">近10走_勝率</span><span class="feat-chip">調教師_r200_勝率</span><span class="feat-chip">ブリンカー変更</span><span class="feat-chip">相手レベル_平均着順</span><span class="feat-chip">コース馬場_r200_勝率</span><span class="feat-chip">種牡馬_ダ_勝率</span><span class="feat-chip">近5走_上り3F平均</span><span class="feat-chip">近5走_タイム指数_max</span><span class="feat-chip">1走前_馬場状態</span><span class="feat-chip">タイム指数_近5走_slope</span><span class="feat-chip">上り3F_近3走_slope</span><span class="feat-chip">近3走_勝率</span><span class="feat-chip">タイム指数_加速度</span><span class="feat-chip">1走前_クラス調整着順</span><span class="feat-chip">距離変化_前走</span><span class="feat-chip">間隔</span><span class="feat-chip">騎手馬場_r100_勝率</span><span class="feat-chip">近5走_タイム指数平均</span><span class="feat-chip">馬体重増減</span><span class="feat-chip">近5走_上り3F_std</span><span class="feat-chip">着順_近3走_slope</span><span class="feat-chip">馬距離_勝率</span><span class="feat-chip">母父馬_勝率</span><span class="feat-chip">前走着差タイム</span><span class="feat-chip">騎手変更</span><span class="feat-chip">1走前_頭数</span><span class="feat-chip">1走前_上り3F</span></div>
+  <div style="margin:6px 0 4px;font-size:0.82rem;color:#e67e22">NaN指示変数:</div><div><span class="feat-chip nan-chip">芝ダ一致_平均着順_近5走_isnan</span><span class="feat-chip nan-chip">1走前_馬場状態_isnan</span><span class="feat-chip nan-chip">タイム指数_近5走_slope_isnan</span><span class="feat-chip nan-chip">上り3F_近3走_slope_isnan</span><span class="feat-chip nan-chip">タイム指数_加速度_isnan</span><span class="feat-chip nan-chip">近5走_上り3F_std_isnan</span><span class="feat-chip nan-chip">着順_近3走_slope_isnan</span></div>
+</div>
+<div id="tab-芝短" class="tab-content ">
+  <div class="seg-header" style="border-left:5px solid #27ae60">
+    <strong style="color:#27ae60">芝短</strong> — 芝 & 距離≤1400m &amp; クラス_rank≠1.0（新馬除外）<br>
+    <span style="margin-right:12px">2023-24: <strong style="color:#555">28.8%</strong> 的中 / ROI <span style="color:#c62828">-7.19%</span> (866R)</span><span style="margin-right:12px">2025: <strong style="color:#555">21.7%</strong> 的中 / ROI <span style="color:#c62828">-25.99%</span> (434R)</span><span style="margin-right:12px">2026: <strong style="color:#555">17.2%</strong> 的中 / ROI <span style="color:#c62828">-50.39%</span> (204R)</span>
+    <br><small style='color:#888'>shiba_short_acc_rand: 30特徴 acc_2325=0.2754 1番人気28.69%</small>
+  </div>
+  <div style="margin:10px 0 4px;font-size:0.82rem;color:#555">特徴量 (30個):</div>
+  <div><span class="feat-chip">馬番</span><span class="feat-chip">斤量</span><span class="feat-chip">1走前_馬場状態</span><span class="feat-chip">近10走_複勝率</span><span class="feat-chip">種牡馬_ダ_勝率</span><span class="feat-chip">馬体重</span><span class="feat-chip">近10走_勝率</span><span class="feat-chip">3走前_上り3F</span><span class="feat-chip">騎手会場_r100_勝率</span><span class="feat-chip">馬距離_勝率</span><span class="feat-chip">1走前_タイム指数</span><span class="feat-chip">1走前_単勝オッズ</span><span class="feat-chip">1走前_PCI</span><span class="feat-chip">騎手コース_r100_勝率</span><span class="feat-chip">相手レベル_平均着順</span><span class="feat-chip">前走着差タイム</span><span class="feat-chip">近5走_クラス調整_平均着順</span><span class="feat-chip">1走前_3角</span><span class="feat-chip">1走前_頭数</span><span class="feat-chip">馬_r20_勝率</span><span class="feat-chip">1走前_クラス調整着順</span><span class="feat-chip">同距離帯_平均着順_近5走</span><span class="feat-chip">1走前_4角</span><span class="feat-chip">近5走_上り3F平均</span><span class="feat-chip">間隔</span><span class="feat-chip">3走前_タイム指数</span><span class="feat-chip">騎手変更</span><span class="feat-chip">同会場_複勝率_近5走</span><span class="feat-chip">芝ダ転向</span><span class="feat-chip">コース枠_r200_勝率</span></div>
+  <div style="margin:6px 0 4px;font-size:0.82rem;color:#e67e22">NaN指示変数:</div><div><span class="feat-chip nan-chip">1走前_馬場状態_isnan</span><span class="feat-chip nan-chip">3走前_上り3F_isnan</span><span class="feat-chip nan-chip">1走前_3角_isnan</span><span class="feat-chip nan-chip">同距離帯_平均着順_近5走_isnan</span><span class="feat-chip nan-chip">3走前_タイム指数_isnan</span></div>
+</div>
+<div id="tab-芝中" class="tab-content ">
+  <div class="seg-header" style="border-left:5px solid #16a085">
+    <strong style="color:#16a085">芝中</strong> — 芝 & 1401-2000m &amp; クラス_rank≠1.0（新馬除外）<br>
+    <span style="margin-right:12px">2023-24: <strong style="color:#2e7d32">31.3%</strong> 的中 / ROI <span style="color:#c62828">-14.13%</span> (1669R)</span><span style="margin-right:12px">2025: <strong style="color:#555">28.6%</strong> 的中 / ROI <span style="color:#c62828">-22.53%</span> (857R)</span><span style="margin-right:12px">2026: <strong style="color:#555">22.8%</strong> 的中 / ROI <span style="color:#c62828">-46.55%</span> (426R)</span>
+    <br><small style='color:#888'>multistart L2=0.003: 37特徴 acc_2325=0.3088</small>
+  </div>
+  <div style="margin:10px 0 4px;font-size:0.82rem;color:#555">特徴量 (37個):</div>
+  <div><span class="feat-chip">馬番</span><span class="feat-chip">斤量</span><span class="feat-chip">1走前_単勝オッズ</span><span class="feat-chip">種牡馬_勝率</span><span class="feat-chip">馬体重増減</span><span class="feat-chip">近5走_クラス調整_平均着順</span><span class="feat-chip">1走前_クラス差</span><span class="feat-chip">3走前_クラス差</span><span class="feat-chip">1走前_上り3F</span><span class="feat-chip">騎手馬場_r100_勝率</span><span class="feat-chip">4角位置_近3走_slope</span><span class="feat-chip">2走前_クラス差</span><span class="feat-chip">1走前_馬場状態</span><span class="feat-chip">騎手会場_r100_勝率</span><span class="feat-chip">2走前_タイム指数</span><span class="feat-chip">同会場_平均着順_近5走</span><span class="feat-chip">近10走_複勝率</span><span class="feat-chip">着順_近3走_slope</span><span class="feat-chip">前走_人気着順差</span><span class="feat-chip">1走前_PCI</span><span class="feat-chip">近3走_複勝率</span><span class="feat-chip">コース枠_r200_複勝率</span><span class="feat-chip">近10走_勝率</span><span class="feat-chip">馬体重</span><span class="feat-chip">良馬場_平均着順_近5走</span><span class="feat-chip">1走前_RPCI</span><span class="feat-chip">1走前_頭数</span><span class="feat-chip">同馬場_平均着順_近5走</span><span class="feat-chip">種牡馬_ダ_勝率</span><span class="feat-chip">前走着差タイム</span><span class="feat-chip">2走前_上り3F</span><span class="feat-chip">性別_num</span><span class="feat-chip">馬コース_r20_勝率</span><span class="feat-chip">馬距離_勝率</span><span class="feat-chip">タイム指数_近5走_slope</span><span class="feat-chip">母父馬_勝率</span><span class="feat-chip">芝ダ転向</span></div>
+  <div style="margin:6px 0 4px;font-size:0.82rem;color:#e67e22">NaN指示変数:</div><div><span class="feat-chip nan-chip">4角位置_近3走_slope_isnan</span><span class="feat-chip nan-chip">1走前_馬場状態_isnan</span><span class="feat-chip nan-chip">2走前_タイム指数_isnan</span><span class="feat-chip nan-chip">同会場_平均着順_近5走_isnan</span><span class="feat-chip nan-chip">着順_近3走_slope_isnan</span><span class="feat-chip nan-chip">良馬場_平均着順_近5走_isnan</span><span class="feat-chip nan-chip">同馬場_平均着順_近5走_isnan</span><span class="feat-chip nan-chip">2走前_上り3F_isnan</span><span class="feat-chip nan-chip">タイム指数_近5走_slope_isnan</span></div>
+</div>
+<div id="tab-芝長" class="tab-content ">
+  <div class="seg-header" style="border-left:5px solid #8e44ad">
+    <strong style="color:#8e44ad">芝長</strong> — 芝 & 距離>2000m &amp; クラス_rank≠1.0（新馬除外）<br>
+    <span style="margin-right:12px">2023-24: <strong style="color:#2e7d32">32.4%</strong> 的中 / ROI <span style="color:#c62828">-14.03%</span> (578R)</span><span style="margin-right:12px">2025: <strong style="color:#2e7d32">33.2%</strong> 的中 / ROI <span style="color:#c62828">-10.45%</span> (268R)</span><span style="margin-right:12px">2026: <strong style="color:#555">21.5%</strong> 的中 / ROI <span style="color:#c62828">-37.78%</span> (135R)</span>
+    <br><small style='color:#888'>L2=0.003 rand: 26特徴 acc_2325=0.3534</small>
+  </div>
+  <div style="margin:10px 0 4px;font-size:0.82rem;color:#555">特徴量 (26個):</div>
+  <div><span class="feat-chip">近3走_複勝率</span><span class="feat-chip">騎手距離_r100_勝率</span><span class="feat-chip">近5走_タイム指数平均</span><span class="feat-chip">馬コース_r20_勝率</span><span class="feat-chip">調教師コース_r100_勝率</span><span class="feat-chip">同会場_複勝率_近5走</span><span class="feat-chip">近5走_上り3F_std</span><span class="feat-chip">コース枠_r200_複勝率</span><span class="feat-chip">相手レベル_平均着順</span><span class="feat-chip">タイム指数_加速度</span><span class="feat-chip">近10走_勝率</span><span class="feat-chip">コース馬場_r200_勝率</span><span class="feat-chip">種牡馬_ダ_勝率</span><span class="feat-chip">タイム指数_近5走_slope</span><span class="feat-chip">道悪_平均着順_近5走</span><span class="feat-chip">1走前_タイム指数</span><span class="feat-chip">距離変化_前走</span><span class="feat-chip">性別_num</span><span class="feat-chip">馬体重</span><span class="feat-chip">馬体重増減</span><span class="feat-chip">調教師_r200_勝率</span><span class="feat-chip">輸送有無</span><span class="feat-chip">コース枠_r200_勝率</span><span class="feat-chip">馬番</span><span class="feat-chip">斤量</span><span class="feat-chip">近5走_タイム指数_min</span></div>
+  <div style="margin:6px 0 4px;font-size:0.82rem;color:#e67e22">NaN指示変数:</div><div><span class="feat-chip nan-chip">近5走_上り3F_std_isnan</span><span class="feat-chip nan-chip">タイム指数_加速度_isnan</span><span class="feat-chip nan-chip">タイム指数_近5走_slope_isnan</span><span class="feat-chip nan-chip">道悪_平均着順_近5走_isnan</span></div>
+</div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">設計情報</div>
+    <div class="di-grid">
+      <div class="di-item"><div class="di-label">モデル</div><div class="di-val">Conditional Logit + Isotonic Calibration</div></div>
+      <div class="di-item"><div class="di-label">学習期間</div><div class="di-val">train: 2013-2021 / val: 2022 / OOS: 2023-2026</div></div>
+      <div class="di-item"><div class="di-label">選択指標</div><div class="di-val">acc_2325 = 1着的中率（2023-24 と 2025 の加重平均）</div></div>
+      <div class="di-item"><div class="di-label">正則化</div><div class="di-val">L2 = 0.003, Adam optimizer, early stopping on val NLL</div></div>
+      <div class="di-item"><div class="di-label">特徴量探索</div><div class="di-val">greedy forward selection（候補全数NaN時のみ停止）</div></div>
+      <div class="di-item"><div class="di-label">新馬除外</div><div class="di-val">全セグメント クラス_rank ≠ 1.0</div></div>
+    </div>
+  </div>
+
+</div>
+<script>
+function showTab(k) {
+  document.querySelectorAll('.tab-content').forEach(e=>e.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(e=>e.classList.remove('active'));
+  document.getElementById('tab-'+k).classList.add('active');
+  event.target.classList.add('active');
+}
+</script>
+</body>
+</html>
