@@ -498,7 +498,12 @@ def make_newspaper(date_str=None):
                 grp['clogit_rank'] if 'clogit_rank' in grp.columns
                 else pd.Series(np.nan, index=grp.index), errors='coerce'
             )
-        grp = grp.sort_values('_sort_rank', na_position='last')
+        # 表示は馬番順（AI順位は列に保持）
+        bango_col = 'dc_馬番' if 'dc_馬番' in grp.columns else ('馬番' if '馬番' in grp.columns else None)
+        if bango_col:
+            grp = grp.assign(_bango_num=pd.to_numeric(grp[bango_col], errors='coerce')).sort_values('_bango_num', na_position='last').drop(columns=['_bango_num'])
+        else:
+            grp = grp.sort_values('_sort_rank', na_position='last')
 
         race_data.append(dict(
             grp=grp, kaikai=kaikai, r_num=r_num, race_name=race_name,
@@ -514,139 +519,139 @@ def make_newspaper(date_str=None):
     css = """<style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: 'Yu Gothic', 'Hiragino Sans', 'Meiryo', sans-serif;
-         font-size: 11px; background: #eef1f5; color: #222; }
+         font-size: 10px; background: #eef1f5; color: #222; }
 
   /* ── トップバー ─────────────────────────────────── */
-  .topbar { background: #1a237e; color: #fff; padding: 6px 16px;
-            display: flex; gap: 18px; align-items: center; font-size: 12px; }
+  .topbar { background: #1a237e; color: #fff; padding: 3px 10px;
+            display: flex; gap: 12px; align-items: center; font-size: 10px; }
   .topbar a { color: #90caf9; text-decoration: none; }
   .topbar a:hover { text-decoration: underline; }
 
   /* ── ページタイトル ──────────────────────────────── */
-  .page-title { font-size: 17px; font-weight: bold; padding: 10px 16px;
+  .page-title { font-size: 13px; font-weight: bold; padding: 6px 10px;
                 background: #1a252f; color: white;
-                display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-  .page-title .subtitle { font-size: 10px; color: #aaa; font-weight: normal; }
+                display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .page-title .subtitle { font-size: 9px; color: #aaa; font-weight: normal; }
   .report-btn { background: #1a237e; color: #fff; text-decoration: none;
-                font-size: 12px; font-weight: 600; padding: 5px 12px;
-                border-radius: 6px; border: 1px solid rgba(255,255,255,.3); }
+                font-size: 10px; font-weight: 600; padding: 3px 8px;
+                border-radius: 4px; border: 1px solid rgba(255,255,255,.3); }
   .report-btn:hover { opacity: .85; }
 
   /* ── タブバー ───────────────────────────────────── */
   .tab-bar { display: flex; background: #fff; border-bottom: 2px solid #c8d0d8;
              position: sticky; top: 0; z-index: 50;
-             box-shadow: 0 2px 6px rgba(0,0,0,0.08); overflow-x: auto; }
-  .tab-btn { padding: 10px 22px; border: none; background: none; cursor: pointer;
-             font-size: 13px; font-weight: 600; color: #666; white-space: nowrap;
+             box-shadow: 0 1px 4px rgba(0,0,0,0.08); overflow-x: auto; }
+  .tab-btn { padding: 6px 14px; border: none; background: none; cursor: pointer;
+             font-size: 11px; font-weight: 600; color: #666; white-space: nowrap;
              border-bottom: 3px solid transparent; margin-bottom: -2px; }
   .tab-btn:hover { color: #1a237e; background: #f0f4ff; }
   .tab-btn.active { color: #1a237e; border-bottom-color: #1a237e; background: #f0f4ff; }
-  .tab-btn .cnt { font-size: 10px; color: #aaa; margin-left: 4px; }
+  .tab-btn .cnt { font-size: 9px; color: #aaa; margin-left: 3px; }
   .tab-btn.active .cnt { color: #5c6bc0; }
 
   /* ── タブコンテンツ ──────────────────────────────── */
-  .tab-pane { display: none; padding: 12px 12px 40px; }
+  .tab-pane { display: none; padding: 8px 8px 30px; }
   .tab-pane.active { display: block; }
 
   /* ── 買い目セクション ────────────────────────────── */
-  .buy-section { background: white; border-radius: 10px; padding: 14px 18px;
-                 margin-bottom: 14px; box-shadow: 0 2px 6px rgba(0,0,0,0.08); }
-  .section-title { font-size: 14px; font-weight: bold; margin: 0 0 10px;
-                   padding-bottom: 5px; border-bottom: 2px solid currentColor; }
+  .buy-section { background: white; border-radius: 8px; padding: 10px 12px;
+                 margin-bottom: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+  .section-title { font-size: 12px; font-weight: bold; margin: 0 0 7px;
+                   padding-bottom: 4px; border-bottom: 2px solid currentColor; }
   .section-title.buy   { color: #c0392b; }
-  .section-title.watch { color: #e67e22; margin-top: 14px; }
-  .buy-grid { display: flex; flex-wrap: wrap; gap: 10px; }
-  .buy-card { border-radius: 10px; padding: 10px 14px; min-width: 170px; }
+  .section-title.watch { color: #e67e22; margin-top: 10px; }
+  .buy-grid { display: flex; flex-wrap: wrap; gap: 7px; }
+  .buy-card { border-radius: 7px; padding: 7px 10px; min-width: 150px; }
   .buy-card.confirmed  { background: #fde8e8; border: 2px solid #c0392b; }
   .buy-card.watch-card { background: #fef9e7; border: 2px solid #e67e22; }
-  .card-race  { font-size: 9px; color: #777; margin-bottom: 3px; }
-  .card-horse { font-size: 15px; font-weight: bold; color: #1a252f; margin-bottom: 2px; }
-  .card-meta  { font-size: 9px; color: #666; }
+  .card-race  { font-size: 8px; color: #777; margin-bottom: 2px; }
+  .card-horse { font-size: 13px; font-weight: bold; color: #1a252f; margin-bottom: 1px; }
+  .card-meta  { font-size: 8px; color: #666; }
   .badge-buy   { display: inline-block; background: #c0392b; color: white;
-                 font-size: 10px; font-weight: bold; padding: 2px 9px;
-                 border-radius: 10px; margin-top: 5px; }
+                 font-size: 9px; font-weight: bold; padding: 1px 7px;
+                 border-radius: 8px; margin-top: 3px; }
   .badge-watch { display: inline-block; background: #e67e22; color: white;
-                 font-size: 9px; padding: 2px 9px; border-radius: 10px; margin-top: 5px; }
-  .seg-chip { color: white; font-size: 8px; padding: 1px 6px;
-              border-radius: 4px; vertical-align: middle; }
-  .no-signal { color: #aaa; font-style: italic; font-size: 11px; }
+                 font-size: 8px; padding: 1px 7px; border-radius: 8px; margin-top: 3px; }
+  .seg-chip { color: white; font-size: 7px; padding: 1px 5px;
+              border-radius: 3px; vertical-align: middle; }
+  .no-signal { color: #aaa; font-style: italic; font-size: 10px; }
 
   /* ── レースブロック ──────────────────────────────── */
-  .race-block { background: white; border-radius: 8px; margin-bottom: 10px;
-                box-shadow: 0 1px 4px rgba(0,0,0,0.08); overflow: hidden; }
-  .race-header { display: flex; align-items: center; gap: 8px; padding: 8px 14px;
-                 background: #f7f9fb; border-left: 6px solid #888; flex-wrap: wrap; }
-  .race-venue { font-size: 15px; font-weight: bold; color: #222; }
-  .race-rnum  { font-size: 13px; font-weight: bold; color: #555; }
-  .race-name  { font-size: 13px; font-weight: bold; flex: 1; color: #1a252f; }
-  .race-seg   { color: white; font-size: 9px; padding: 2px 9px; border-radius: 12px; }
-  .race-dist  { font-size: 10px; color: #888; }
-  .n-horses   { font-size: 9px; color: #aaa; }
-  .seg-report-link { margin-left: auto; font-size: 9px; color: #1a237e;
-                     text-decoration: none; padding: 2px 7px; border-radius: 4px;
+  .race-block { background: white; border-radius: 6px; margin-bottom: 7px;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.08); overflow: hidden; }
+  .race-header { display: flex; align-items: center; gap: 6px; padding: 5px 10px;
+                 background: #f7f9fb; border-left: 5px solid #888; flex-wrap: wrap; }
+  .race-venue { font-size: 12px; font-weight: bold; color: #222; }
+  .race-rnum  { font-size: 11px; font-weight: bold; color: #555; }
+  .race-name  { font-size: 11px; font-weight: bold; flex: 1; color: #1a252f; }
+  .race-seg   { color: white; font-size: 8px; padding: 1px 7px; border-radius: 10px; }
+  .race-dist  { font-size: 9px; color: #888; }
+  .n-horses   { font-size: 8px; color: #aaa; }
+  .seg-report-link { margin-left: auto; font-size: 8px; color: #1a237e;
+                     text-decoration: none; padding: 1px 5px; border-radius: 3px;
                      border: 1px solid #c5cae9; background: #e8eaf6; white-space: nowrap; }
   .seg-report-link:hover { background: #c5cae9; }
 
   /* NaN Alert */
-  .nan-alert { padding: 5px 14px; background: #fff8f8;
-               border-top: 1px solid #fcc; font-size: 9px; }
-  .nan-chip { display: inline-block; margin: 1px 3px; padding: 1px 6px;
-              border-radius: 4px; font-weight: bold; }
+  .nan-alert { padding: 3px 10px; background: #fff8f8;
+               border-top: 1px solid #fcc; font-size: 8px; }
+  .nan-chip { display: inline-block; margin: 1px 2px; padding: 1px 5px;
+              border-radius: 3px; font-weight: bold; }
   .nan-hi  { background: #c0392b; color: white; }
   .nan-mid { background: #e67e22; color: white; }
   .nan-lo  { background: #f9e79f; color: #555; }
 
   /* Race Table */
   .table-wrap { overflow-x: auto; }
-  table.race-table { border-collapse: collapse; width: 100%; font-size: 10px; }
-  table.race-table th { background: #2c3e50; color: white; padding: 4px 6px;
+  table.race-table { border-collapse: collapse; width: 100%; font-size: 9px; }
+  table.race-table th { background: #2c3e50; color: white; padding: 3px 4px;
                         text-align: center; border: 1px solid #222;
-                        white-space: nowrap; font-size: 9px; font-weight: bold; }
-  table.race-table td { padding: 3px 5px; border: 1px solid #e0e0e0;
+                        white-space: nowrap; font-size: 8px; font-weight: bold; }
+  table.race-table td { padding: 2px 4px; border: 1px solid #e0e0e0;
                         text-align: center; white-space: nowrap; }
   .row-buy td { background: #fde8e8 !important; outline: 2px solid #c0392b; }
   .row-r1 td  { background: #fef5f5 !important; }
   .row-r2 td  { background: #fef9ee !important; }
   .row-r3 td  { background: #f3faf5 !important; }
 
-  .td-rank  { font-weight: bold; min-width: 28px; }
-  .td-horse { text-align: left !important; font-weight: bold; min-width: 95px; font-size: 11px; }
-  .td-jky   { font-size: 9px; min-width: 38px; }
-  .td-odds  { min-width: 38px; }
-  .td-prob  { min-width: 42px; color: #16a085; font-weight: bold; }
-  .td-buy   { background: #c0392b !important; color: white !important; font-weight: bold; min-width: 28px; }
-  .td-watch { background: #e67e22 !important; color: white !important; min-width: 28px; }
-  .td-nan   { background: #ffe0e0 !important; color: #c0392b; font-weight: bold; font-size: 8px; }
+  .td-rank  { font-weight: bold; min-width: 22px; }
+  .td-horse { text-align: left !important; font-weight: bold; min-width: 80px; font-size: 10px; }
+  .td-jky   { font-size: 8px; min-width: 32px; }
+  .td-odds  { min-width: 32px; }
+  .td-prob  { min-width: 36px; color: #16a085; font-weight: bold; }
+  .td-buy   { background: #c0392b !important; color: white !important; font-weight: bold; min-width: 22px; }
+  .td-watch { background: #e67e22 !important; color: white !important; min-width: 22px; }
+  .td-nan   { background: #ffe0e0 !important; color: #c0392b; font-weight: bold; font-size: 7px; }
   .td-none  { color: #ccc; }
 
   /* ── 詳細展開パネル ─────────────────────────────── */
-  .detail-row td { padding: 6px 10px; background: #f9f9f9 !important;
+  .detail-row td { padding: 4px 8px; background: #f9f9f9 !important;
                    border: 1px solid #e8e8e8; outline: none; }
-  .detail-panel { display: flex; flex-wrap: wrap; gap: 4px; }
+  .detail-panel { display: flex; flex-wrap: wrap; gap: 3px; }
   .feat-chip { display: inline-flex; flex-direction: column; align-items: center;
-               padding: 3px 7px; border-radius: 5px; font-size: 9px;
-               min-width: 50px; border: 1px solid rgba(0,0,0,0.08);
+               padding: 2px 5px; border-radius: 4px; font-size: 8px;
+               min-width: 44px; border: 1px solid rgba(0,0,0,0.08);
                cursor: default; }
-  .feat-name { font-size: 8px; color: rgba(0,0,0,0.5); line-height: 1; margin-bottom: 1px; }
-  .feat-val  { font-weight: bold; font-size: 10px; line-height: 1.3; }
-  .detail-hint { font-size: 8px; color: #bbb; margin-left: 3px; transition: color .15s; }
+  .feat-name { font-size: 7px; color: rgba(0,0,0,0.5); line-height: 1; margin-bottom: 1px; }
+  .feat-val  { font-weight: bold; font-size: 9px; line-height: 1.2; }
+  .detail-hint { font-size: 7px; color: #bbb; margin-left: 2px; transition: color .15s; }
   tr.expandable:hover td { background: #fafafa; }
   tr.expandable:hover .detail-hint { color: #777; }
 
   /* ── レース内側タブ ─────────────────────────────── */
-  .race-tab-bar { display: flex; flex-wrap: wrap; gap: 4px; padding: 10px 12px 0;
+  .race-tab-bar { display: flex; flex-wrap: wrap; gap: 3px; padding: 7px 8px 0;
                   background: #f0f4f8; border-bottom: 2px solid #d0d8e0; }
-  .race-tab-btn { padding: 5px 12px; border: none; background: #e0e8f0;
-                  border-radius: 6px 6px 0 0; cursor: pointer;
-                  font-size: 12px; font-weight: 600; color: #555; margin-bottom: -2px; }
+  .race-tab-btn { padding: 3px 9px; border: none; background: #e0e8f0;
+                  border-radius: 5px 5px 0 0; cursor: pointer;
+                  font-size: 10px; font-weight: 600; color: #555; margin-bottom: -2px; }
   .race-tab-btn:hover { background: #d0dcea; color: #1a237e; }
   .race-tab-btn.active { background: #fff; color: #1a237e; border: 2px solid #d0d8e0;
                           border-bottom-color: #fff; }
-  .race-tab-body { padding: 10px 12px 20px; background: #f0f4f8; }
+  .race-tab-body { padding: 7px 8px 14px; background: #f0f4f8; }
   .race-tab-pane { display: none; }
   .race-tab-pane.active { display: block; }
 
-  .footer { font-size: 8px; color: #aaa; text-align: right; padding: 8px 12px 20px; }
+  .footer { font-size: 7px; color: #aaa; text-align: right; padding: 5px 8px 14px; }
 </style>"""
 
     # ═══════════════════════════════════════════════════════════
