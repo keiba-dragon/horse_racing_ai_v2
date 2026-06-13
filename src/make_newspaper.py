@@ -116,10 +116,14 @@ VENUE_LETTER_TO_CODE = {
 
 _MARK_RE = re.compile(r'[☆▲△▼○●◎◇◆★]')
 _DOT_RE  = re.compile(r'[．.]')
+_STABLE_RE = re.compile(r'^(栗東|美浦)')
 def _norm_name(s): return _MARK_RE.sub('', str(s)).strip()
 def _norm_jkn(s):
     import unicodedata
     return _DOT_RE.sub('', unicodedata.normalize('NFKC', _norm_name(s)))
+def _norm_trainer(s):
+    """調教師名の栗東/美浦プレフィックスを除去して略称を返す"""
+    return _STABLE_RE.sub('', _norm_name(s))
 
 def _extract_venue(kaikai):
     m = re.search(r'\d+([^\d]+)', str(kaikai))
@@ -127,15 +131,20 @@ def _extract_venue(kaikai):
 
 
 def patch_jockey_stats(result_df, card_df, data_file):
-    """parquetから騎手の直近統計をresult_dfのNaN列に補完する。
-    card_dfは略称(丸山)、parquetは全名(丸山元気)なので前方一致でマッピング。
-    """
+    """parquetから騎手・調教師の直近統計をresult_dfのNaN列に補完する。"""
     JOCKEY_STAT_COLS = [
-        '騎手コース_r100_勝率', '騎手馬場_r100_勝率',
-        '騎手距離_r100_勝率', '騎手会場_r100_勝率',
+        '騎手コース_r100_勝率', '騎手馬場_r100_勝率', '騎手距離_r100_勝率',
+        '騎手会場_r100_勝率', '騎手_r200_勝率', '騎手_r200_複勝率',
+        '騎手コース_r100_複勝率', '騎手馬場_r100_複勝率', '騎手距離_r100_複勝率',
+        '騎手脚質_r100_勝率', '騎手脚質_r100_複勝率', '騎手_平均着順',
+    ]
+    TRAINER_STAT_COLS = [
+        '調教師_r200_勝率', '調教師_r200_複勝率',
+        '調教師コース_r100_勝率', '調教師コース_r100_複勝率',
     ]
     target_cols = [c for c in JOCKEY_STAT_COLS if c in result_df.columns]
-    if not target_cols:
+    trainer_cols = [c for c in TRAINER_STAT_COLS if c in result_df.columns]
+    if not target_cols and not trainer_cols:
         return result_df
 
     # card_dfから 馬名S → 騎手略称 マッピング
@@ -252,7 +261,73 @@ def patch_jockey_stats(result_df, card_df, data_file):
 
     matched = sum(1 for s in today_shorts if s in short_to_full)
     print(f'騎手統計補完: {filled}セル補完 / 略称マッチ {matched}/{len(today_shorts)}人 / {len(stats_map)}ペア')
-    result_df.drop(columns=['_jkn_short', '_kosu'], errors='ignore', inplace=True)
+
+    # ── 調教師統計補完 ──────────────────────────────────────────
+    if trainer_cols:
+        try:
+            tr_pq = pd.read_parquet(data_file, columns=['調教師', '今回_コース種別', '日付_num'] + trainer_cols)
+            tr_pq['_tr_full'] = tr_pq['調教師'].apply(_norm_name)
+            tr_counts = tr_pq['_tr_full'].value_counts()
+            tr_stat_counts = tr_pq[trainer_cols].notna().any(axis=1).groupby(tr_pq['_tr_full']).sum()
+
+            # card_dfから 馬名S → 調教師略称（栗東/美浦プレフィックス除去）
+            horse_tr_map = {}
+            if card_df is not None and '調教師' in card_df.columns:
+                for _, cr in card_df.drop_duplicates('馬名S').iterrows():
+                    horse_tr_map[str(cr['馬名S'])] = _norm_trainer(cr.get('調教師', ''))
+            result_df['_tr_short'] = result_df['馬名S'].map(horse_tr_map).fillna('') if '馬名S' in result_df.columns else ''
+
+            today_tr = set(result_df['_tr_short'].dropna()) - {'', 'nan'}
+            tr_short_to_full = {}
+            for short in today_tr:
+                short_n = _norm_jkn(short)
+                cands = {fn: cnt for fn, cnt in tr_counts.items()
+                         if _norm_jkn(fn).startswith(short_n) or short_n.startswith(_norm_jkn(fn))}
+                if len(short) >= 2:
+                    for fn, cnt in tr_counts.items():
+                        if fn.startswith(short[:2]) and _char_overlap(short, fn) >= 1.0:
+                            cands.setdefault(fn, cnt)
+                if cands:
+                    tr_short_to_full[short] = max(cands.items(),
+                                                   key=lambda x: (tr_stat_counts.get(x[0], 0), x[1]))[0]
+
+            tr_fns = set(tr_short_to_full.values())
+            tr_pq_f = tr_pq[tr_pq['_tr_full'].isin(tr_fns)].sort_values('日付_num', ascending=False)
+            tr_f2s = {v: k for k, v in tr_short_to_full.items()}
+            tr_stats_map = {}
+            for fn in tr_fns:
+                short = tr_f2s.get(fn, fn)
+                jrows = tr_pq_f[tr_pq_f['_tr_full'] == fn]
+                if jrows.empty:
+                    continue
+                for cosu in result_df.loc[result_df['_tr_short'] == short, '_kosu'].dropna().unique():
+                    surf = cosu.split('_')[-1] if '_' in cosu else cosu
+                    for crow in [jrows[jrows['今回_コース種別'] == cosu],
+                                 jrows[jrows['今回_コース種別'].str.endswith('_' + surf, na=False)],
+                                 jrows]:
+                        entry = {}
+                        for _, rw in crow.iterrows():
+                            entry = {c: float(rw[c]) for c in trainer_cols if pd.notna(rw.get(c))}
+                            if entry:
+                                break
+                        if entry:
+                            tr_stats_map[(short, cosu)] = entry
+                            break
+
+            tr_filled = 0
+            for idx, row in result_df.iterrows():
+                short = row.get('_tr_short', '')
+                cosu  = row.get('_kosu', '')
+                entry = tr_stats_map.get((short, cosu)) or tr_stats_map.get((short, '')) or {}
+                for c, v in entry.items():
+                    if c in result_df.columns and pd.isna(result_df.at[idx, c]):
+                        result_df.at[idx, c] = v
+                        tr_filled += 1
+            print(f'調教師統計補完: {tr_filled}セル補完 / {len(tr_stats_map)}ペア')
+        except Exception as e:
+            print(f'[WARN] 調教師統計補完失敗: {e}')
+
+    result_df.drop(columns=['_jkn_short', '_kosu', '_tr_short'], errors='ignore', inplace=True)
     return result_df
 
 
