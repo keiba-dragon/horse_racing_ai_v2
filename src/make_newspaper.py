@@ -628,22 +628,22 @@ def make_newspaper(date_str=None):
     css = """<style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { font-family: 'Yu Gothic', 'Hiragino Sans', 'Meiryo', sans-serif;
-               font-size: 10px; background: #c8d0d8; color: #222; }
+               font-size: 14px; background: #c8d0d8; color: #222; }
   .app { background: #eef1f5; min-height: 100vh; overflow-x: hidden; }
 
   /* ── トップバー ─────────────────────────────────── */
-  .topbar { background: #1a237e; color: #fff; padding: 3px 10px;
-            display: flex; gap: 12px; align-items: center; font-size: 10px; }
+  .topbar { background: #1a237e; color: #fff; padding: 4px 12px;
+            display: flex; gap: 12px; align-items: center; font-size: 13px; }
   .topbar a { color: #90caf9; text-decoration: none; }
   .topbar a:hover { text-decoration: underline; }
 
   /* ── ページタイトル ──────────────────────────────── */
-  .page-title { font-size: 12px; font-weight: bold; padding: 5px 8px;
+  .page-title { font-size: 16px; font-weight: bold; padding: 7px 12px;
                 background: #1a252f; color: white;
-                display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-  .page-title .subtitle { font-size: 8px; color: #aaa; font-weight: normal; }
+                display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .page-title .subtitle { font-size: 11px; color: #aaa; font-weight: normal; }
   .report-btn { background: #1a237e; color: #fff; text-decoration: none;
-                font-size: 9px; font-weight: 600; padding: 2px 6px;
+                font-size: 12px; font-weight: 600; padding: 3px 8px;
                 border-radius: 4px; border: 1px solid rgba(255,255,255,.3); }
   .report-btn:hover { opacity: .85; }
 
@@ -651,61 +651,61 @@ def make_newspaper(date_str=None):
   .tab-bar { display: flex; background: #fff; border-bottom: 2px solid #c8d0d8;
              position: sticky; top: 0; z-index: 50;
              box-shadow: 0 1px 4px rgba(0,0,0,0.08); overflow-x: auto; }
-  .tab-btn { padding: 5px 10px; border: none; background: none; cursor: pointer;
-             font-size: 10px; font-weight: 600; color: #666; white-space: nowrap;
+  .tab-btn { padding: 7px 14px; border: none; background: none; cursor: pointer;
+             font-size: 13px; font-weight: 600; color: #666; white-space: nowrap;
              border-bottom: 3px solid transparent; margin-bottom: -2px; }
   .tab-btn:hover { color: #1a237e; background: #f0f4ff; }
   .tab-btn.active { color: #1a237e; border-bottom-color: #1a237e; background: #f0f4ff; }
-  .tab-btn .cnt { font-size: 9px; color: #aaa; margin-left: 3px; }
+  .tab-btn .cnt { font-size: 11px; color: #aaa; margin-left: 3px; }
   .tab-btn.active .cnt { color: #5c6bc0; }
 
   /* ── タブコンテンツ ──────────────────────────────── */
-  .tab-pane { display: none; padding: 4px 2px 20px; overflow: hidden; max-width: 100%; }
+  .tab-pane { display: none; padding: 6px 4px 24px; overflow: hidden; max-width: 100%; }
   .tab-pane.active { display: block; }
 
   /* ── 買い目セクション ────────────────────────────── */
-  .buy-section { background: white; border-radius: 8px; padding: 10px 12px;
+  .buy-section { background: white; border-radius: 8px; padding: 12px 14px;
                  margin-bottom: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
-  .section-title { font-size: 12px; font-weight: bold; margin: 0 0 7px;
-                   padding-bottom: 4px; border-bottom: 2px solid currentColor; }
+  .section-title { font-size: 15px; font-weight: bold; margin: 0 0 8px;
+                   padding-bottom: 5px; border-bottom: 2px solid currentColor; }
   .section-title.buy   { color: #c0392b; }
-  .section-title.watch { color: #e67e22; margin-top: 10px; }
-  .buy-grid { display: flex; flex-wrap: wrap; gap: 7px; }
-  .buy-card { border-radius: 7px; padding: 7px 10px; min-width: 150px; }
+  .section-title.watch { color: #e67e22; margin-top: 12px; }
+  .buy-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+  .buy-card { border-radius: 7px; padding: 8px 12px; min-width: 160px; }
   .buy-card.confirmed  { background: #fde8e8; border: 2px solid #c0392b; }
   .buy-card.watch-card { background: #fef9e7; border: 2px solid #e67e22; }
-  .card-race  { font-size: 8px; color: #777; margin-bottom: 2px; }
-  .card-horse { font-size: 13px; font-weight: bold; color: #1a252f; margin-bottom: 1px; }
-  .card-meta  { font-size: 8px; color: #666; }
+  .card-race  { font-size: 11px; color: #777; margin-bottom: 2px; }
+  .card-horse { font-size: 16px; font-weight: bold; color: #1a252f; margin-bottom: 2px; }
+  .card-meta  { font-size: 11px; color: #666; }
   .badge-buy   { display: inline-block; background: #c0392b; color: white;
-                 font-size: 9px; font-weight: bold; padding: 1px 7px;
-                 border-radius: 8px; margin-top: 3px; }
+                 font-size: 12px; font-weight: bold; padding: 2px 8px;
+                 border-radius: 8px; margin-top: 4px; }
   .badge-watch { display: inline-block; background: #e67e22; color: white;
-                 font-size: 8px; padding: 1px 7px; border-radius: 8px; margin-top: 3px; }
-  .seg-chip { color: white; font-size: 7px; padding: 1px 5px;
+                 font-size: 11px; padding: 2px 8px; border-radius: 8px; margin-top: 4px; }
+  .seg-chip { color: white; font-size: 10px; padding: 1px 6px;
               border-radius: 3px; vertical-align: middle; }
-  .no-signal { color: #aaa; font-style: italic; font-size: 10px; }
+  .no-signal { color: #aaa; font-style: italic; font-size: 13px; }
 
   /* ── レースブロック ──────────────────────────────── */
-  .race-block { background: white; border-radius: 6px; margin-bottom: 7px;
+  .race-block { background: white; border-radius: 6px; margin-bottom: 8px;
                 box-shadow: 0 1px 3px rgba(0,0,0,0.08); overflow: hidden; }
-  .race-header { display: flex; align-items: center; gap: 6px; padding: 5px 10px;
+  .race-header { display: flex; align-items: center; gap: 6px; padding: 6px 12px;
                  background: #f7f9fb; border-left: 5px solid #888; flex-wrap: wrap; }
-  .race-venue { font-size: 12px; font-weight: bold; color: #222; }
-  .race-rnum  { font-size: 11px; font-weight: bold; color: #555; }
-  .race-name  { font-size: 11px; font-weight: bold; flex: 1; color: #1a252f; }
-  .race-seg   { color: white; font-size: 8px; padding: 1px 7px; border-radius: 10px; }
-  .race-dist  { font-size: 9px; color: #888; }
-  .n-horses   { font-size: 8px; color: #aaa; }
-  .seg-report-link { margin-left: auto; font-size: 8px; color: #1a237e;
-                     text-decoration: none; padding: 1px 5px; border-radius: 3px;
+  .race-venue { font-size: 15px; font-weight: bold; color: #222; }
+  .race-rnum  { font-size: 14px; font-weight: bold; color: #555; }
+  .race-name  { font-size: 14px; font-weight: bold; flex: 1; color: #1a252f; }
+  .race-seg   { color: white; font-size: 11px; padding: 1px 8px; border-radius: 10px; }
+  .race-dist  { font-size: 12px; color: #888; }
+  .n-horses   { font-size: 11px; color: #aaa; }
+  .seg-report-link { margin-left: auto; font-size: 11px; color: #1a237e;
+                     text-decoration: none; padding: 2px 6px; border-radius: 3px;
                      border: 1px solid #c5cae9; background: #e8eaf6; white-space: nowrap; }
   .seg-report-link:hover { background: #c5cae9; }
 
   /* NaN Alert */
-  .nan-alert { padding: 3px 10px; background: #fff8f8;
-               border-top: 1px solid #fcc; font-size: 8px; }
-  .nan-chip { display: inline-block; margin: 1px 2px; padding: 1px 5px;
+  .nan-alert { padding: 4px 12px; background: #fff8f8;
+               border-top: 1px solid #fcc; font-size: 11px; }
+  .nan-chip { display: inline-block; margin: 1px 3px; padding: 1px 6px;
               border-radius: 3px; font-weight: bold; }
   .nan-hi  { background: #c0392b; color: white; }
   .nan-mid { background: #e67e22; color: white; }
@@ -713,69 +713,69 @@ def make_newspaper(date_str=None):
 
   /* Race Table */
   .table-wrap { overflow-x: auto; }
-  table.race-table { border-collapse: collapse; width: 100%; font-size: 9px; table-layout: fixed; }
-  table.race-table th { background: #2c3e50; color: white; padding: 2px 3px;
+  table.race-table { border-collapse: collapse; width: 100%; font-size: 13px; table-layout: fixed; }
+  table.race-table th { background: #2c3e50; color: white; padding: 3px 4px;
                         text-align: center; border: 1px solid #222;
-                        font-size: 8px; font-weight: bold; overflow: hidden; }
-  table.race-table td { padding: 2px 3px; border: 1px solid #e0e0e0;
+                        font-size: 12px; font-weight: bold; overflow: hidden; }
+  table.race-table td { padding: 3px 4px; border: 1px solid #e0e0e0;
                         text-align: center; overflow: hidden; }
   .row-buy td { background: #fde8e8 !important; outline: 2px solid #c0392b; }
   .row-r1 td  { background: #fef5f5 !important; }
   .row-r2 td  { background: #fef9ee !important; }
   .row-r3 td  { background: #f3faf5 !important; }
 
-  .td-rank  { font-weight: bold; width: 20px; min-width: 20px; max-width: 20px; }
-  .td-horse { text-align: left !important; font-weight: bold; font-size: 10px;
+  .td-rank  { font-weight: bold; width: 26px; min-width: 26px; max-width: 26px; }
+  .td-horse { text-align: left !important; font-weight: bold; font-size: 14px;
               overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .td-jky   { font-size: 8px; width: 28px; min-width: 28px; max-width: 28px;
+  .td-jky   { font-size: 12px; width: 40px; min-width: 40px; max-width: 40px;
               overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .td-odds  { width: 32px; min-width: 32px; max-width: 32px; }
-  .td-prob  { width: 32px; min-width: 32px; max-width: 32px; color: #16a085; font-weight: bold; }
-  .td-buy   { background: #c0392b !important; color: white !important; font-weight: bold; width: 18px; min-width: 18px; max-width: 18px; }
-  .td-watch { background: #e67e22 !important; color: white !important; width: 20px; }
-  .td-nan   { background: #ffe0e0 !important; color: #c0392b; font-weight: bold; font-size: 7px; }
+  .td-odds  { width: 44px; min-width: 44px; max-width: 44px; }
+  .td-prob  { width: 44px; min-width: 44px; max-width: 44px; color: #16a085; font-weight: bold; }
+  .td-buy   { background: #c0392b !important; color: white !important; font-weight: bold; width: 28px; min-width: 28px; max-width: 28px; }
+  .td-watch { background: #e67e22 !important; color: white !important; width: 28px; }
+  .td-nan   { background: #ffe0e0 !important; color: #c0392b; font-weight: bold; font-size: 10px; }
   .td-none  { color: #ccc; }
 
   /* ── 詳細展開パネル ─────────────────────────────── */
-  .detail-row td { padding: 4px 8px; background: #f9f9f9 !important;
+  .detail-row td { padding: 6px 10px; background: #f9f9f9 !important;
                    border: 1px solid #e8e8e8; outline: none; }
-  .detail-panel { display: flex; flex-wrap: wrap; gap: 2px; }
+  .detail-panel { display: flex; flex-wrap: wrap; gap: 3px; }
   .feat-chip { display: inline-flex; flex-direction: column; align-items: center;
-               padding: 2px 4px; border-radius: 3px; font-size: 8px;
-               min-width: 38px; border: 1px solid rgba(0,0,0,0.08);
+               padding: 3px 6px; border-radius: 3px; font-size: 11px;
+               min-width: 50px; border: 1px solid rgba(0,0,0,0.08);
                cursor: default; }
-  .feat-name { font-size: 6px; color: rgba(0,0,0,0.5); line-height: 1; margin-bottom: 1px; }
-  .feat-val  { font-weight: bold; font-size: 8px; line-height: 1.2; }
-  .feat-pt   { font-size: 6px; color: rgba(0,0,0,0.45); line-height: 1; margin-top: 1px; }
-  .detail-hint { font-size: 7px; color: #bbb; margin-left: 2px; transition: color .15s; }
+  .feat-name { font-size: 9px; color: rgba(0,0,0,0.5); line-height: 1; margin-bottom: 1px; }
+  .feat-val  { font-weight: bold; font-size: 11px; line-height: 1.2; }
+  .feat-pt   { font-size: 9px; color: rgba(0,0,0,0.45); line-height: 1; margin-top: 1px; }
+  .detail-hint { font-size: 10px; color: #bbb; margin-left: 2px; transition: color .15s; }
   tr.expandable:hover td { background: #fafafa; }
   tr.expandable:hover .detail-hint { color: #777; }
   /* ── 馬体重チップ ─── */
-  .wt-chip { font-size: 7px; color: #888; font-weight: normal; }
+  .wt-chip { font-size: 10px; color: #888; font-weight: normal; }
   /* ── 実着順列 ─── */
-  .td-jyuni { width: 16px; min-width: 16px; max-width: 16px; font-weight: bold; font-size: 9px; text-align: center; }
+  .td-jyuni { width: 22px; min-width: 22px; max-width: 22px; font-weight: bold; font-size: 13px; text-align: center; }
   .ar-1 { background: #ffd700 !important; color: #5a3000 !important; }
   .ar-2 { background: #c0c0c0 !important; color: #333 !important; }
   .ar-3 { background: #cd7f32 !important; color: #fff !important; }
   .ar-n { color: #aaa; }
   /* ── 払戻バナー ─── */
-  .result-banner { background: #1b5e20; color: #fff; padding: 3px 8px;
-                   font-size: 9px; font-weight: bold; }
+  .result-banner { background: #1b5e20; color: #fff; padding: 4px 10px;
+                   font-size: 12px; font-weight: bold; }
 
   /* ── レース内側タブ ─────────────────────────────── */
-  .race-tab-bar { display: flex; flex-wrap: wrap; gap: 3px; padding: 7px 8px 0;
+  .race-tab-bar { display: flex; flex-wrap: wrap; gap: 4px; padding: 8px 10px 0;
                   background: #f0f4f8; border-bottom: 2px solid #d0d8e0; }
-  .race-tab-btn { padding: 3px 9px; border: none; background: #e0e8f0;
+  .race-tab-btn { padding: 4px 12px; border: none; background: #e0e8f0;
                   border-radius: 5px 5px 0 0; cursor: pointer;
-                  font-size: 10px; font-weight: 600; color: #555; margin-bottom: -2px; }
+                  font-size: 13px; font-weight: 600; color: #555; margin-bottom: -2px; }
   .race-tab-btn:hover { background: #d0dcea; color: #1a237e; }
   .race-tab-btn.active { background: #fff; color: #1a237e; border: 2px solid #d0d8e0;
                           border-bottom-color: #fff; }
-  .race-tab-body { padding: 4px 4px 10px; background: #f0f4f8; overflow: hidden; }
+  .race-tab-body { padding: 6px 6px 12px; background: #f0f4f8; overflow: hidden; }
   .race-tab-pane { display: none; }
   .race-tab-pane.active { display: block; }
 
-  .footer { font-size: 7px; color: #aaa; text-align: right; padding: 5px 8px 14px; }
+  .footer { font-size: 10px; color: #aaa; text-align: right; padding: 6px 10px 16px; }
 </style>"""
 
     # ═══════════════════════════════════════════════════════════
