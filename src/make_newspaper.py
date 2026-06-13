@@ -237,8 +237,12 @@ def make_newspaper(date_str=None):
   /* ── ページタイトル ──────────────────────────────── */
   .page-title { font-size: 17px; font-weight: bold; padding: 10px 16px;
                 background: #1a252f; color: white;
-                display: flex; align-items: center; gap: 10px; }
+                display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .page-title .subtitle { font-size: 10px; color: #aaa; font-weight: normal; }
+  .report-btn { background: #1a237e; color: #fff; text-decoration: none;
+                font-size: 12px; font-weight: 600; padding: 5px 12px;
+                border-radius: 6px; border: 1px solid rgba(255,255,255,.3); }
+  .report-btn:hover { opacity: .85; }
 
   /* ── タブバー ───────────────────────────────────── */
   .tab-bar { display: flex; background: #fff; border-bottom: 2px solid #c8d0d8;
@@ -448,21 +452,14 @@ def make_newspaper(date_str=None):
                 chips.append(f'<span class="nan-chip {cls}">{f}: {n}/{len(grp)}頭</span>')
             nan_alert_html = f'<div class="nan-alert">⚠ NaN特徴量:　{"　".join(chips)}</div>'
 
-        # テーブルヘッダー
-        hdr = ''
-        for f in display_feats:
-            hdr += f'<th title="{f}" style="min-width:42px">{short_feat(f)}</th>'
-        # _isnan 列ヘッダー
-        for f in isnan_feats:
-            hdr += f'<th style="color:#f39c12;min-width:32px" title="{f}">{short_feat(f)}</th>'
-
-        # 行HTML
+        # 行HTML（特徴量列なし・シンプル6列）
         rows = []
         for _, r in grp.iterrows():
-            c_rank  = r.get('clogit_rank')
             c_buy   = bool(r.get('clogit_buy', False))
             c_calib = r.get('clogit_calib')
             horse   = r.get('馬名S', '')
+            acc_score = r.get('_acc_score', np.nan)
+            sort_rank = r.get('_sort_rank', np.nan)
 
             ci = card_map.get(horse, {})
             ov = ci.get('単勝オッズ', r.get('単勝オッズ', ''))
@@ -471,43 +468,22 @@ def make_newspaper(date_str=None):
             bango   = r.get('dc_馬番', r.get('馬番', ''))
             prob_s  = f'{c_calib:.1%}' if pd.notna(c_calib) else '-'
 
-            try: r_int = int(float(c_rank))
-            except: r_int = None
+            try: rank_i = int(float(sort_rank))
+            except: rank_i = None
+            rank_s = str(rank_i) if rank_i else '-'
 
-            if c_buy:
-                row_cls = 'row-buy'
-            elif r_int == 1: row_cls = 'row-r1'
-            elif r_int == 2: row_cls = 'row-r2'
-            elif r_int == 3: row_cls = 'row-r3'
-            else:             row_cls = ''
+            if c_buy:              row_cls = 'row-buy'
+            elif rank_i == 1:      row_cls = 'row-r1'
+            elif rank_i == 2:      row_cls = 'row-r2'
+            elif rank_i == 3:      row_cls = 'row-r3'
+            else:                  row_cls = ''
 
             if c_buy:
                 buy_td = '<td class="td-buy">◎買</td>'
-            elif seg_key in ('芝短', '芝長') and r_int == 1:
+            elif seg_key in ('芝短', '芝長') and rank_i == 1:
                 buy_td = '<td class="td-watch">待</td>'
             else:
                 buy_td = '<td class="td-none">-</td>'
-
-            rank_s = str(r_int) if r_int else '-'
-
-            # 特徴量セル（ヒートマップ）
-            feat_tds = ''
-            for f in display_feats:
-                raw = r.get(f) if f in r.index else None
-                if raw is None or (isinstance(raw, float) and np.isnan(raw)):
-                    feat_tds += '<td class="td-nan">NaN</td>'
-                else:
-                    pct = feat_pct.get(f, {}).get(r.name)
-                    bg  = percentile_color(pct)
-                    disp = fmt_val(f, raw) or str(raw)
-                    feat_tds += f'<td style="background:{bg}">{disp}</td>'
-
-            # _isnan セル
-            for f in isnan_feats:
-                base = f[:-6]
-                ival = 1 if (base in r.index and pd.isna(r[base])) else 0
-                cls  = 'nan-hi' if ival else 'td-none'
-                feat_tds += f'<td class="{cls}">{"NaN" if ival else "0"}</td>'
 
             rows.append(
                 f'<tr class="{row_cls}">'
@@ -517,7 +493,6 @@ def make_newspaper(date_str=None):
                 f'<td class="td-jky">{jockey}</td>'
                 f'<td class="td-odds">{odds_s}</td>'
                 f'<td class="td-prob">{prob_s}</td>'
-                f'{feat_tds}'
                 f'</tr>'
             )
 
@@ -535,14 +510,12 @@ def make_newspaper(date_str=None):
     <span class="race-dist">{surf}{dist_str}</span>
     <span class="n-horses">{len(grp)}頭　特徴{len(display_feats)}個</span>
   </div>
-  {nan_alert_html}
   <div class="table-wrap">
   <table class="race-table">
     <thead><tr>
       <th>順位</th><th>買い</th>
       <th style="text-align:left">馬名</th>
-      <th>騎手</th><th>オッズ</th><th>勝率</th>
-      {hdr}
+      <th>騎手</th><th>オッズ</th><th>AI勝率</th>
     </tr></thead>
     <tbody>{"".join(rows)}</tbody>
   </table>
@@ -590,14 +563,13 @@ def make_newspaper(date_str=None):
   {css}
 </head>
 <body>
-  <div class="topbar">
-    <span style="font-weight:700">🏇 競馬AI v2</span>
-    <a href="accuracy_model_report_20260613.html">📊 的中率モデル</a>
-    <a href="model_report_20260613.html">📈 ROIモデル</a>
-  </div>
   <div class="page-title">
-    競馬AI 予想新聞　{date_disp}
-    <span class="subtitle">{len(race_data)}レース / {len(result)}頭　|　セル色=レース内パーセンタイル（青=低・橙=高）</span>
+    <span>🏇 競馬AI 予想新聞　{date_disp}</span>
+    <span class="subtitle">{len(race_data)}レース / {len(result)}頭</span>
+    <span style="margin-left:auto;display:flex;gap:8px;flex-shrink:0">
+      <a class="report-btn" href="accuracy_model_report_20260613.html">📊 予想モデルレポート</a>
+      <a class="report-btn" href="model_report_20260613.html" style="background:#1b5e20">📈 ROIモデルレポート</a>
+    </span>
   </div>
 
   <div class="tab-bar">{tab_buttons}</div>
