@@ -175,15 +175,22 @@ def patch_jockey_stats(result_df, card_df, data_file):
 
     pq['_jkn_full'] = pq['騎手'].apply(_norm_name)
 
-    # 略称 → 全名 のマッピング（前方一致 + 最多レース数で決定）
+    # 略称 → 全名 のマッピング（双方向prefix + 最多レース数で決定）
     all_pq_fullnames = pq['_jkn_full'].value_counts()
+    # 統計が存在する行数（NaN以外）を優先スコアとして事前計算
+    pq_stat_counts = (pq[target_cols].notna().any(axis=1)
+                      .groupby(pq['_jkn_full']).sum())
     short_to_full = {}
     for short in today_shorts:
-        # 前方一致で全候補を探し、最多レース数のものを採用（完全一致でも短縮名に件数が少ないものがあるため）
+        # 双方向prefix: card名がparquet名の前方一致 OR parquet名がcard名の前方一致
         candidates = [(fn, cnt) for fn, cnt in all_pq_fullnames.items()
-                      if str(fn).startswith(short)]
+                      if str(fn).startswith(short) or short.startswith(str(fn))]
         if candidates:
-            short_to_full[short] = max(candidates, key=lambda x: x[1])[0]
+            # 統計データがある行数が多いものを優先、同数なら総行数
+            short_to_full[short] = max(
+                candidates,
+                key=lambda x: (pq_stat_counts.get(x[0], 0), x[1])
+            )[0]
 
     # 全名でフィルタ
     target_fullnames = set(short_to_full.values())
@@ -559,13 +566,27 @@ def make_newspaper(date_str=None):
         seg_lbl   = SEG_LABEL.get(seg_key, seg_key or '?')
         venue_full = next((v for k, v in V_FULL.items() if k in rd['kaikai']), rd['kaikai'][:3])
 
+        _vm1 = re.search(r'[^\d]+', rd['kaikai'])
+        _vletter1 = _vm1.group().strip() if _vm1 else ''
+        _vcode1 = VENUE_LETTER_TO_CODE.get(_vletter1, '')
+        try:
+            _rn_int1 = int(rd['r_num'])
+        except (ValueError, TypeError):
+            _rn_int1 = 0
+        race_live_odds1 = live_odds.get((_vcode1, _rn_int1), {})
+
         for _, r in rd['grp'].iterrows():
             c_rank = r.get('clogit_rank')
             c_buy  = bool(r.get('clogit_buy', False))
             horse  = r.get('馬名S', '')
 
             ci = card_map.get(horse, {})
-            ov = ci.get('単勝オッズ', r.get('単勝オッズ', ''))
+            bango1 = r.get('dc_馬番', r.get('馬番', ''))
+            try:
+                uma_s1 = str(int(float(bango1))).zfill(2)
+            except (ValueError, TypeError):
+                uma_s1 = '00'
+            ov = race_live_odds1.get(uma_s1) or ci.get('単勝オッズ', r.get('単勝オッズ', ''))
             odds_s = f'{float(ov):.1f}倍' if ov not in ('', None) and str(ov) not in ('nan', '') else '未発表'
             jockey = str(ci.get('騎手', r.get('dc_騎手', r.get('騎手', '')))).strip()
 
