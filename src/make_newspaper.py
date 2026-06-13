@@ -296,6 +296,10 @@ def make_newspaper(date_str=None):
   .race-seg   { color: white; font-size: 9px; padding: 2px 9px; border-radius: 12px; }
   .race-dist  { font-size: 10px; color: #888; }
   .n-horses   { font-size: 9px; color: #aaa; }
+  .seg-report-link { margin-left: auto; font-size: 9px; color: #1a237e;
+                     text-decoration: none; padding: 2px 7px; border-radius: 4px;
+                     border: 1px solid #c5cae9; background: #e8eaf6; white-space: nowrap; }
+  .seg-report-link:hover { background: #c5cae9; }
 
   /* NaN Alert */
   .nan-alert { padding: 5px 14px; background: #fff8f8;
@@ -541,6 +545,7 @@ def make_newspaper(date_str=None):
         if venue_key not in venue_order:
             venue_order.append(venue_key)
 
+        acc_report_href = f'accuracy_model_report_20{tgt_date}.html#tab-{seg_key}' if seg_key else '#'
         race_groups[venue_key].append((rd['r_num'], rd['race_name'], f'''
 <div class="race-block">
   <div class="race-header" style="border-left-color:{seg_color}">
@@ -550,6 +555,7 @@ def make_newspaper(date_str=None):
     <span class="race-seg" style="background:{seg_color}">{seg_lbl}</span>
     <span class="race-dist">{surf}{dist_str}</span>
     <span class="n-horses">{len(grp)}頭　特徴{len(display_feats)}個</span>
+    <a class="seg-report-link" href="{acc_report_href}" target="_blank">📊 モデル</a>
   </div>
   <div class="table-wrap">
   <table class="race-table">
