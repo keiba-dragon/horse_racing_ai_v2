@@ -107,6 +107,8 @@ def percentile_color(pct):
 
 
 def make_newspaper(date_str=None):
+    from datetime import datetime
+    generated_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     # ── キャッシュ探索 ────────────────────────────────────────────
     cache_dir = os.path.join(BASE_DIR, 'data', 'raw', 'cache')
     all_caches = sorted(
@@ -605,6 +607,7 @@ def make_newspaper(date_str=None):
   <div class="page-title">
     <span>🏇 競馬AI 予想新聞　{date_disp}</span>
     <span class="subtitle">{len(race_data)}レース / {len(result)}頭</span>
+    <span class="subtitle" style="color:#90caf9">更新: {generated_at}</span>
     <span style="margin-left:auto;display:flex;gap:8px;flex-shrink:0">
       <a class="report-btn" href="accuracy_model_report_20260613.html">📊 予想モデルレポート</a>
       <a class="report-btn" href="model_report_20260613.html" style="background:#1b5e20">📈 ROIモデルレポート</a>
@@ -617,6 +620,7 @@ def make_newspaper(date_str=None):
 
   <div class="footer">
     的中率最大化モデル (accuracy_model.pkl) | clogit + isotonic calibration | 芝短/芝長 オッズ帯フィルタ(≥6倍)
+    <br>生成日時: {generated_at}
   </div>
 
 <script>
