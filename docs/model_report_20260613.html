@@ -46,6 +46,21 @@ table.summary tr:hover td{background:#f5f5f5}
 .odds-box{background:#fff3e0;border:2px solid #e67e22;border-radius:8px;padding:14px 18px;margin-top:12px}
 .odds-title{font-weight:700;color:#e65100;margin-bottom:6px}
 small{font-size:0.8em;color:#888;margin-left:4px}
+/* calibration */
+.calib-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:700px){.calib-grid{grid-template-columns:1fr}}
+.calib-card{background:#fafafa;border-radius:8px;padding:14px 16px;border:1px solid #e0e0e0}
+.calib-title{font-weight:700;font-size:0.9rem;margin-bottom:2px}
+.calib-meta{font-size:0.75rem;color:#888;margin-bottom:6px}
+.calib-summary{display:flex;gap:16px;font-size:0.82rem;margin-bottom:10px;flex-wrap:wrap}
+.calib-body{display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap}
+.calib-chart{flex:0 0 auto}
+.calib-table-wrap{flex:1;min-width:200px;overflow-x:auto}
+.calib-tbl{border-collapse:collapse;width:100%;font-size:0.8rem}
+.calib-tbl th{background:#f0f0f0;padding:4px 8px;text-align:center;font-weight:600}
+.calib-tbl td{padding:4px 8px;border-bottom:1px solid #f0f0f0;text-align:center;vertical-align:middle}
+.diff-pos{color:#2e7d32;font-weight:600}
+.diff-neg{color:#c62828;font-weight:600}
 </style>
 </head>
 <body>
@@ -143,6 +158,714 @@ small{font-size:0.8em;color:#888;margin-left:4px}
       * 指標1位全買い（ROIモデルのROI順位1位馬の単勝を毎レース購入）<br>
       * OOS = Out-of-Sample。train:2013-2021 / val:2022 / OOS:2023-2026
     </p>
+  </div>
+
+  <div class="section">
+    <div class="section-title">キャリブレーション品質 — 予測確率 vs 実際の勝率（OOS 2023-2026）</div>
+    <p style="font-size:0.82rem;color:#555;margin-bottom:14px">
+      isotonic calibration 後の予測確率をデシル分けし、各ビン内の平均予測確率と実際の勝率を比較。<br>
+      <span style="color:#aaa">灰の破線 = 予測</span>、<span style="color:#333">色の実線 = 実際の勝率</span>。完全一致なら両線が重なる。
+    </p>
+    <div class="calib-grid">
+<div class="calib-card" style="border-top:3px solid #2980b9">
+  <div class="calib-title" style="color:#2980b9">ダ長（ダ>1400m）</div>
+  <div class="calib-meta">OOS 2023-2026 / n=42,942頭</div>
+  <div class="calib-summary">
+    <span>平均予測: <strong>7.35%</strong></span>
+    <span>平均実際: <strong style="color:#2980b9">7.31%</strong></span>
+    <span>誤差: <span class="diff-neg">-0.04%</span></span>
+  </div>
+  <div class="calib-body">
+    <div class="calib-chart">
+      <div style="font-size:0.72rem;color:#aaa;margin-bottom:2px">予測確率 → 実際の勝率（灰:予測 / 色:実際）</div>
+      <svg width="260" height="90" style="display:block">
+  <polyline points="10.0,79.9 50.0,73.6 90.0,58.2 130.0,55.5 170.0,50.0 210.0,34.4 250.0,10.0" fill="none" stroke="#bbb" stroke-width="1.5" stroke-dasharray="4,3"/>
+  <polyline points="10.0,80.0 50.0,72.2 90.0,62.9 130.0,55.5 170.0,47.7 210.0,30.8 250.0,14.6" fill="none" stroke="#2980b9" stroke-width="2.5"/>
+  <circle cx="10.0" cy="80.0" r="3" fill="#2980b9"/> <circle cx="50.0" cy="72.2" r="3" fill="#2980b9"/> <circle cx="90.0" cy="62.9" r="3" fill="#2980b9"/> <circle cx="130.0" cy="55.5" r="3" fill="#2980b9"/> <circle cx="170.0" cy="47.7" r="3" fill="#2980b9"/> <circle cx="210.0" cy="30.8" r="3" fill="#2980b9"/> <circle cx="250.0" cy="14.6" r="3" fill="#2980b9"/>
+</svg>
+    </div>
+    <div class="calib-table-wrap">
+      <table class="calib-tbl">
+        <thead><tr><th>予測帯</th><th>予測 / 実際</th><th>差</th><th>n</th></tr></thead>
+        <tbody><tr>
+  <td style="color:#666">3.4%</td>
+  <td>
+    <div style="display:flex;align-items:center;gap:4px">
+      <div style="width:10px;height:8px;background:#ddd;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#aaa">3.4%</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:4px;margin-top:2px">
+      <div style="width:10px;height:8px;background:#2980b9;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#2980b9">3.3%</span>
+    </div>
+  </td>
+  <td class="diff-neg">-0.0%</td>
+  <td style="color:#888;font-size:0.8rem">6,310</td>
+</tr><tr>
+  <td style="color:#666">4.4%</td>
+  <td>
+    <div style="display:flex;align-items:center;gap:4px">
+      <div style="width:13px;height:8px;background:#ddd;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#aaa">4.4%</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:4px;margin-top:2px">
+      <div style="width:14px;height:8px;background:#2980b9;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#2980b9">4.6%</span>
+    </div>
+  </td>
+  <td class="diff-pos">+0.2%</td>
+  <td style="color:#888;font-size:0.8rem">4,342</td>
+</tr><tr>
+  <td style="color:#666">6.8%</td>
+  <td>
+    <div style="display:flex;align-items:center;gap:4px">
+      <div style="width:21px;height:8px;background:#ddd;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#aaa">6.8%</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:4px;margin-top:2px">
+      <div style="width:19px;height:8px;background:#2980b9;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#2980b9">6.1%</span>
+    </div>
+  </td>
+  <td class="diff-neg">-0.8%</td>
+  <td style="color:#888;font-size:0.8rem">10,546</td>
+</tr><tr>
+  <td style="color:#666">7.3%</td>
+  <td>
+    <div style="display:flex;align-items:center;gap:4px">
+      <div style="width:23px;height:8px;background:#ddd;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#aaa">7.3%</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:4px;margin-top:2px">
+      <div style="width:23px;height:8px;background:#2980b9;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#2980b9">7.3%</span>
+    </div>
+  </td>
+  <td class="diff-neg">-0.0%</td>
+  <td style="color:#888;font-size:0.8rem">1,751</td>
+</tr><tr>
+  <td style="color:#666">8.1%</td>
+  <td>
+    <div style="display:flex;align-items:center;gap:4px">
+      <div style="width:26px;height:8px;background:#ddd;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#aaa">8.1%</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:4px;margin-top:2px">
+      <div style="width:27px;height:8px;background:#2980b9;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#2980b9">8.5%</span>
+    </div>
+  </td>
+  <td class="diff-pos">+0.4%</td>
+  <td style="color:#888;font-size:0.8rem">12,478</td>
+</tr><tr>
+  <td style="color:#666">10.6%</td>
+  <td>
+    <div style="display:flex;align-items:center;gap:4px">
+      <div style="width:33px;height:8px;background:#ddd;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#aaa">10.6%</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:4px;margin-top:2px">
+      <div style="width:35px;height:8px;background:#2980b9;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#2980b9">11.2%</span>
+    </div>
+  </td>
+  <td class="diff-pos">+0.6%</td>
+  <td style="color:#888;font-size:0.8rem">5,061</td>
+</tr><tr>
+  <td style="color:#666">14.5%</td>
+  <td>
+    <div style="display:flex;align-items:center;gap:4px">
+      <div style="width:46px;height:8px;background:#ddd;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#aaa">14.5%</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:4px;margin-top:2px">
+      <div style="width:44px;height:8px;background:#2980b9;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#2980b9">13.8%</span>
+    </div>
+  </td>
+  <td class="diff-neg">-0.7%</td>
+  <td style="color:#888;font-size:0.8rem">2,454</td>
+</tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+<div class="calib-card" style="border-top:3px solid #1a6fa0">
+  <div class="calib-title" style="color:#1a6fa0">ダ短（ダ≤1400m）</div>
+  <div class="calib-meta">OOS 2023-2026 / n=34,202頭</div>
+  <div class="calib-summary">
+    <span>平均予測: <strong>6.74%</strong></span>
+    <span>平均実際: <strong style="color:#1a6fa0">6.72%</strong></span>
+    <span>誤差: <span class="diff-neg">-0.02%</span></span>
+  </div>
+  <div class="calib-body">
+    <div class="calib-chart">
+      <div style="font-size:0.72rem;color:#aaa;margin-bottom:2px">予測確率 → 実際の勝率（灰:予測 / 色:実際）</div>
+      <svg width="260" height="90" style="display:block">
+  <polyline points="10.0,79.2 40.0,65.8 70.0,57.5 100.0,57.0 130.0,53.5 160.0,45.7 190.0,34.6 220.0,26.4 250.0,14.5" fill="none" stroke="#bbb" stroke-width="1.5" stroke-dasharray="4,3"/>
+  <polyline points="10.0,80.0 40.0,71.6 70.0,58.4 100.0,51.6 130.0,50.5 160.0,42.7 190.0,39.1 220.0,29.8 250.0,10.0" fill="none" stroke="#1a6fa0" stroke-width="2.5"/>
+  <circle cx="10.0" cy="80.0" r="3" fill="#1a6fa0"/> <circle cx="40.0" cy="71.6" r="3" fill="#1a6fa0"/> <circle cx="70.0" cy="58.4" r="3" fill="#1a6fa0"/> <circle cx="100.0" cy="51.6" r="3" fill="#1a6fa0"/> <circle cx="130.0" cy="50.5" r="3" fill="#1a6fa0"/> <circle cx="160.0" cy="42.7" r="3" fill="#1a6fa0"/> <circle cx="190.0" cy="39.1" r="3" fill="#1a6fa0"/> <circle cx="220.0" cy="29.8" r="3" fill="#1a6fa0"/> <circle cx="250.0" cy="10.0" r="3" fill="#1a6fa0"/>
+</svg>
+    </div>
+    <div class="calib-table-wrap">
+      <table class="calib-tbl">
+        <thead><tr><th>予測帯</th><th>予測 / 実際</th><th>差</th><th>n</th></tr></thead>
+        <tbody><tr>
+  <td style="color:#666">3.6%</td>
+  <td>
+    <div style="display:flex;align-items:center;gap:4px">
+      <div style="width:11px;height:8px;background:#ddd;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#aaa">3.6%</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:4px;margin-top:2px">
+      <div style="width:11px;height:8px;background:#1a6fa0;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#1a6fa0">3.5%</span>
+    </div>
+  </td>
+  <td class="diff-neg">-0.1%</td>
+  <td style="color:#888;font-size:0.8rem">4,188</td>
+</tr><tr>
+  <td style="color:#666">5.1%</td>
+  <td>
+    <div style="display:flex;align-items:center;gap:4px">
+      <div style="width:16px;height:8px;background:#ddd;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#aaa">5.1%</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:4px;margin-top:2px">
+      <div style="width:14px;height:8px;background:#1a6fa0;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#1a6fa0">4.5%</span>
+    </div>
+  </td>
+  <td class="diff-neg">-0.7%</td>
+  <td style="color:#888;font-size:0.8rem">5,917</td>
+</tr><tr>
+  <td style="color:#666">6.1%</td>
+  <td>
+    <div style="display:flex;align-items:center;gap:4px">
+      <div style="width:19px;height:8px;background:#ddd;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#aaa">6.1%</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:4px;margin-top:2px">
+      <div style="width:19px;height:8px;background:#1a6fa0;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#1a6fa0">6.0%</span>
+    </div>
+  </td>
+  <td class="diff-neg">-0.1%</td>
+  <td style="color:#888;font-size:0.8rem">4,575</td>
+</tr><tr>
+  <td style="color:#666">6.2%</td>
+  <td>
+    <div style="display:flex;align-items:center;gap:4px">
+      <div style="width:19px;height:8px;background:#ddd;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#aaa">6.2%</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:4px;margin-top:2px">
+      <div style="width:21px;height:8px;background:#1a6fa0;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#1a6fa0">6.8%</span>
+    </div>
+  </td>
+  <td class="diff-pos">+0.6%</td>
+  <td style="color:#888;font-size:0.8rem">5,532</td>
+</tr><tr>
+  <td style="color:#666">6.6%</td>
+  <td>
+    <div style="display:flex;align-items:center;gap:4px">
+      <div style="width:20px;height:8px;background:#ddd;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#aaa">6.6%</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:4px;margin-top:2px">
+      <div style="width:22px;height:8px;background:#1a6fa0;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#1a6fa0">6.9%</span>
+    </div>
+  </td>
+  <td class="diff-pos">+0.4%</td>
+  <td style="color:#888;font-size:0.8rem">1,679</td>
+</tr><tr>
+  <td style="color:#666">7.5%</td>
+  <td>
+    <div style="display:flex;align-items:center;gap:4px">
+      <div style="width:23px;height:8px;background:#ddd;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#aaa">7.5%</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:4px;margin-top:2px">
+      <div style="width:24px;height:8px;background:#1a6fa0;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#1a6fa0">7.8%</span>
+    </div>
+  </td>
+  <td class="diff-pos">+0.3%</td>
+  <td style="color:#888;font-size:0.8rem">3,857</td>
+</tr><tr>
+  <td style="color:#666">8.7%</td>
+  <td>
+    <div style="display:flex;align-items:center;gap:4px">
+      <div style="width:27px;height:8px;background:#ddd;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#aaa">8.7%</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:4px;margin-top:2px">
+      <div style="width:26px;height:8px;background:#1a6fa0;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#1a6fa0">8.2%</span>
+    </div>
+  </td>
+  <td class="diff-neg">-0.5%</td>
+  <td style="color:#888;font-size:0.8rem">1,970</td>
+</tr><tr>
+  <td style="color:#666">9.7%</td>
+  <td>
+    <div style="display:flex;align-items:center;gap:4px">
+      <div style="width:31px;height:8px;background:#ddd;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#aaa">9.7%</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:4px;margin-top:2px">
+      <div style="width:29px;height:8px;background:#1a6fa0;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#1a6fa0">9.3%</span>
+    </div>
+  </td>
+  <td class="diff-neg">-0.4%</td>
+  <td style="color:#888;font-size:0.8rem">4,018</td>
+</tr><tr>
+  <td style="color:#666">11.1%</td>
+  <td>
+    <div style="display:flex;align-items:center;gap:4px">
+      <div style="width:35px;height:8px;background:#ddd;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#aaa">11.1%</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:4px;margin-top:2px">
+      <div style="width:37px;height:8px;background:#1a6fa0;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#1a6fa0">11.6%</span>
+    </div>
+  </td>
+  <td class="diff-pos">+0.5%</td>
+  <td style="color:#888;font-size:0.8rem">2,466</td>
+</tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+<div class="calib-card" style="border-top:3px solid #27ae60">
+  <div class="calib-title" style="color:#27ae60">芝短（芝≤1400m）</div>
+  <div class="calib-meta">OOS 2023-2026 / n=22,239頭</div>
+  <div class="calib-summary">
+    <span>平均予測: <strong>6.76%</strong></span>
+    <span>平均実際: <strong style="color:#27ae60">6.57%</strong></span>
+    <span>誤差: <span class="diff-neg">-0.19%</span></span>
+  </div>
+  <div class="calib-body">
+    <div class="calib-chart">
+      <div style="font-size:0.72rem;color:#aaa;margin-bottom:2px">予測確率 → 実際の勝率（灰:予測 / 色:実際）</div>
+      <svg width="260" height="90" style="display:block">
+  <polyline points="10.0,80.0 44.3,71.6 78.6,67.1 112.9,60.3 147.1,56.1 181.4,52.4 215.7,38.8 250.0,10.0" fill="none" stroke="#bbb" stroke-width="1.5" stroke-dasharray="4,3"/>
+  <polyline points="10.0,77.4 44.3,73.9 78.6,67.6 112.9,60.8 147.1,59.4 181.4,53.8 215.7,38.5 250.0,13.4" fill="none" stroke="#27ae60" stroke-width="2.5"/>
+  <circle cx="10.0" cy="77.4" r="3" fill="#27ae60"/> <circle cx="44.3" cy="73.9" r="3" fill="#27ae60"/> <circle cx="78.6" cy="67.6" r="3" fill="#27ae60"/> <circle cx="112.9" cy="60.8" r="3" fill="#27ae60"/> <circle cx="147.1" cy="59.4" r="3" fill="#27ae60"/> <circle cx="181.4" cy="53.8" r="3" fill="#27ae60"/> <circle cx="215.7" cy="38.5" r="3" fill="#27ae60"/> <circle cx="250.0" cy="13.4" r="3" fill="#27ae60"/>
+</svg>
+    </div>
+    <div class="calib-table-wrap">
+      <table class="calib-tbl">
+        <thead><tr><th>予測帯</th><th>予測 / 実際</th><th>差</th><th>n</th></tr></thead>
+        <tbody><tr>
+  <td style="color:#666">2.0%</td>
+  <td>
+    <div style="display:flex;align-items:center;gap:4px">
+      <div style="width:6px;height:8px;background:#ddd;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#aaa">2.0%</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:4px;margin-top:2px">
+      <div style="width:8px;height:8px;background:#27ae60;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#27ae60">2.6%</span>
+    </div>
+  </td>
+  <td class="diff-pos">+0.5%</td>
+  <td style="color:#888;font-size:0.8rem">2,638</td>
+</tr><tr>
+  <td style="color:#666">3.8%</td>
+  <td>
+    <div style="display:flex;align-items:center;gap:4px">
+      <div style="width:12px;height:8px;background:#ddd;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#aaa">3.8%</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:4px;margin-top:2px">
+      <div style="width:10px;height:8px;background:#27ae60;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#27ae60">3.3%</span>
+    </div>
+  </td>
+  <td class="diff-neg">-0.5%</td>
+  <td style="color:#888;font-size:0.8rem">1,916</td>
+</tr><tr>
+  <td style="color:#666">4.8%</td>
+  <td>
+    <div style="display:flex;align-items:center;gap:4px">
+      <div style="width:15px;height:8px;background:#ddd;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#aaa">4.8%</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:4px;margin-top:2px">
+      <div style="width:14px;height:8px;background:#27ae60;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#27ae60">4.7%</span>
+    </div>
+  </td>
+  <td class="diff-neg">-0.1%</td>
+  <td style="color:#888;font-size:0.8rem">5,602</td>
+</tr><tr>
+  <td style="color:#666">6.2%</td>
+  <td>
+    <div style="display:flex;align-items:center;gap:4px">
+      <div style="width:19px;height:8px;background:#ddd;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#aaa">6.2%</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:4px;margin-top:2px">
+      <div style="width:19px;height:8px;background:#27ae60;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#27ae60">6.1%</span>
+    </div>
+  </td>
+  <td class="diff-neg">-0.1%</td>
+  <td style="color:#888;font-size:0.8rem">1,320</td>
+</tr><tr>
+  <td style="color:#666">7.1%</td>
+  <td>
+    <div style="display:flex;align-items:center;gap:4px">
+      <div style="width:22px;height:8px;background:#ddd;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#aaa">7.1%</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:4px;margin-top:2px">
+      <div style="width:20px;height:8px;background:#27ae60;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#27ae60">6.4%</span>
+    </div>
+  </td>
+  <td class="diff-neg">-0.7%</td>
+  <td style="color:#888;font-size:0.8rem">3,166</td>
+</tr><tr>
+  <td style="color:#666">7.9%</td>
+  <td>
+    <div style="display:flex;align-items:center;gap:4px">
+      <div style="width:25px;height:8px;background:#ddd;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#aaa">7.9%</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:4px;margin-top:2px">
+      <div style="width:24px;height:8px;background:#27ae60;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#27ae60">7.6%</span>
+    </div>
+  </td>
+  <td class="diff-neg">-0.3%</td>
+  <td style="color:#888;font-size:0.8rem">3,356</td>
+</tr><tr>
+  <td style="color:#666">10.8%</td>
+  <td>
+    <div style="display:flex;align-items:center;gap:4px">
+      <div style="width:34px;height:8px;background:#ddd;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#aaa">10.8%</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:4px;margin-top:2px">
+      <div style="width:34px;height:8px;background:#27ae60;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#27ae60">10.9%</span>
+    </div>
+  </td>
+  <td class="diff-pos">+0.1%</td>
+  <td style="color:#888;font-size:0.8rem">3,037</td>
+</tr><tr>
+  <td style="color:#666">17.0%</td>
+  <td>
+    <div style="display:flex;align-items:center;gap:4px">
+      <div style="width:54px;height:8px;background:#ddd;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#aaa">17.0%</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:4px;margin-top:2px">
+      <div style="width:52px;height:8px;background:#27ae60;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#27ae60">16.3%</span>
+    </div>
+  </td>
+  <td class="diff-neg">-0.7%</td>
+  <td style="color:#888;font-size:0.8rem">1,204</td>
+</tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+<div class="calib-card" style="border-top:3px solid #16a085">
+  <div class="calib-title" style="color:#16a085">芝中（芝1401-2000m）</div>
+  <div class="calib-meta">OOS 2023-2026 / n=38,911頭</div>
+  <div class="calib-summary">
+    <span>平均予測: <strong>7.55%</strong></span>
+    <span>平均実際: <strong style="color:#16a085">7.43%</strong></span>
+    <span>誤差: <span class="diff-neg">-0.12%</span></span>
+  </div>
+  <div class="calib-body">
+    <div class="calib-chart">
+      <div style="font-size:0.72rem;color:#aaa;margin-bottom:2px">予測確率 → 実際の勝率（灰:予測 / 色:実際）</div>
+      <svg width="260" height="90" style="display:block">
+  <polyline points="10.0,80.0 36.7,71.4 63.3,66.8 90.0,63.1 116.7,56.5 143.3,54.8 170.0,47.9 196.7,39.6 223.3,31.7 250.0,10.0" fill="none" stroke="#bbb" stroke-width="1.5" stroke-dasharray="4,3"/>
+  <polyline points="10.0,77.4 36.7,71.5 63.3,66.6 90.0,61.8 116.7,56.3 143.3,50.9 170.0,50.5 196.7,43.4 223.3,31.5 250.0,14.6" fill="none" stroke="#16a085" stroke-width="2.5"/>
+  <circle cx="10.0" cy="77.4" r="3" fill="#16a085"/> <circle cx="36.7" cy="71.5" r="3" fill="#16a085"/> <circle cx="63.3" cy="66.6" r="3" fill="#16a085"/> <circle cx="90.0" cy="61.8" r="3" fill="#16a085"/> <circle cx="116.7" cy="56.3" r="3" fill="#16a085"/> <circle cx="143.3" cy="50.9" r="3" fill="#16a085"/> <circle cx="170.0" cy="50.5" r="3" fill="#16a085"/> <circle cx="196.7" cy="43.4" r="3" fill="#16a085"/> <circle cx="223.3" cy="31.5" r="3" fill="#16a085"/> <circle cx="250.0" cy="14.6" r="3" fill="#16a085"/>
+</svg>
+    </div>
+    <div class="calib-table-wrap">
+      <table class="calib-tbl">
+        <thead><tr><th>予測帯</th><th>予測 / 実際</th><th>差</th><th>n</th></tr></thead>
+        <tbody><tr>
+  <td style="color:#666">1.2%</td>
+  <td>
+    <div style="display:flex;align-items:center;gap:4px">
+      <div style="width:3px;height:8px;background:#ddd;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#aaa">1.2%</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:4px;margin-top:2px">
+      <div style="width:5px;height:8px;background:#16a085;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#16a085">1.8%</span>
+    </div>
+  </td>
+  <td class="diff-pos">+0.6%</td>
+  <td style="color:#888;font-size:0.8rem">4,252</td>
+</tr><tr>
+  <td style="color:#666">3.3%</td>
+  <td>
+    <div style="display:flex;align-items:center;gap:4px">
+      <div style="width:10px;height:8px;background:#ddd;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#aaa">3.3%</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:4px;margin-top:2px">
+      <div style="width:10px;height:8px;background:#16a085;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#16a085">3.2%</span>
+    </div>
+  </td>
+  <td class="diff-neg">-0.0%</td>
+  <td style="color:#888;font-size:0.8rem">4,857</td>
+</tr><tr>
+  <td style="color:#666">4.3%</td>
+  <td>
+    <div style="display:flex;align-items:center;gap:4px">
+      <div style="width:13px;height:8px;background:#ddd;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#aaa">4.3%</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:4px;margin-top:2px">
+      <div style="width:14px;height:8px;background:#16a085;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#16a085">4.4%</span>
+    </div>
+  </td>
+  <td class="diff-pos">+0.1%</td>
+  <td style="color:#888;font-size:0.8rem">3,974</td>
+</tr><tr>
+  <td style="color:#666">5.2%</td>
+  <td>
+    <div style="display:flex;align-items:center;gap:4px">
+      <div style="width:16px;height:8px;background:#ddd;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#aaa">5.2%</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:4px;margin-top:2px">
+      <div style="width:17px;height:8px;background:#16a085;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#16a085">5.6%</span>
+    </div>
+  </td>
+  <td class="diff-pos">+0.3%</td>
+  <td style="color:#888;font-size:0.8rem">3,782</td>
+</tr><tr>
+  <td style="color:#666">6.8%</td>
+  <td>
+    <div style="display:flex;align-items:center;gap:4px">
+      <div style="width:21px;height:8px;background:#ddd;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#aaa">6.8%</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:4px;margin-top:2px">
+      <div style="width:21px;height:8px;background:#16a085;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#16a085">6.9%</span>
+    </div>
+  </td>
+  <td class="diff-pos">+0.0%</td>
+  <td style="color:#888;font-size:0.8rem">5,688</td>
+</tr><tr>
+  <td style="color:#666">7.2%</td>
+  <td>
+    <div style="display:flex;align-items:center;gap:4px">
+      <div style="width:23px;height:8px;background:#ddd;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#aaa">7.2%</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:4px;margin-top:2px">
+      <div style="width:26px;height:8px;background:#16a085;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#16a085">8.2%</span>
+    </div>
+  </td>
+  <td class="diff-pos">+1.0%</td>
+  <td style="color:#888;font-size:0.8rem">1,274</td>
+</tr><tr>
+  <td style="color:#666">8.9%</td>
+  <td>
+    <div style="display:flex;align-items:center;gap:4px">
+      <div style="width:28px;height:8px;background:#ddd;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#aaa">8.9%</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:4px;margin-top:2px">
+      <div style="width:26px;height:8px;background:#16a085;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#16a085">8.2%</span>
+    </div>
+  </td>
+  <td class="diff-neg">-0.6%</td>
+  <td style="color:#888;font-size:0.8rem">3,506</td>
+</tr><tr>
+  <td style="color:#666">10.8%</td>
+  <td>
+    <div style="display:flex;align-items:center;gap:4px">
+      <div style="width:34px;height:8px;background:#ddd;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#aaa">10.8%</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:4px;margin-top:2px">
+      <div style="width:31px;height:8px;background:#16a085;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#16a085">9.9%</span>
+    </div>
+  </td>
+  <td class="diff-neg">-0.9%</td>
+  <td style="color:#888;font-size:0.8rem">4,681</td>
+</tr><tr>
+  <td style="color:#666">12.7%</td>
+  <td>
+    <div style="display:flex;align-items:center;gap:4px">
+      <div style="width:40px;height:8px;background:#ddd;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#aaa">12.7%</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:4px;margin-top:2px">
+      <div style="width:40px;height:8px;background:#16a085;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#16a085">12.8%</span>
+    </div>
+  </td>
+  <td class="diff-pos">+0.1%</td>
+  <td style="color:#888;font-size:0.8rem">3,361</td>
+</tr><tr>
+  <td style="color:#666">17.9%</td>
+  <td>
+    <div style="display:flex;align-items:center;gap:4px">
+      <div style="width:57px;height:8px;background:#ddd;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#aaa">17.9%</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:4px;margin-top:2px">
+      <div style="width:53px;height:8px;background:#16a085;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#16a085">16.8%</span>
+    </div>
+  </td>
+  <td class="diff-neg">-1.1%</td>
+  <td style="color:#888;font-size:0.8rem">3,536</td>
+</tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+<div class="calib-card" style="border-top:3px solid #8e44ad">
+  <div class="calib-title" style="color:#8e44ad">芝長（芝>2000m）</div>
+  <div class="calib-meta">OOS 2023-2026 / n=11,897頭</div>
+  <div class="calib-summary">
+    <span>平均予測: <strong>8.26%</strong></span>
+    <span>平均実際: <strong style="color:#8e44ad">8.13%</strong></span>
+    <span>誤差: <span class="diff-neg">-0.13%</span></span>
+  </div>
+  <div class="calib-body">
+    <div class="calib-chart">
+      <div style="font-size:0.72rem;color:#aaa;margin-bottom:2px">予測確率 → 実際の勝率（灰:予測 / 色:実際）</div>
+      <svg width="260" height="90" style="display:block">
+  <polyline points="10.0,77.9 50.0,68.7 90.0,68.3 130.0,67.3 170.0,54.4 210.0,43.8 250.0,10.0" fill="none" stroke="#bbb" stroke-width="1.5" stroke-dasharray="4,3"/>
+  <polyline points="10.0,80.0 50.0,69.8 90.0,72.9 130.0,65.3 170.0,52.6 210.0,43.8 250.0,18.0" fill="none" stroke="#8e44ad" stroke-width="2.5"/>
+  <circle cx="10.0" cy="80.0" r="3" fill="#8e44ad"/> <circle cx="50.0" cy="69.8" r="3" fill="#8e44ad"/> <circle cx="90.0" cy="72.9" r="3" fill="#8e44ad"/> <circle cx="130.0" cy="65.3" r="3" fill="#8e44ad"/> <circle cx="170.0" cy="52.6" r="3" fill="#8e44ad"/> <circle cx="210.0" cy="43.8" r="3" fill="#8e44ad"/> <circle cx="250.0" cy="18.0" r="3" fill="#8e44ad"/>
+</svg>
+    </div>
+    <div class="calib-table-wrap">
+      <table class="calib-tbl">
+        <thead><tr><th>予測帯</th><th>予測 / 実際</th><th>差</th><th>n</th></tr></thead>
+        <tbody><tr>
+  <td style="color:#666">5.0%</td>
+  <td>
+    <div style="display:flex;align-items:center;gap:4px">
+      <div style="width:16px;height:8px;background:#ddd;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#aaa">5.0%</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:4px;margin-top:2px">
+      <div style="width:14px;height:8px;background:#8e44ad;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#8e44ad">4.6%</span>
+    </div>
+  </td>
+  <td class="diff-neg">-0.4%</td>
+  <td style="color:#888;font-size:0.8rem">1,925</td>
+</tr><tr>
+  <td style="color:#666">6.9%</td>
+  <td>
+    <div style="display:flex;align-items:center;gap:4px">
+      <div style="width:21px;height:8px;background:#ddd;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#aaa">6.9%</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:4px;margin-top:2px">
+      <div style="width:21px;height:8px;background:#8e44ad;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#8e44ad">6.7%</span>
+    </div>
+  </td>
+  <td class="diff-neg">-0.2%</td>
+  <td style="color:#888;font-size:0.8rem">1,276</td>
+</tr><tr>
+  <td style="color:#666">7.0%</td>
+  <td>
+    <div style="display:flex;align-items:center;gap:4px">
+      <div style="width:22px;height:8px;background:#ddd;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#aaa">7.0%</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:4px;margin-top:2px">
+      <div style="width:19px;height:8px;background:#8e44ad;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#8e44ad">6.0%</span>
+    </div>
+  </td>
+  <td class="diff-neg">-0.9%</td>
+  <td style="color:#888;font-size:0.8rem">1,608</td>
+</tr><tr>
+  <td style="color:#666">7.2%</td>
+  <td>
+    <div style="display:flex;align-items:center;gap:4px">
+      <div style="width:22px;height:8px;background:#ddd;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#aaa">7.2%</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:4px;margin-top:2px">
+      <div style="width:24px;height:8px;background:#8e44ad;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#8e44ad">7.6%</span>
+    </div>
+  </td>
+  <td class="diff-pos">+0.4%</td>
+  <td style="color:#888;font-size:0.8rem">3,280</td>
+</tr><tr>
+  <td style="color:#666">9.7%</td>
+  <td>
+    <div style="display:flex;align-items:center;gap:4px">
+      <div style="width:31px;height:8px;background:#ddd;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#aaa">9.7%</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:4px;margin-top:2px">
+      <div style="width:32px;height:8px;background:#8e44ad;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#8e44ad">10.1%</span>
+    </div>
+  </td>
+  <td class="diff-pos">+0.4%</td>
+  <td style="color:#888;font-size:0.8rem">2,030</td>
+</tr><tr>
+  <td style="color:#666">11.8%</td>
+  <td>
+    <div style="display:flex;align-items:center;gap:4px">
+      <div style="width:37px;height:8px;background:#ddd;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#aaa">11.8%</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:4px;margin-top:2px">
+      <div style="width:37px;height:8px;background:#8e44ad;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#8e44ad">11.8%</span>
+    </div>
+  </td>
+  <td class="diff-neg">-0.0%</td>
+  <td style="color:#888;font-size:0.8rem">1,148</td>
+</tr><tr>
+  <td style="color:#666">18.6%</td>
+  <td>
+    <div style="display:flex;align-items:center;gap:4px">
+      <div style="width:59px;height:8px;background:#ddd;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#aaa">18.6%</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:4px;margin-top:2px">
+      <div style="width:54px;height:8px;background:#8e44ad;border-radius:3px"></div>
+      <span style="font-size:0.82rem;color:#8e44ad">17.0%</span>
+    </div>
+  </td>
+  <td class="diff-neg">-1.6%</td>
+  <td style="color:#888;font-size:0.8rem">630</td>
+</tr></tbody>
+      </table>
+    </div>
+  </div>
+</div></div>
   </div>
 
   <div class="section">
