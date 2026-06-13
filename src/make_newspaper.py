@@ -331,11 +331,8 @@ def patch_jockey_stats(result_df, card_df, data_file):
     return result_df
 
 
-def fetch_live_odds(tgt_date: str) -> dict:
-    """netkeibaのAPIから単勝オッズ取得。
-    Returns: {(venue_code_2char, r_num_int): {umaban_str_02d: odds_float}}
-    """
-    import json
+def _get_race_ids(tgt_date: str) -> list:
+    """netkeibaからレースIDリスト取得（odds/weight/result で共有）"""
     full_date = ('20' + str(tgt_date)) if len(str(tgt_date)) == 6 else str(tgt_date)
     try:
         req = urllib.request.Request(
@@ -343,11 +340,17 @@ def fetch_live_odds(tgt_date: str) -> dict:
             headers={'User-Agent': 'Mozilla/5.0'})
         with urllib.request.urlopen(req, timeout=10) as r:
             html = r.read().decode('euc-jp', errors='replace')
-        race_ids = list(dict.fromkeys(re.findall(r'race_id=(\d{12})', html)))
+        return list(dict.fromkeys(re.findall(r'race_id=(\d{12})', html)))
     except Exception as e:
-        print(f'[WARN] オッズ: レースID取得失敗 {e}')
-        return {}
+        print(f'[WARN] レースID取得失敗 {e}')
+        return []
 
+
+def fetch_live_odds(race_ids: list) -> dict:
+    """netkeibaのAPIから単勝オッズ取得。
+    Returns: {(venue_code_2char, r_num_int): {umaban_str_02d: odds_float}}
+    """
+    import json
     odds_by_race = {}   # {(venue_code, r_num_int): {umaban_02d: odds_float}}
     total_horses = 0
     for race_id in race_ids:
@@ -380,6 +383,109 @@ def fetch_live_odds(tgt_date: str) -> dict:
 
     print(f'オッズ取得: {total_horses}頭 / {len(odds_by_race)}R ({len(race_ids)}R中)')
     return odds_by_race
+
+
+def fetch_horse_weights(race_ids: list) -> dict:
+    """shutuba.htmlから馬体重を取得。
+    Returns: {(venue_code, r_num_int): {umaban_02d: '500(+2)'}}
+    """
+    result = {}
+    n_filled = 0
+    row_pat = re.compile(r'<tr[^>]*class="[^"]*HorseList[^"]*"[^>]*>(.*?)</tr>', re.DOTALL)
+    uma_pat = re.compile(r'class="Umaban\d*[^"]*"[^>]*>\s*(\d+)', re.DOTALL)
+    wt_pat  = re.compile(r'class="[^"]*Weight[^"]*"[^>]*>(.*?)</td>', re.DOTALL)
+    for race_id in race_ids:
+        venue_code = race_id[4:6]
+        r_num_int  = int(race_id[10:12])
+        try:
+            req = urllib.request.Request(
+                f'https://race.netkeiba.com/race/shutuba.html?race_id={race_id}',
+                headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req, timeout=10) as r:
+                html = r.read().decode('euc-jp', errors='replace')
+            race_wt = {}
+            for m in row_pat.finditer(html):
+                row = m.group(1)
+                u_m = uma_pat.search(row)
+                w_m = wt_pat.search(row)
+                if u_m and w_m:
+                    uma_s  = u_m.group(1).zfill(2)
+                    wt_raw = re.sub(r'<[^>]+>', '', w_m.group(1)).strip()
+                    if re.search(r'\d{3}', wt_raw):
+                        race_wt[uma_s] = wt_raw
+            if race_wt:
+                result[(venue_code, r_num_int)] = race_wt
+                n_filled += len(race_wt)
+            time.sleep(0.2)
+        except Exception:
+            continue
+    print(f'馬体重取得: {n_filled}頭 / {len(result)}R')
+    return result
+
+
+def fetch_race_results(race_ids: list) -> dict:
+    """result.htmlからレース結果（着順・払戻金）を取得。未確定レースはスキップ。
+    Returns: {(venue_code, r_num_int): {
+        'order':   {umaban_02d: actual_rank_int},
+        'tansho':  [(umaban_02d, payout_int)],
+        'fukusho': [(umaban_02d, payout_int)],
+    }}
+    """
+    results = {}
+    n_done  = 0
+    row_pat   = re.compile(r'<tr[^>]*class="[^"]*HorseList[^"]*"[^>]*>(.*?)</tr>', re.DOTALL)
+    jyuni_pat = re.compile(r'class="Result_Num"[^>]*>(.*?)</td>', re.DOTALL)
+    uma_pat   = re.compile(r'class="Num Txt_C"[^>]*>(.*?)</td>', re.DOTALL)
+    for race_id in race_ids:
+        venue_code = race_id[4:6]
+        r_num_int  = int(race_id[10:12])
+        try:
+            req = urllib.request.Request(
+                f'https://race.netkeiba.com/race/result.html?race_id={race_id}',
+                headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req, timeout=10) as r:
+                html = r.read().decode('euc-jp', errors='replace')
+            # 確定チェック
+            if 'Result_Num' not in html:
+                continue
+            # 着順 → 馬番 マッピング
+            order = {}
+            for m in row_pat.finditer(html):
+                row = m.group(1)
+                j_m = jyuni_pat.search(row)
+                u_m = uma_pat.search(row)
+                if j_m and u_m:
+                    rank_s = re.sub(r'<[^>]+>', '', j_m.group(1)).strip()
+                    uma_s2 = re.sub(r'<[^>]+>', '', u_m.group(1)).strip()
+                    if rank_s.isdigit() and uma_s2.isdigit():
+                        order[uma_s2.zfill(2)] = int(rank_s)
+            if not order:
+                continue
+            # 払戻: Tansho / Fukusho 行
+            tansho, fukusho = [], []
+            for tr_cls, lst in [('Tansho', tansho), ('Fukusho', fukusho)]:
+                for tr_m in re.finditer(f'<tr class="{tr_cls}"[^>]*>(.*?)</tr>', html, re.DOTALL):
+                    tr_html = tr_m.group(1)
+                    res_m  = re.search(r'class="Result"[^>]*>(.*?)</td>', tr_html, re.DOTALL)
+                    pay_m  = re.search(r'class="Payout"[^>]*>(.*?)</td>', tr_html, re.DOTALL)
+                    if not (res_m and pay_m):
+                        continue
+                    uma_nums = re.findall(r'<span>(\d+)</span>', res_m.group(1))
+                    pay_vals = [int(re.sub(r'[^\d]', '', v))
+                                for v in re.findall(r'(\d[\d,]*円)', pay_m.group(1))
+                                if re.sub(r'[^\d]', '', v)]
+                    for uma_n, pay_v in zip(uma_nums, pay_vals if pay_vals else [None]):
+                        if pay_v:
+                            lst.append((uma_n.zfill(2), pay_v))
+            results[(venue_code, r_num_int)] = {
+                'order': order, 'tansho': tansho, 'fukusho': fukusho}
+            n_done += 1
+            time.sleep(0.2)
+        except Exception:
+            continue
+    if n_done:
+        print(f'レース結果取得: {n_done}R確定')
+    return results
 
 
 def make_newspaper(date_str=None):
@@ -419,8 +525,11 @@ def make_newspaper(date_str=None):
         result['騎手会場_r100_勝率'] = result['騎手コース_r100_勝率']
         print('騎手会場_r100_勝率 ← 騎手コース_r100_勝率 で代替')
 
-    # ── ライブオッズ取得 ──────────────────────────────────────────
-    live_odds = fetch_live_odds(tgt_date)
+    # ── netkeiba レースID取得 → オッズ・体重・結果を一括フェッチ ─────
+    race_ids     = _get_race_ids(tgt_date)
+    live_odds    = fetch_live_odds(race_ids)
+    horse_weights = fetch_horse_weights(race_ids)
+    race_results  = fetch_race_results(race_ids)
 
     # ── カード情報（騎手・オッズ）────────────────────────────────
     # live_oddsはAPIから取得済みの {(venue_code, r_num_int): {umaban_02d: odds_float}}
@@ -642,6 +751,17 @@ def make_newspaper(date_str=None):
   .detail-hint { font-size: 7px; color: #bbb; margin-left: 2px; transition: color .15s; }
   tr.expandable:hover td { background: #fafafa; }
   tr.expandable:hover .detail-hint { color: #777; }
+  /* ── 馬体重チップ ─── */
+  .wt-chip { font-size: 7px; color: #888; font-weight: normal; }
+  /* ── 実着順列 ─── */
+  .td-jyuni { width: 16px; min-width: 16px; max-width: 16px; font-weight: bold; font-size: 9px; text-align: center; }
+  .ar-1 { background: #ffd700 !important; color: #5a3000 !important; }
+  .ar-2 { background: #c0c0c0 !important; color: #333 !important; }
+  .ar-3 { background: #cd7f32 !important; color: #fff !important; }
+  .ar-n { color: #aaa; }
+  /* ── 払戻バナー ─── */
+  .result-banner { background: #1b5e20; color: #fff; padding: 3px 8px;
+                   font-size: 9px; font-weight: bold; }
 
   /* ── レース内側タブ ─────────────────────────────── */
   .race-tab-bar { display: flex; flex-wrap: wrap; gap: 3px; padding: 7px 8px 0;
@@ -761,6 +881,8 @@ def make_newspaper(date_str=None):
         except (ValueError, TypeError):
             _rn_int = 0
         race_live_odds = live_odds.get((_vcode, _rn_int), {})
+        race_wt_map    = horse_weights.get((_vcode, _rn_int), {})
+        race_res       = race_results.get((_vcode, _rn_int))   # None or dict
 
         # 表示特徴量（_isnanは別扱い）
         display_feats = [f for f in feats if not f.endswith('_isnan')]
@@ -832,6 +954,21 @@ def make_newspaper(date_str=None):
             else:
                 buy_td = '<td class="td-none">-</td>'
 
+            # 馬体重
+            wt_str  = race_wt_map.get(uma_s, '')
+            wt_html = f'<span class="wt-chip"> {wt_str}</span>' if wt_str else ''
+
+            # 実際着順（結果確定後）
+            actual_rank = race_res['order'].get(uma_s) if race_res else None
+            if actual_rank is not None:
+                ar_cls = {1: 'ar-1', 2: 'ar-2', 3: 'ar-3'}.get(actual_rank, 'ar-n')
+                jyuni_td = f'<td class="td-jyuni {ar_cls}">{actual_rank}</td>'
+            elif race_res:
+                jyuni_td = '<td class="td-jyuni ar-n">-</td>'
+            else:
+                jyuni_td = ''
+            n_cols = 7 if race_res else 6
+
             # 詳細パネル（特徴量チップ）
             detail_id = f'det-{vk_safe}-{rn_safe}-{hi}'
             chips = []
@@ -857,15 +994,16 @@ def make_newspaper(date_str=None):
 
             rows.append(
                 f'<tr class="{row_cls} expandable" onclick="toggleDetail(\'{detail_id}\')">'
+                f'{jyuni_td}'
                 f'<td class="td-rank">{rank_s}</td>'
                 f'{buy_td}'
-                f'<td class="td-horse">{bango}.{horse}<span class="detail-hint">▾</span></td>'
+                f'<td class="td-horse">{bango}.{horse}{wt_html}<span class="detail-hint">▾</span></td>'
                 f'<td class="td-jky">{jockey}</td>'
                 f'<td class="td-odds">{odds_s}</td>'
                 f'<td class="td-prob">{prob_s}</td>'
                 f'</tr>'
                 f'<tr id="{detail_id}" class="detail-row" style="display:none">'
-                f'<td colspan="6">{detail_html}</td>'
+                f'<td colspan="{n_cols}">{detail_html}</td>'
                 f'</tr>'
             )
 
@@ -874,6 +1012,22 @@ def make_newspaper(date_str=None):
             venue_order.append(venue_key)
 
         acc_report_href = f'accuracy_model_report_20{tgt_date}.html#tab-{seg_key}' if seg_key else '#'
+
+        # 払戻バナー（結果確定後）
+        payout_banner = ''
+        if race_res:
+            parts = []
+            for uma_s2, pay in race_res.get('tansho', []):
+                parts.append(f'単勝 {int(uma_s2)}番 ¥{pay:,}')
+            fk = race_res.get('fukusho', [])
+            if fk:
+                fk_str = ' / '.join(f'{int(u)}番 ¥{p:,}' for u, p in fk)
+                parts.append(f'複勝 {fk_str}')
+            if parts:
+                payout_banner = f'<div class="result-banner">🏆 {"　".join(parts)}</div>'
+
+        # テーブルヘッダー（結果列は結果確定時のみ）
+        result_th = '<th>着</th>' if race_res else ''
         race_groups[venue_key].append((rd['r_num'], rd['race_name'], f'''
 <div class="race-block">
   <div class="race-header" style="border-left-color:{seg_color}">
@@ -885,10 +1039,11 @@ def make_newspaper(date_str=None):
     <span class="n-horses">{len(grp)}頭　特徴{len(display_feats)}個</span>
     <a class="seg-report-link" href="{acc_report_href}" target="_blank">📊 モデル</a>
   </div>
+  {payout_banner}
   <div class="table-wrap">
   <table class="race-table">
     <thead><tr>
-      <th>順位</th><th>買い</th>
+      {result_th}<th>順位</th><th>買い</th>
       <th style="text-align:left">馬名</th>
       <th>騎手</th><th>オッズ</th><th>AI勝率</th>
     </tr></thead>
