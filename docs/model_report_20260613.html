@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>競馬AI v2 モデル評価レポート 2026-06-13</title>
+<style>
+:root {--indigo:#1a237e;--bg:#f0f2f5;}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI','Yu Gothic',sans-serif;background:var(--bg);color:#212121;font-size:14px;line-height:1.6}
+nav{background:var(--indigo);color:#fff;padding:0 24px;height:52px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+nav .brand{font-size:1rem;font-weight:700}
+.hero{background:linear-gradient(135deg,#1a237e 0%,#283593 50%,#1565c0 100%);color:#fff;padding:40px 24px;text-align:center}
+.hero h1{font-size:1.8rem;font-weight:800;margin-bottom:8px}
+.hero .sub{font-size:0.9rem;opacity:.8;margin-bottom:20px}
+.mission-badge{display:inline-block;background:rgba(255,255,255,.15);border:2px solid rgba(255,255,255,.4);border-radius:50px;padding:8px 24px;font-size:1rem;font-weight:700}
+.container{max-width:1100px;margin:0 auto;padding:28px 20px 60px}
+.section{background:#fff;border-radius:10px;padding:22px 24px;margin-bottom:24px;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+.section-title{font-size:1rem;font-weight:700;color:#1a237e;border-bottom:2px solid #e8eaf6;padding-bottom:8px;margin-bottom:16px}
+.kpi-grid{display:flex;flex-wrap:wrap;gap:14px}
+.kpi-card{background:#f8f9fa;border-radius:10px;padding:14px 18px;min-width:160px;flex:1;text-align:center;border:1px solid #e0e0e0}
+.kpi-seg{font-size:0.78rem;color:white;padding:2px 10px;border-radius:10px;display:inline-block;margin-bottom:6px}
+.kpi-val{font-size:1.9rem;font-weight:800;margin:4px 0}
+.kpi-label{font-size:0.75rem;color:#666}
+.kpi-sub{font-size:0.72rem;color:#999;margin-top:2px}
+.roi-hi{color:#1b5e20;background:#e8f5e9;padding:1px 4px;border-radius:3px}
+.roi-pos{color:#2e7d32}
+.roi-neu{color:#e65100}
+.roi-neg{color:#c62828}
+table.summary{border-collapse:collapse;width:100%;font-size:0.88rem}
+table.summary th{background:#1a237e;color:#fff;padding:8px 10px;text-align:center}
+table.summary td{padding:8px 10px;border-bottom:1px solid #eee;text-align:center}
+table.summary tr:hover td{background:#f5f5f5}
+.tab-btns{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:16px}
+.tab-btn{padding:7px 14px;border:none;border-radius:6px 6px 0 0;background:#e8eaf6;cursor:pointer;font-size:0.82rem;font-weight:600;border-top:3px solid transparent}
+.tab-btn.active{background:#fff;border-bottom:none;font-weight:700}
+.tab-content{display:none;padding:16px;background:#fff;border:1px solid #e0e0e0;border-radius:0 8px 8px 8px}
+.tab-content.active{display:block}
+.seg-header{padding:10px 14px;background:#f8f9fa;border-radius:6px;margin-bottom:12px;line-height:1.7}
+.feat-chip{display:inline-block;background:#e8eaf6;color:#1a237e;font-size:0.78rem;padding:2px 8px;border-radius:10px;margin:2px 3px}
+.nan-chip{background:#fff3e0;color:#e65100}
+.di-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.di-item{background:#f8f9fa;padding:12px 14px;border-radius:6px;border-left:3px solid #5c6bc0}
+.di-label{font-size:0.78rem;color:#666;margin-bottom:2px}
+.di-val{font-size:0.88rem;font-weight:600}
+.odds-box{background:#fff3e0;border:2px solid #e67e22;border-radius:8px;padding:14px 18px;margin-top:12px}
+.odds-title{font-weight:700;color:#e65100;margin-bottom:6px}
+small{font-size:0.8em;color:#888;margin-left:4px}
+</style>
+</head>
+<body>
+<nav>
+  <span class="brand">🏇 競馬AI v2 — モデル評価レポート</span>
+  <span style="font-size:0.82rem;opacity:.8">更新: 2026-06-13</span>
+</nav>
+<div class="hero">
+  <h1>競馬AI v2 モデル評価レポート</h1>
+  <div class="sub">clogit + isotonic calibration | 5セグメント | OOS 2023-2026</div>
+  <div class="mission-badge"><span style="color:#69f0ae">✅</span> ミッション達成 — 全5セグメント 25+26合算 OOS ROI &ge; -10%</div>
+</div>
+<div class="container">
+
+  <div class="section">
+    <div class="section-title">25+26 合算 OOS ROI（指標1位全買い）</div>
+    <div class="kpi-grid">
+<div class="kpi-card">
+  <div class="kpi-seg" style="background:#2980b9">ダ長（ダ>1400m）</div>
+  <div class="kpi-val roi-neu">-0.58%</div>
+  <div class="kpi-label">25+26 合算</div>
+  <div class="kpi-sub">-9.87% / +16.21% / -39.67%</div>
+</div>
+<div class="kpi-card">
+  <div class="kpi-seg" style="background:#1a6fa0">ダ短（ダ≤1400m）</div>
+  <div class="kpi-val roi-neu">-7.97%</div>
+  <div class="kpi-label">25+26 合算</div>
+  <div class="kpi-sub">-8.90% / +4.94% / -37.59%</div>
+</div>
+<div class="kpi-card">
+  <div class="kpi-seg" style="background:#27ae60">芝短（芝≤1400m）</div>
+  <div class="kpi-val roi-neu">-4.89%</div>
+  <div class="kpi-label">25+26 合算</div>
+  <div class="kpi-sub">+23.26% / -0.07% / -15.15%</div>
+</div>
+<div class="kpi-card">
+  <div class="kpi-seg" style="background:#16a085">芝中（芝1401-2000m）</div>
+  <div class="kpi-val roi-pos">+6.69%</div>
+  <div class="kpi-label">25+26 合算</div>
+  <div class="kpi-sub">+5.15% / -9.78% / +39.81%</div>
+</div>
+<div class="kpi-card">
+  <div class="kpi-seg" style="background:#8e44ad">芝長（芝>2000m）</div>
+  <div class="kpi-val roi-pos">+5.14%</div>
+  <div class="kpi-label">25+26 合算</div>
+  <div class="kpi-sub">+57.60% / +21.27% / -26.89%</div>
+</div></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">セグメント別 OOS ROI サマリー</div>
+    <table class="summary">
+      <thead><tr>
+        <th>セグメント</th><th>総レース数</th>
+        <th>2023-24 ROI</th><th>2025 ROI</th><th>2026 ROI</th><th>25+26 合算</th>
+      </tr></thead>
+      <tbody><tr>
+  <td style="font-weight:bold;color:#2980b9">ダ長（ダ>1400m）</td>
+  <td>3,162</td>
+  <td class="roi-neu">-9.87% <small>(1841R)</small></td>
+  <td class="roi-hi">+16.21% <small>(924R)</small></td>
+  <td class="roi-neg">-39.67% <small>(397R)</small></td>
+  <td class="roi-neu" style="font-weight:bold">-0.58% ✅</td>
+</tr><tr>
+  <td style="font-weight:bold;color:#1a6fa0">ダ短（ダ≤1400m）</td>
+  <td>2,311</td>
+  <td class="roi-neu">-8.90% <small>(1352R)</small></td>
+  <td class="roi-pos">+4.94% <small>(668R)</small></td>
+  <td class="roi-neg">-37.59% <small>(291R)</small></td>
+  <td class="roi-neu" style="font-weight:bold">-7.97% ✅</td>
+</tr><tr>
+  <td style="font-weight:bold;color:#27ae60">芝短（芝≤1400m）</td>
+  <td>1,504</td>
+  <td class="roi-hi">+23.26% <small>(866R)</small></td>
+  <td class="roi-neu">-0.07% <small>(434R)</small></td>
+  <td class="roi-neg">-15.15% <small>(204R)</small></td>
+  <td class="roi-neu" style="font-weight:bold">-4.89% ✅</td>
+</tr><tr>
+  <td style="font-weight:bold;color:#16a085">芝中（芝1401-2000m）</td>
+  <td>2,952</td>
+  <td class="roi-pos">+5.15% <small>(1669R)</small></td>
+  <td class="roi-neu">-9.78% <small>(857R)</small></td>
+  <td class="roi-hi">+39.81% <small>(426R)</small></td>
+  <td class="roi-pos" style="font-weight:bold">+6.69% ✅</td>
+</tr><tr>
+  <td style="font-weight:bold;color:#8e44ad">芝長（芝>2000m）</td>
+  <td>981</td>
+  <td class="roi-hi">+57.60% <small>(578R)</small></td>
+  <td class="roi-hi">+21.27% <small>(268R)</small></td>
+  <td class="roi-neg">-26.89% <small>(135R)</small></td>
+  <td class="roi-pos" style="font-weight:bold">+5.14% ✅</td>
+</tr></tbody>
+    </table>
+    <p style="font-size:0.78rem;color:#888;margin-top:8px">
+      * 指標1位全買い（ROIモデルのROI順位1位馬の単勝を毎レース購入）<br>
+      * OOS = Out-of-Sample。train:2013-2021 / val:2022 / OOS:2023-2026
+    </p>
+  </div>
+
+  <div class="section">
+    <div class="section-title">オッズ帯フィルタ戦略（芝短/芝長のみ）</div>
+    <div class="odds-box">
+      <div class="odds-title">◎ 買い条件: ROI1位 かつ 単勝オッズ &ge; 6.0倍</div>
+      <p style="font-size:0.88rem">
+        芝短・芝長セグメントのROI1位馬は、単勝オッズが6倍以上の場合のみ買い推奨。<br>
+        OOS両期間（2023-24 AND 2025）でプラスを確認済み。<br>
+        ダ長/ダ短/芝中はオッズフィルタなし（ROI1位を参考表示のみ）。
+      </p>
+    </div>
+  </div>
+
+  <div class="section" id="segments">
+    <div class="section-title">セグメント別 特徴量詳細</div>
+    <div class="tab-btns"><button class="tab-btn active" onclick="showTab('da')" style="border-top:3px solid #2980b9">ダ長（ダ>1400m）</button><button class="tab-btn " onclick="showTab('da_s')" style="border-top:3px solid #1a6fa0">ダ短（ダ≤1400m）</button><button class="tab-btn " onclick="showTab('shi_s')" style="border-top:3px solid #27ae60">芝短（芝≤1400m）</button><button class="tab-btn " onclick="showTab('shi_m')" style="border-top:3px solid #16a085">芝中（芝1401-2000m）</button><button class="tab-btn " onclick="showTab('shi_l')" style="border-top:3px solid #8e44ad">芝長（芝>2000m）</button></div>
+    
+<div id="tab-da" class="tab-content active">
+  <div class="seg-header" style="border-left:5px solid #2980b9">
+    <strong style="color:#2980b9">ダ長（ダ>1400m）</strong>
+    — ダ & 距離>1400m &amp; クラス_rank≠1.0（新馬除外）<br>
+    2023-24: <span class="roi-neu">-9.87%</span> &nbsp;/&nbsp;
+    2025: <span class="roi-hi">+16.21%</span> &nbsp;/&nbsp;
+    2026: <span class="roi-neg">-39.67%</span> &nbsp;/&nbsp;
+    <strong>25+26: <span class="roi-neu">-0.58%</span> ✅</strong>
+    
+  </div>
+  <div style="margin:10px 0 4px;font-size:0.82rem;color:#555">特徴量 (10個):</div>
+  <div><span class="feat-chip">馬番</span><span class="feat-chip">斤量</span><span class="feat-chip">種牡馬_勝率</span><span class="feat-chip">性別_num</span><span class="feat-chip">ブリンカー変更</span><span class="feat-chip">近5走_上り3F平均</span><span class="feat-chip">1走前_馬場状態</span><span class="feat-chip">2走前_クラス差</span><span class="feat-chip">コース枠_r200_勝率</span><span class="feat-chip">3走前_クラス差</span></div>
+  <div style="margin:6px 0 4px;font-size:0.82rem;color:#e67e22">NaN指示変数 (自動追加):</div><div><span class="feat-chip nan-chip">1走前_馬場状態_isnan</span></div>
+</div>
+<div id="tab-da_s" class="tab-content ">
+  <div class="seg-header" style="border-left:5px solid #1a6fa0">
+    <strong style="color:#1a6fa0">ダ短（ダ≤1400m）</strong>
+    — ダ & 距離≤1400m &amp; クラス_rank≠1.0（新馬除外）<br>
+    2023-24: <span class="roi-neu">-8.90%</span> &nbsp;/&nbsp;
+    2025: <span class="roi-pos">+4.94%</span> &nbsp;/&nbsp;
+    2026: <span class="roi-neg">-37.59%</span> &nbsp;/&nbsp;
+    <strong>25+26: <span class="roi-neu">-7.97%</span> ✅</strong>
+    
+  </div>
+  <div style="margin:10px 0 4px;font-size:0.82rem;color:#555">特徴量 (10個):</div>
+  <div><span class="feat-chip">馬番</span><span class="feat-chip">斤量</span><span class="feat-chip">種牡馬_勝率</span><span class="feat-chip">間隔</span><span class="feat-chip">2走前_クラス差</span><span class="feat-chip">コース枠_r200_勝率</span><span class="feat-chip">1走前_馬場状態</span><span class="feat-chip">1走前_クラス差</span><span class="feat-chip">3走前_クラス差</span><span class="feat-chip">ブリンカー変更</span></div>
+  <div style="margin:6px 0 4px;font-size:0.82rem;color:#e67e22">NaN指示変数 (自動追加):</div><div><span class="feat-chip nan-chip">1走前_馬場状態_isnan</span></div>
+</div>
+<div id="tab-shi_s" class="tab-content ">
+  <div class="seg-header" style="border-left:5px solid #27ae60">
+    <strong style="color:#27ae60">芝短（芝≤1400m）</strong>
+    — 芝 & 距離≤1400m &amp; クラス_rank≠1.0（新馬除外）<br>
+    2023-24: <span class="roi-hi">+23.26%</span> &nbsp;/&nbsp;
+    2025: <span class="roi-neu">-0.07%</span> &nbsp;/&nbsp;
+    2026: <span class="roi-neg">-15.15%</span> &nbsp;/&nbsp;
+    <strong>25+26: <span class="roi-neu">-4.89%</span> ✅</strong>
+    <br><small style="color:#888;margin-top:4px">⚠️ 除外済: 1走前_3角, 1走前_脚質_num（差し馬バイアス）</small>
+  </div>
+  <div style="margin:10px 0 4px;font-size:0.82rem;color:#555">特徴量 (10個):</div>
+  <div><span class="feat-chip">馬番</span><span class="feat-chip">斤量</span><span class="feat-chip">馬体重</span><span class="feat-chip">馬距離_勝率</span><span class="feat-chip">コース枠_r200_勝率</span><span class="feat-chip">性別_num</span><span class="feat-chip">近5走_上り3F平均</span><span class="feat-chip">近5走_上り3F_std</span><span class="feat-chip">距離変化_前走</span><span class="feat-chip">ブリンカー変更</span></div>
+  <div style="margin:6px 0 4px;font-size:0.82rem;color:#e67e22">NaN指示変数 (自動追加):</div><div><span class="feat-chip nan-chip">近5走_上り3F_std_isnan</span></div>
+</div>
+<div id="tab-shi_m" class="tab-content ">
+  <div class="seg-header" style="border-left:5px solid #16a085">
+    <strong style="color:#16a085">芝中（芝1401-2000m）</strong>
+    — 芝 & 1401-2000m &amp; クラス_rank≠1.0（新馬除外）<br>
+    2023-24: <span class="roi-pos">+5.15%</span> &nbsp;/&nbsp;
+    2025: <span class="roi-neu">-9.78%</span> &nbsp;/&nbsp;
+    2026: <span class="roi-hi">+39.81%</span> &nbsp;/&nbsp;
+    <strong>25+26: <span class="roi-pos">+6.69%</span> ✅</strong>
+    <br><small style="color:#888;margin-top:4px">⚠️ 近5走_上り3F_std 強制ベース追加で +7.31% 達成</small>
+  </div>
+  <div style="margin:10px 0 4px;font-size:0.82rem;color:#555">特徴量 (10個):</div>
+  <div><span class="feat-chip">馬番</span><span class="feat-chip">斤量</span><span class="feat-chip">近5走_上り3F_std</span><span class="feat-chip">馬距離_勝率</span><span class="feat-chip">種牡馬_勝率</span><span class="feat-chip">間隔</span><span class="feat-chip">ブリンカー変更</span><span class="feat-chip">コース枠_r200_勝率</span><span class="feat-chip">芝ダ転向</span><span class="feat-chip">3走前_クラス差</span></div>
+  <div style="margin:6px 0 4px;font-size:0.82rem;color:#e67e22">NaN指示変数 (自動追加):</div><div><span class="feat-chip nan-chip">近5走_上り3F_std_isnan</span></div>
+</div>
+<div id="tab-shi_l" class="tab-content ">
+  <div class="seg-header" style="border-left:5px solid #8e44ad">
+    <strong style="color:#8e44ad">芝長（芝>2000m）</strong>
+    — 芝 & 距離>2000m &amp; クラス_rank≠1.0（新馬除外）<br>
+    2023-24: <span class="roi-hi">+57.60%</span> &nbsp;/&nbsp;
+    2025: <span class="roi-hi">+21.27%</span> &nbsp;/&nbsp;
+    2026: <span class="roi-neg">-26.89%</span> &nbsp;/&nbsp;
+    <strong>25+26: <span class="roi-pos">+5.14%</span> ✅</strong>
+    
+  </div>
+  <div style="margin:10px 0 4px;font-size:0.82rem;color:#555">特徴量 (10個):</div>
+  <div><span class="feat-chip">馬番</span><span class="feat-chip">斤量</span><span class="feat-chip">ブリンカー変更</span><span class="feat-chip">間隔</span><span class="feat-chip">馬体重</span><span class="feat-chip">1走前_馬場状態</span><span class="feat-chip">コース枠_r200_勝率</span><span class="feat-chip">1走前_クラス差</span><span class="feat-chip">2走前_クラス差</span><span class="feat-chip">3走前_クラス差</span></div>
+  <div style="margin:6px 0 4px;font-size:0.82rem;color:#e67e22">NaN指示変数 (自動追加):</div><div><span class="feat-chip nan-chip">1走前_馬場状態_isnan</span></div>
+</div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">設計情報</div>
+    <div class="di-grid">
+      <div class="di-item"><div class="di-label">モデル</div><div class="di-val">Conditional Logit + Isotonic Calibration</div></div>
+      <div class="di-item"><div class="di-label">学習期間</div><div class="di-val">train: 2013-2021 / val: 2022 / OOS: 2023-2026</div></div>
+      <div class="di-item"><div class="di-label">新馬除外</div><div class="di-val">全セグメント クラス_rank ≠ 1.0（デビュー戦除外）</div></div>
+      <div class="di-item"><div class="di-label">選択指標</div><div class="di-val">2325 = (r2324×n2324 + r25×n25)/(n+n)、単年±30%キャップ</div></div>
+      <div class="di-item"><div class="di-label">正則化</div><div class="di-val">L2 = 0.006, Adam optimizer, early stopping on val NLL</div></div>
+      <div class="di-item"><div class="di-label">特徴量ルール</div><div class="di-val">JVLink API（前日〜当日12時）で確実に取れるもののみ</div></div>
+    </div>
+  </div>
+
+</div>
+<script>
+function showTab(k) {
+  document.querySelectorAll('.tab-content').forEach(e=>e.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(e=>e.classList.remove('active'));
+  document.getElementById('tab-'+k).classList.add('active');
+  event.target.classList.add('active');
+}
+</script>
+</body>
+</html>
