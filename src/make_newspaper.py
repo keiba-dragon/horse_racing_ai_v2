@@ -217,43 +217,64 @@ def make_newspaper(date_str=None):
 
     # ── CSS ──────────────────────────────────────────────────────
     css = """<style>
-  @page { size: A3 landscape; margin: 5mm; }
-  * { box-sizing: border-box; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: 'Yu Gothic', 'Hiragino Sans', 'Meiryo', sans-serif;
-         font-size: 11px; background: #eef1f5; margin: 0; padding: 8px; color: #222; }
+         font-size: 11px; background: #eef1f5; color: #222; }
 
-  h1.page-title { font-size: 18px; margin: 0 0 10px; padding: 10px 18px;
-                  background: #1a252f; color: white; border-radius: 8px;
-                  display: flex; align-items: center; gap: 10px; }
-  h1.page-title .subtitle { font-size: 11px; color: #aaa; font-weight: normal; }
+  /* ── トップバー ─────────────────────────────────── */
+  .topbar { background: #1a237e; color: #fff; padding: 6px 16px;
+            display: flex; gap: 18px; align-items: center; font-size: 12px; }
+  .topbar a { color: #90caf9; text-decoration: none; }
+  .topbar a:hover { text-decoration: underline; }
 
-  /* ── 買い目セクション ─────────────────────────── */
+  /* ── ページタイトル ──────────────────────────────── */
+  .page-title { font-size: 17px; font-weight: bold; padding: 10px 16px;
+                background: #1a252f; color: white;
+                display: flex; align-items: center; gap: 10px; }
+  .page-title .subtitle { font-size: 10px; color: #aaa; font-weight: normal; }
+
+  /* ── タブバー ───────────────────────────────────── */
+  .tab-bar { display: flex; background: #fff; border-bottom: 2px solid #c8d0d8;
+             position: sticky; top: 0; z-index: 50;
+             box-shadow: 0 2px 6px rgba(0,0,0,0.08); overflow-x: auto; }
+  .tab-btn { padding: 10px 22px; border: none; background: none; cursor: pointer;
+             font-size: 13px; font-weight: 600; color: #666; white-space: nowrap;
+             border-bottom: 3px solid transparent; margin-bottom: -2px; }
+  .tab-btn:hover { color: #1a237e; background: #f0f4ff; }
+  .tab-btn.active { color: #1a237e; border-bottom-color: #1a237e; background: #f0f4ff; }
+  .tab-btn .cnt { font-size: 10px; color: #aaa; margin-left: 4px; }
+  .tab-btn.active .cnt { color: #5c6bc0; }
+
+  /* ── タブコンテンツ ──────────────────────────────── */
+  .tab-pane { display: none; padding: 12px 12px 40px; }
+  .tab-pane.active { display: block; }
+
+  /* ── 買い目セクション ────────────────────────────── */
   .buy-section { background: white; border-radius: 10px; padding: 14px 18px;
-                 margin-bottom: 14px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+                 margin-bottom: 14px; box-shadow: 0 2px 6px rgba(0,0,0,0.08); }
   .section-title { font-size: 14px; font-weight: bold; margin: 0 0 10px;
                    padding-bottom: 5px; border-bottom: 2px solid currentColor; }
-  .section-title.buy  { color: #c0392b; border-color: #c0392b; }
-  .section-title.watch { color: #e67e22; border-color: #e67e22; margin-top: 14px; }
+  .section-title.buy   { color: #c0392b; }
+  .section-title.watch { color: #e67e22; margin-top: 14px; }
   .buy-grid { display: flex; flex-wrap: wrap; gap: 10px; }
-  .buy-card { border-radius: 10px; padding: 10px 14px; min-width: 170px;
-              position: relative; }
-  .buy-card.confirmed { background: #fde8e8; border: 2px solid #c0392b; }
+  .buy-card { border-radius: 10px; padding: 10px 14px; min-width: 170px; }
+  .buy-card.confirmed  { background: #fde8e8; border: 2px solid #c0392b; }
   .buy-card.watch-card { background: #fef9e7; border: 2px solid #e67e22; }
-  .card-race { font-size: 9px; color: #777; margin-bottom: 3px; }
+  .card-race  { font-size: 9px; color: #777; margin-bottom: 3px; }
   .card-horse { font-size: 15px; font-weight: bold; color: #1a252f; margin-bottom: 2px; }
-  .card-meta { font-size: 9px; color: #666; }
-  .badge-buy { display: inline-block; background: #c0392b; color: white;
-               font-size: 10px; font-weight: bold; padding: 2px 9px;
-               border-radius: 10px; margin-top: 5px; }
+  .card-meta  { font-size: 9px; color: #666; }
+  .badge-buy   { display: inline-block; background: #c0392b; color: white;
+                 font-size: 10px; font-weight: bold; padding: 2px 9px;
+                 border-radius: 10px; margin-top: 5px; }
   .badge-watch { display: inline-block; background: #e67e22; color: white;
                  font-size: 9px; padding: 2px 9px; border-radius: 10px; margin-top: 5px; }
   .seg-chip { color: white; font-size: 8px; padding: 1px 6px;
               border-radius: 4px; vertical-align: middle; }
   .no-signal { color: #aaa; font-style: italic; font-size: 11px; }
 
-  /* ── レースブロック ───────────────────────────── */
+  /* ── レースブロック ──────────────────────────────── */
   .race-block { background: white; border-radius: 8px; margin-bottom: 10px;
-                box-shadow: 0 1px 4px rgba(0,0,0,0.09); overflow: hidden; }
+                box-shadow: 0 1px 4px rgba(0,0,0,0.08); overflow: hidden; }
   .race-header { display: flex; align-items: center; gap: 8px; padding: 8px 14px;
                  background: #f7f9fb; border-left: 6px solid #888; flex-wrap: wrap; }
   .race-venue { font-size: 15px; font-weight: bold; color: #222; }
@@ -280,28 +301,22 @@ def make_newspaper(date_str=None):
                         white-space: nowrap; font-size: 9px; font-weight: bold; }
   table.race-table td { padding: 3px 5px; border: 1px solid #e0e0e0;
                         text-align: center; white-space: nowrap; }
-
-  /* 行ハイライト */
-  .row-buy { outline: 2px solid #c0392b; outline-offset: -2px; }
-  .row-buy td { background: #fde8e8 !important; }
+  .row-buy td { background: #fde8e8 !important; outline: 2px solid #c0392b; }
   .row-r1 td  { background: #fef5f5 !important; }
   .row-r2 td  { background: #fef9ee !important; }
   .row-r3 td  { background: #f3faf5 !important; }
 
-  /* 特定セル */
-  .td-rank  { font-weight: bold; min-width: 32px; }
+  .td-rank  { font-weight: bold; min-width: 28px; }
   .td-horse { text-align: left !important; font-weight: bold; min-width: 95px; font-size: 11px; }
   .td-jky   { font-size: 9px; min-width: 38px; }
   .td-odds  { min-width: 38px; }
   .td-prob  { min-width: 42px; color: #16a085; font-weight: bold; }
-  .td-buy   { background: #c0392b !important; color: white !important;
-               font-weight: bold; min-width: 32px; }
-  .td-watch { background: #e67e22 !important; color: white !important; min-width: 32px; }
-  .td-nan   { background: #ffe0e0 !important; color: #c0392b;
-               font-weight: bold; font-size: 8px; }
+  .td-buy   { background: #c0392b !important; color: white !important; font-weight: bold; min-width: 28px; }
+  .td-watch { background: #e67e22 !important; color: white !important; min-width: 28px; }
+  .td-nan   { background: #ffe0e0 !important; color: #c0392b; font-weight: bold; font-size: 8px; }
   .td-none  { color: #ccc; }
 
-  .footer { font-size: 8px; color: #aaa; text-align: right; margin-top: 10px; }
+  .footer { font-size: 8px; color: #aaa; text-align: right; padding: 8px 12px 20px; }
 </style>"""
 
     # ═══════════════════════════════════════════════════════════
@@ -367,7 +382,9 @@ def make_newspaper(date_str=None):
     # ═══════════════════════════════════════════════════════════
     # Section 2: レース別詳細（ヒートマップ + NaN一覧）
     # ═══════════════════════════════════════════════════════════
-    race_blocks = []
+    from collections import defaultdict
+    race_groups = defaultdict(list)   # venue_key → [html, ...]
+    venue_order = []                  # 登場順の会場キー
 
     for rd in race_data:
         grp     = rd['grp']
@@ -484,7 +501,11 @@ def make_newspaper(date_str=None):
                 f'</tr>'
             )
 
-        race_blocks.append(f'''
+        venue_key = rd['kaikai']
+        if venue_key not in venue_order:
+            venue_order.append(venue_key)
+
+        race_groups[venue_key].append(f'''
 <div class="race-block">
   <div class="race-header" style="border-left-color:{seg_color}">
     <span class="race-venue">{venue_s}</span>
@@ -498,7 +519,7 @@ def make_newspaper(date_str=None):
   <div class="table-wrap">
   <table class="race-table">
     <thead><tr>
-      <th>ROI<br>順位</th><th>買い</th>
+      <th>順位</th><th>買い</th>
       <th style="text-align:left">馬名</th>
       <th>騎手</th><th>オッズ</th><th>勝率</th>
       {hdr}
@@ -509,34 +530,56 @@ def make_newspaper(date_str=None):
 </div>''')
 
     # ═══════════════════════════════════════════════════════════
-    # HTML組立
+    # HTML組立（タブ構成）
     # ═══════════════════════════════════════════════════════════
+
+    # タブボタン生成
+    n_buy = len(buy_cards)
+    tab_buttons = f'<button class="tab-btn active" onclick="switchTab(\'buy\', this)">◎ 買い目 <span class="cnt">({n_buy}件)</span></button>'
+    tab_panes   = f'<div id="pane-buy" class="tab-pane active">{buy_html}</div>'
+
+    for vk in venue_order:
+        blocks = race_groups[vk]
+        venue_full = next((v for k, v in V_FULL.items() if k in vk), vk[:3])
+        tab_id = f'v-{vk.replace(" ", "_")}'
+        tab_buttons += f'<button class="tab-btn" onclick="switchTab(\'{tab_id}\', this)">{venue_full} <span class="cnt">({len(blocks)}R)</span></button>'
+        tab_panes   += f'<div id="pane-{tab_id}" class="tab-pane">{"".join(blocks)}</div>'
+
     html = f"""<!DOCTYPE html>
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>競馬AI新聞 {date_disp}</title>
   {css}
 </head>
 <body>
-  <div style="background:#1a237e;color:#fff;padding:6px 20px;font-size:0.82rem;display:flex;gap:20px;align-items:center">
-    <span>🏇 競馬AI v2</span>
-    <a href="accuracy_model_report_20260613.html" style="color:#90caf9;text-decoration:none">📊 的中率モデルレポート</a>
-    <a href="model_report_20260613.html" style="color:#a5d6a7;text-decoration:none">📈 ROIモデルレポート</a>
+  <div class="topbar">
+    <span style="font-weight:700">🏇 競馬AI v2</span>
+    <a href="accuracy_model_report_20260613.html">📊 的中率モデル</a>
+    <a href="model_report_20260613.html">📈 ROIモデル</a>
   </div>
-  <h1 class="page-title">
+  <div class="page-title">
     競馬AI 予想新聞　{date_disp}
     <span class="subtitle">{len(race_data)}レース / {len(result)}頭　|　セル色=レース内パーセンタイル（青=低・橙=高）</span>
-  </h1>
+  </div>
 
-  {buy_html}
+  <div class="tab-bar">{tab_buttons}</div>
 
-  {"".join(race_blocks)}
+  {tab_panes}
 
   <div class="footer">
-    make_newspaper.py v2 | 的中率最大化モデル (accuracy_model.pkl) | clogit + isotonic calibration
-    | 芝短/芝長のみ オッズ帯フィルタ(≥6倍) 適用
+    的中率最大化モデル (accuracy_model.pkl) | clogit + isotonic calibration | 芝短/芝長 オッズ帯フィルタ(≥6倍)
   </div>
+
+<script>
+function switchTab(id, btn) {{
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('pane-' + id).classList.add('active');
+  btn.classList.add('active');
+}}
+</script>
 </body>
 </html>"""
 
