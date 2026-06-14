@@ -507,6 +507,16 @@ def predict_date(base_dir, target_date_num, card_df=None):
             for _a in _clogit_pkg['artifacts'].values():
                 _need.update(_a['feat_cols'])
             _need.add('前走日付')  # 休養日数計算用
+        # accuracy_model の特徴量も読み込む
+        _acc_model_path2 = os.path.join(base_dir, 'models', 'accuracy_model.pkl')
+        if os.path.exists(_acc_model_path2):
+            try:
+                with open(_acc_model_path2, 'rb') as _af2:
+                    _am2 = pickle.load(_af2)
+                for _a2 in _am2.values():
+                    _need.update(_a2.get('feat_cols', []))
+            except Exception:
+                pass
         try:
             import pyarrow.parquet as _pq_mod
             _avail = set(_pq_mod.read_schema(feat_pq).names)
@@ -541,7 +551,10 @@ def predict_date(base_dir, target_date_num, card_df=None):
             print("エラー: parquetが見つかりません")
             return None
         # 各馬の当日より前の最新行を取得
+        # 着順_num=0（競走中止/取消/失格）はタイム指数が異常値になるため除外
         df_hist = df_all[df_all['日付_num'] < target_date_num]
+        _atch = pd.to_numeric(df_hist.get('着順_num', pd.Series(dtype=float)), errors='coerce')
+        df_hist = df_hist[(_atch > 0) | _atch.isna()].copy()
         df_latest = (df_hist.sort_values('日付_num')
                      .groupby('馬名S', sort=False).last().reset_index())
         # N走前シフト補正: df_latestの最新行自体が「前走」になるため
@@ -666,7 +679,18 @@ def predict_date(base_dir, target_date_num, card_df=None):
         if _clogit_pkg is not None:
             for _a in _clogit_pkg['artifacts'].values():
                 _clogit_feats_fb.update(_a['feat_cols'])
-        all_feats_now = list(set((sub_features or []) + (cur_features or []) + list(_clogit_feats_fb)))
+        # accuracy_model の特徴量も pq_cols に含める
+        _acc_feats_fb = set()
+        _acc_model_path = os.path.join(base_dir, 'models', 'accuracy_model.pkl')
+        if os.path.exists(_acc_model_path):
+            try:
+                with open(_acc_model_path, 'rb') as _af:
+                    _am_tmp = pickle.load(_af)
+                for _a in _am_tmp.values():
+                    _acc_feats_fb.update(_a.get('feat_cols', []))
+            except Exception:
+                pass
+        all_feats_now = list(set((sub_features or []) + (cur_features or []) + list(_clogit_feats_fb) + list(_acc_feats_fb)))
         pq_cols = (['馬名S', '日付', '距離', '前走日付'] +
                    [c for c in df_latest.columns
                     if c not in ('馬名S', '日付', '距離', '前走日付') and c in all_feats_now])

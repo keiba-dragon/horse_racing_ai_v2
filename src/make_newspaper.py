@@ -525,6 +525,25 @@ def make_newspaper(date_str=None):
     card_df  = cache.get('card_df', pd.DataFrame())
     tgt_date = cache.get('target_date', '??')
 
+    # タイム指数の異常値を修正（着順_num=0の行由来: 走破タイム=0 → 偏差値500超え）
+    _ti_cols = [c for c in result.columns if 'タイム指数' in c and 'slope' not in c and '加速度' not in c]
+    for _c in _ti_cols:
+        _s = pd.to_numeric(result[_c], errors='coerce')
+        result[_c] = _s.where(_s.between(0, 130), other=np.nan)
+
+    # 馬場状態の異常値を修正（JVLinkコード10/50/90等 + 截断文字列'稍'/'不' が混入）
+    # _BABA_NUM_MAP: 10=良(芝外), 50=良(芝内), 70=重(芝内), 80=不良(芝内), 90=不明→良 etc.
+    _ext_baba_str  = {'良': 0, '稍重': 1, '稍': 1, '重': 2, '不良': 3, '不': 3}
+    _ext_baba_num  = {0:0, 1:0, 2:1, 3:2, 4:3, 5:0, 6:1, 7:2, 8:3, 9:0,
+                      10:0, 20:1, 30:2, 40:3, 50:0, 60:1, 70:2, 80:3, 90:0}
+    for _c in [c for c in result.columns if '馬場状態' in c and '_isnan' not in c]:
+        _raw = result[_c]
+        _via_str = _raw.map(_ext_baba_str)
+        _via_num = pd.to_numeric(_raw, errors='coerce').round().astype('Int64').map(_ext_baba_num)
+        _merged = _via_str.combine_first(_via_num)
+        _s = pd.to_numeric(_merged, errors='coerce')
+        result[_c] = _s.where(_s.between(0, 3), other=np.nan)
+
     # ── モデル読み込み（的中率最大化モデル）────────────────────────
     model_path = os.path.join(BASE_DIR, 'models', 'accuracy_model.pkl')
     acc_model  = pickle.load(open(model_path, 'rb'))
