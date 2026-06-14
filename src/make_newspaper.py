@@ -651,11 +651,20 @@ def make_newspaper(date_str=None):
                 rows.append(fv)
             X = np.array(rows, dtype=float)
             try:
-                scores = scaler.transform(X) @ coef
+                X_sc = scaler.transform(X)
+                scores = X_sc @ coef
+                contribs_arr = X_sc * coef  # shape: (n_horses, n_feats)
             except Exception:
+                X_sc = np.zeros_like(X)
                 scores = np.zeros(len(grp))
+                contribs_arr = np.zeros_like(X)
             grp = grp.copy()
             grp['_acc_score'] = scores
+            grp['_contrib_dict'] = pd.array(
+                [{feat_cols[fi]: float(contribs_arr[ri, fi]) for fi in range(len(feat_cols))}
+                 for ri in range(len(grp))],
+                dtype=object
+            )
             grp['_sort_rank'] = grp['_acc_score'].rank(ascending=False, method='first')
             # accuracy_model の isotonic calibration で確率を計算
             _e = np.exp(scores - scores.max())
@@ -667,9 +676,10 @@ def make_newspaper(date_str=None):
                 _p_calib = _p_raw
             grp['_acc_prob'] = _p_calib
         else:
-            grp['_acc_score'] = np.nan
-            grp['_sort_rank'] = pd.Series(np.nan, index=grp.index)
-            grp['_acc_prob']  = np.nan
+            grp['_acc_score']    = np.nan
+            grp['_sort_rank']    = pd.Series(np.nan, index=grp.index)
+            grp['_acc_prob']     = np.nan
+            grp['_contrib_dict'] = pd.array([{} for _ in range(len(grp))], dtype=object)
         # 表示は馬番順（AI順位は列に保持）
         bango_col = 'dc_馬番' if 'dc_馬番' in grp.columns else ('馬番' if '馬番' in grp.columns else None)
         if bango_col:
@@ -1020,17 +1030,28 @@ def make_newspaper(date_str=None):
 
             # 詳細パネル（特徴量チップ）
             detail_id = f'det-{vk_safe}-{rn_safe}-{hi}'
+            contrib_dict = r.get('_contrib_dict') or {}
+            if not isinstance(contrib_dict, dict):
+                contrib_dict = {}
             chips = []
             for f in display_feats:
-                val = r.get(f)
-                pct = feat_pct.get(f, {}).get(r.name, np.nan)
-                fv  = fmt_val(f, val)
+                val  = r.get(f)
+                fv   = fmt_val(f, val)
+                contrib = contrib_dict.get(f, np.nan)
                 if fv is None:
-                    bg, fc, fv_disp = '#f0f0f0', '#aaa', 'NaN'
-                    pt_s = ''
+                    bg, fc, fv_disp, pt_s = '#f0f0f0', '#aaa', 'NaN', ''
                 else:
-                    bg, fc, fv_disp = percentile_color(pct), '#222', fv
-                    pt_s = f'{int(round(pct * 100))}pt' if not pd.isna(pct) else ''
+                    fv_disp = fv
+                    if pd.isna(contrib):
+                        bg, fc, pt_s = '#f5f5f5', '#222', ''
+                    elif contrib > 0:
+                        intensity = min(abs(contrib) / 0.5, 1.0)
+                        bg = f'rgb(255,{int(255-100*intensity)},{int(255-155*intensity)})'
+                        fc, pt_s = '#222', f'+{contrib:.2f}'
+                    else:
+                        intensity = min(abs(contrib) / 0.5, 1.0)
+                        bg = f'rgb({int(200+55*(1-intensity))},{int(210+45*(1-intensity))},255)'
+                        fc, pt_s = '#222', f'{contrib:.2f}'
                 sname = short_feat(f)
                 chips.append(
                     f'<span class="feat-chip" style="background:{bg};color:{fc}">'
