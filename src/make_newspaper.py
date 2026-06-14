@@ -638,12 +638,19 @@ def make_newspaper(date_str=None):
             grp = grp.copy()
             grp['_acc_score'] = scores
             grp['_sort_rank'] = grp['_acc_score'].rank(ascending=False, method='first')
+            # accuracy_model の isotonic calibration で確率を計算
+            _e = np.exp(scores - scores.max())
+            _p_raw = _e / _e.sum()
+            _iso = art.get('isotonic')
+            if _iso is not None:
+                _p_calib = np.clip(_iso.predict(_p_raw), 0.001, 0.999)
+            else:
+                _p_calib = _p_raw
+            grp['_acc_prob'] = _p_calib
         else:
             grp['_acc_score'] = np.nan
-            grp['_sort_rank'] = pd.to_numeric(
-                grp['clogit_rank'] if 'clogit_rank' in grp.columns
-                else pd.Series(np.nan, index=grp.index), errors='coerce'
-            )
+            grp['_sort_rank'] = pd.Series(np.nan, index=grp.index)
+            grp['_acc_prob']  = np.nan
         # 表示は馬番順（AI順位は列に保持）
         bango_col = 'dc_馬番' if 'dc_馬番' in grp.columns else ('馬番' if '馬番' in grp.columns else None)
         if bango_col:
@@ -837,9 +844,10 @@ def make_newspaper(date_str=None):
         race_live_odds1 = live_odds.get((_vcode1, _rn_int1), {})
 
         for _, r in rd['grp'].iterrows():
-            c_rank = r.get('clogit_rank')
-            c_buy  = bool(r.get('clogit_buy', False))
+            sort_rank1 = r.get('_sort_rank')
+            c_buy  = (sort_rank1 == 1)
             horse  = r.get('馬名S', '')
+            acc_prob1 = r.get('_acc_prob', np.nan)
 
             ci = card_map.get(horse, {})
             bango1 = r.get('dc_馬番', r.get('馬番', ''))
@@ -850,11 +858,7 @@ def make_newspaper(date_str=None):
             ov = race_live_odds1.get(uma_s1) or ci.get('単勝オッズ', r.get('単勝オッズ', ''))
             odds_s = f'{float(ov):.1f}倍' if ov not in ('', None) and str(ov) not in ('nan', '') else '未発表'
             jockey = str(ci.get('騎手', r.get('dc_騎手', r.get('騎手', '')))).strip()
-
-            try:
-                r_int = int(float(c_rank))
-            except Exception:
-                r_int = None
+            prob_disp = f'{acc_prob1:.1%}' if pd.notna(acc_prob1) else ''
 
             chip = f'<span class="seg-chip" style="background:{seg_color}">{seg_lbl}</span>'
             race_lbl = f'{venue_full} {rd["r_num"]}R　{chip}'
@@ -864,16 +868,8 @@ def make_newspaper(date_str=None):
 <div class="buy-card confirmed">
   <div class="card-race">{race_lbl}</div>
   <div class="card-horse">{horse}</div>
-  <div class="card-meta">{jockey}　単勝 {odds_s}</div>
+  <div class="card-meta">{jockey}　単勝 {odds_s}　AI {prob_disp}</div>
   <span class="badge-buy">◎ 買い</span>
-</div>''')
-            elif seg_key in ('芝短', '芝長') and r_int == 1:
-                watch_cards.append(f'''
-<div class="buy-card watch-card">
-  <div class="card-race">{race_lbl}</div>
-  <div class="card-horse">{horse}</div>
-  <div class="card-meta">{jockey}　単勝 {odds_s}</div>
-  <span class="badge-watch">◆ 要確認（≥6倍で買い）</span>
 </div>''')
 
     buy_html = '<div class="buy-section">'
@@ -883,9 +879,7 @@ def make_newspaper(date_str=None):
     else:
         buy_html += '<p class="no-signal">買いシグナルなし（オッズ未発表または条件未達）</p>'
 
-    if watch_cards:
-        buy_html += '<div class="section-title watch">◆ 要オッズ確認 — 芝短/芝長 ROI1位</div>'
-        buy_html += f'<div class="buy-grid">{"".join(watch_cards)}</div>'
+    # watch_cards は accuracy_model 移行後は不使用
 
     buy_html += '</div>'
 
@@ -955,11 +949,11 @@ def make_newspaper(date_str=None):
         vk_safe = rd['kaikai'].replace(' ', '_')
         rn_safe = rd['r_num'].replace(' ', '_')
         for hi, (_, r) in enumerate(grp.iterrows()):
-            c_buy   = bool(r.get('clogit_buy', False))
-            c_calib = r.get('clogit_calib')
+            sort_rank = r.get('_sort_rank', np.nan)
+            c_buy   = (sort_rank == 1)
+            c_calib = r.get('_acc_prob')      # accuracy_model の確率
             horse   = r.get('馬名S', '')
             acc_score = r.get('_acc_score', np.nan)
-            sort_rank = r.get('_sort_rank', np.nan)
 
             ci    = card_map.get(horse, {})
             bango = r.get('dc_馬番', r.get('馬番', ''))
@@ -987,8 +981,6 @@ def make_newspaper(date_str=None):
 
             if c_buy:
                 buy_td = '<td class="td-buy">◎買</td>'
-            elif seg_key in ('芝短', '芝長') and rank_i == 1:
-                buy_td = '<td class="td-watch">待</td>'
             else:
                 buy_td = '<td class="td-none">-</td>'
 
@@ -1148,7 +1140,7 @@ def make_newspaper(date_str=None):
   {tab_panes}
 
   <div class="footer">
-    的中率最大化モデル (accuracy_model.pkl) | clogit + isotonic calibration | 芝短/芝長 オッズ帯フィルタ(≥6倍)
+    的中率最大化モデル (accuracy_model.pkl) | clogit + isotonic calibration | rank=1 全買い
     <br>生成日時: {generated_at}
   </div>
 </div>
