@@ -675,11 +675,14 @@ def make_newspaper(date_str=None):
             else:
                 _p_calib = _p_raw
             grp['_acc_prob'] = _p_calib
+            # coef 符号から「低い方が有利か」を記録（feat_rank の方向に使う）
+            coef_asc_map = {feat_cols[fi]: bool(coef[fi] < 0) for fi in range(len(feat_cols))}
         else:
             grp['_acc_score']    = np.nan
             grp['_sort_rank']    = pd.Series(np.nan, index=grp.index)
             grp['_acc_prob']     = np.nan
             grp['_contrib_dict'] = pd.array([{} for _ in range(len(grp))], dtype=object)
+            coef_asc_map         = {}
         # 表示は馬番順（AI順位は列に保持）
         bango_col = 'dc_馬番' if 'dc_馬番' in grp.columns else ('馬番' if '馬番' in grp.columns else None)
         if bango_col:
@@ -690,7 +693,7 @@ def make_newspaper(date_str=None):
         race_data.append(dict(
             grp=grp, kaikai=kaikai, r_num=r_num, race_name=race_name,
             kyori_raw=kyori_raw, shiba_da=shiba_da, dist_m=dist_m,
-            surf=surf, seg_key=seg_key, feats=feats
+            surf=surf, seg_key=seg_key, feats=feats, coef_asc_map=coef_asc_map
         ))
 
     # ── 日付表示 ────────────────────────────────────────────────
@@ -947,13 +950,17 @@ def make_newspaper(date_str=None):
         display_feats = [f for f in feats if not f.endswith('_isnan')]
         isnan_feats   = [f for f in feats if f.endswith('_isnan')]
 
-        # ── ヒートマップ用パーセンタイル ──────────────────────────
-        feat_pct = {}
+        # ── レース内ランク ────────────────────────────────────────
+        # coef符号から方向を判断（coef<0 → 低い値が有利 → ascending=True）
+        coef_asc_map = rd.get('coef_asc_map', {})
+        feat_rank = {}
+        n_horses_in_race = len(grp)
         for f in display_feats:
             if f in grp.columns:
                 vals = pd.to_numeric(grp[f], errors='coerce')
-                ranked = vals.rank(pct=True, na_option='keep')
-                feat_pct[f] = ranked.to_dict()
+                asc  = coef_asc_map.get(f, False)
+                ranked = vals.rank(ascending=asc, method='min', na_option='keep')
+                feat_rank[f] = ranked.to_dict()
 
         # ── NaN集計（レース内） ───────────────────────────────────
         nan_by_feat = {}
@@ -1035,23 +1042,27 @@ def make_newspaper(date_str=None):
                 contrib_dict = {}
             chips = []
             for f in display_feats:
-                val  = r.get(f)
-                fv   = fmt_val(f, val)
+                val     = r.get(f)
+                fv      = fmt_val(f, val)
                 contrib = contrib_dict.get(f, np.nan)
+                rank_v  = feat_rank.get(f, {}).get(r.name, np.nan)
                 if fv is None:
                     bg, fc, fv_disp, pt_s = '#f0f0f0', '#aaa', 'NaN', ''
                 else:
                     fv_disp = fv
+                    rank_s = f'{int(rank_v)}/{n_horses_in_race}位' if not pd.isna(rank_v) else ''
                     if pd.isna(contrib):
-                        bg, fc, pt_s = '#f5f5f5', '#222', ''
+                        bg, fc, pt_s = '#f5f5f5', '#222', rank_s
                     elif contrib > 0:
                         intensity = min(abs(contrib) / 0.5, 1.0)
                         bg = f'rgb(255,{int(255-100*intensity)},{int(255-155*intensity)})'
-                        fc, pt_s = '#222', f'+{contrib:.2f}'
+                        fc = '#222'
+                        pt_s = f'+{contrib:.2f}　{rank_s}' if rank_s else f'+{contrib:.2f}'
                     else:
                         intensity = min(abs(contrib) / 0.5, 1.0)
                         bg = f'rgb({int(200+55*(1-intensity))},{int(210+45*(1-intensity))},255)'
-                        fc, pt_s = '#222', f'{contrib:.2f}'
+                        fc = '#222'
+                        pt_s = f'{contrib:.2f}　{rank_s}' if rank_s else f'{contrib:.2f}'
                 sname = short_feat(f)
                 chips.append(
                     f'<span class="feat-chip" style="background:{bg};color:{fc}">'
