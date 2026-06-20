@@ -27,9 +27,11 @@ def _decode_html(r) -> str:
 
 sys.stdout.reconfigure(encoding='utf-8', line_buffering=True)
 
-BASE_DIR    = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-BEFORE_MINS = 30   # 発走の何分前に実行するか（馬体重更新）
-AFTER_MINS  = 15   # 発走の何分後に実行するか（結果取得）
+BASE_DIR     = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BEFORE_MINS  = 30   # 発走の何分前に実行するか（馬体重更新）
+AFTER_MINS   = 15   # 発走の何分後に実行するか（結果取得）
+REPORT_HOUR  = 17   # 夜間レポート生成の時刻（時）
+REPORT_MIN   = 30   # 夜間レポート生成の時刻（分）
 
 
 def get_race_times(tgt_date: str) -> list[datetime]:
@@ -68,6 +70,14 @@ def run_newspaper():
     script = os.path.join(BASE_DIR, 'src', 'make_newspaper.py')
     print(f'[{now()}] 新聞生成開始...')
     r = subprocess.run([sys.executable, script], cwd=BASE_DIR, capture_output=False)
+    return r.returncode == 0
+
+
+def run_result_report(tgt_date: str):
+    script = os.path.join(BASE_DIR, 'src', 'make_result_report.py')
+    full_date = ('20' + str(tgt_date)) if len(str(tgt_date)) == 6 else str(tgt_date)
+    print(f'[{now()}] 結果レポート生成開始...')
+    r = subprocess.run([sys.executable, script, full_date], cwd=BASE_DIR, capture_output=False)
     return r.returncode == 0
 
 
@@ -138,6 +148,22 @@ def main():
         if run_newspaper():
             git_push(label)
             last_run = datetime.now()
+
+    # ── 夜間レポート ─────────────────────────────────────────────────────────
+    now_dt = datetime.now()
+    report_time = now_dt.replace(hour=REPORT_HOUR, minute=REPORT_MIN, second=0, microsecond=0)
+    if now_dt < report_time:
+        print(f'[{now()}] レース終了。夜間レポートまで待機 ({report_time.strftime("%H:%M")})...')
+        while datetime.now() < report_time:
+            remaining = int((report_time - datetime.now()).total_seconds() / 60)
+            print(f'[{now()}] 夜間レポート: あと約{remaining}分', flush=True)
+            time.sleep(60)
+
+    print(f'[{now()}] 夜間レポート生成トリガー')
+    # 最終新聞更新 → 結果レポート → Push
+    run_newspaper()
+    run_result_report(tgt_date)
+    git_push('夜間レポート')
 
 
 if __name__ == '__main__':
