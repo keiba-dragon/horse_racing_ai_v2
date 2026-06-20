@@ -1263,14 +1263,88 @@ function toggleDetail(id) {{
         f.write(html)
     print(f'HTML出力: {out_path}')
 
+    _update_newspaper_index(out_dir)
+
     gdrive = r'G:\マイドライブ\競馬AI\予想レポート'
     if os.path.isdir(gdrive):
         import shutil
         gd_path = os.path.join(gdrive, f'newspaper_{fname_date}.html')
         shutil.copy2(out_path, gd_path)
+        idx_src = os.path.join(out_dir, 'newspapers.html')
+        if os.path.exists(idx_src):
+            shutil.copy2(idx_src, os.path.join(gdrive, 'newspapers.html'))
         print(f'Gdrive出力: {gd_path}')
 
     return out_path
+
+
+def _update_newspaper_index(out_dir: str):
+    """docs/ 内の newspaper_*.html をスキャンして newspapers.html を再生成"""
+    import glob as _glob
+    files = sorted(_glob.glob(os.path.join(out_dir, 'newspaper_????????.html')), reverse=True)
+
+    rows = []
+    for fp in files:
+        fname = os.path.basename(fp)
+        ds = fname[len('newspaper_'):-len('.html')]  # e.g. 20260620
+        try:
+            dt = pd.Timestamp(ds)
+            label = dt.strftime('%Y年%-m月%-d日') if os.name != 'nt' else dt.strftime('%Y年%#m月%#d日')
+            weekday = ['月', '火', '水', '木', '金', '土', '日'][dt.weekday()]
+            label = f'{label}（{weekday}）'
+        except Exception:
+            label = ds
+        rows.append((ds, label, fname))
+
+    items_html = '\n'.join(
+        f'    <li><a href="{fname}">{label}</a></li>'
+        for ds, label, fname in rows
+    )
+
+    idx_html = f"""<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>競馬AI 予想新聞 一覧</title>
+  <style>
+    body {{ font-family: 'Segoe UI','Noto Sans JP',sans-serif; background:#f4f6f9; color:#212121; margin:0; }}
+    nav {{ background:#1a1a2e; padding:0 24px; height:52px; display:flex; align-items:center; gap:16px; }}
+    .nav-brand {{ color:#fff; font-weight:700; font-size:1rem; }}
+    nav a {{ color:#ccc; text-decoration:none; font-size:.875rem; }}
+    nav a:hover {{ color:#fff; }}
+    .container {{ max-width:600px; margin:40px auto; padding:0 24px; }}
+    h1 {{ font-size:1.4rem; margin-bottom:24px; color:#1a1a2e; }}
+    ul {{ list-style:none; padding:0; margin:0; }}
+    li {{ background:#fff; border-radius:8px; margin-bottom:10px;
+          box-shadow:0 2px 6px rgba(0,0,0,.08); }}
+    li a {{ display:block; padding:14px 20px; text-decoration:none; color:#1a1a2e;
+            font-size:1rem; font-weight:600; border-radius:8px; transition:background .15s; }}
+    li a:hover {{ background:#eef2ff; }}
+    li:first-child a {{ color:#1565c0; font-size:1.05rem; }}
+    .badge {{ display:inline-block; background:#1565c0; color:#fff;
+              border-radius:12px; font-size:.72rem; padding:2px 8px; margin-left:8px; }}
+  </style>
+</head>
+<body>
+<nav>
+  <span class="nav-brand">🏇 競馬AI v2</span>
+  <a href="index.html">モデルレポート</a>
+  <a href="newspapers.html" style="color:#fff;font-weight:700;">予想新聞</a>
+</nav>
+<div class="container">
+  <h1>予想新聞 一覧</h1>
+  <ul>
+{items_html}
+  </ul>
+</div>
+</body>
+</html>"""
+
+    idx_path = os.path.join(out_dir, 'newspapers.html')
+    with open(idx_path, 'w', encoding='utf-8') as f:
+        f.write(idx_html)
+    print(f'新聞インデックス更新: {idx_path}')
 
 
 if __name__ == '__main__':
