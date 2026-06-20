@@ -1,6 +1,6 @@
 # coding: utf-8
 """
-weight_watch.py — 全レースの発走前に新聞を自動再生成・Push
+weight_watch.py — 全レースの発走前・発走後に新聞を自動再生成・Push
 
 usage:
     python src/weight_watch.py              # 今日
@@ -8,7 +8,7 @@ usage:
 
 動作:
   1. netkeibaから当日の発走時刻一覧を取得
-  2. 各レースの BEFORE_MINS 分前に make_newspaper.py を実行
+  2. 各レースの BEFORE_MINS 分前（馬体重更新）と AFTER_MINS 分後（結果取得）に実行
   3. docs/ 更新後 git push で GitHub Pages に公開
 """
 import sys, os, re, time, subprocess, urllib.request
@@ -28,7 +28,8 @@ def _decode_html(r) -> str:
 sys.stdout.reconfigure(encoding='utf-8', line_buffering=True)
 
 BASE_DIR    = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-BEFORE_MINS = 30   # 発走の何分前に実行するか
+BEFORE_MINS = 30   # 発走の何分前に実行するか（馬体重更新）
+AFTER_MINS  = 15   # 発走の何分後に実行するか（結果取得）
 
 
 def get_race_times(tgt_date: str) -> list[datetime]:
@@ -99,10 +100,17 @@ def main():
         print('発走時刻が取得できませんでした。終了します。')
         return
 
-    # 実行スケジュール = 各発走時刻の BEFORE_MINS 分前（重複排除・過去分スキップ）
-    triggers = sorted(set(t - timedelta(minutes=BEFORE_MINS) for t in race_times))
+    # 実行スケジュール = 発走前 + 発走後（重複排除・過去分スキップ）
+    pre_triggers  = {(t - timedelta(minutes=BEFORE_MINS), '前')  for t in race_times}
+    post_triggers = {(t + timedelta(minutes=AFTER_MINS),  '後')  for t in race_times}
+    # 同一時刻に前後トリガーが重なる場合は後トリガー優先（結果取得）
+    trigger_map = {}
+    for t, kind in sorted(pre_triggers | post_triggers):
+        trigger_map[t] = kind   # 後から入るほど（時刻昇順の後半）上書き
+    triggers = sorted(trigger_map.items())
+
     now_dt   = datetime.now()
-    triggers = [t for t in triggers if t > now_dt]
+    triggers = [(t, k) for t, k in triggers if t > now_dt]
 
     if not triggers:
         print('本日の実行タイミングがすべて過去です。今すぐ実行します。')
@@ -110,21 +118,22 @@ def main():
             git_push('即時')
         return
 
-    print(f'実行予定: {[t.strftime("%H:%M") for t in triggers]}')
+    print(f'実行予定: {[t.strftime("%H:%M")+"("+k+")" for t, k in triggers]}')
 
     last_run = None
-    for trigger in triggers:
+    for trigger, kind in triggers:
         # 待機
         while datetime.now() < trigger:
             remaining = int((trigger - datetime.now()).total_seconds() / 60)
-            print(f'[{now()}] 次の実行: {trigger.strftime("%H:%M")} (あと約{remaining}分)', flush=True)
+            label_next = trigger.strftime('%H:%M') + f'({kind})'
+            print(f'[{now()}] 次の実行: {label_next} (あと約{remaining}分)', flush=True)
             time.sleep(60)
 
         # 同じ分に複数トリガーが重なっていたらスキップ
         if last_run and (datetime.now() - last_run).total_seconds() < 120:
             continue
 
-        label = trigger.strftime('%H:%M')
+        label = trigger.strftime('%H:%M') + f'({kind})'
         print(f'[{now()}] {label} トリガー')
         if run_newspaper():
             git_push(label)
