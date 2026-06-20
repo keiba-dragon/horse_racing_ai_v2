@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>競馬AI v2 — 的中率最大化モデル レポート 2026-06-09</title>
+  <style>
+    :root {
+      --purple:   #4a148c;
+      --purple2:  #6a1b9a;
+      --purple3:  #9c27b0;
+      --purple4:  #ce93d8;
+      --green:    #2e7d32;
+      --green-bg: #e8f5e9;
+      --red:      #c62828;
+      --red-bg:   #ffebee;
+      --amber:    #e65100;
+      --amber-bg: #fff3e0;
+      --gray:     #546e7a;
+      --bg:       #f3f0f7;
+      --card:     #ffffff;
+      --border:   #e0e0e0;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', 'Helvetica Neue', sans-serif;
+      background: var(--bg);
+      color: #212121;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    nav {
+      background: var(--purple);
+      color: #fff;
+      padding: 0 24px;
+      height: 52px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 2px 8px rgba(0,0,0,.3);
+    }
+    nav .brand { font-size: 1rem; font-weight: 700; letter-spacing: .5px; }
+    nav .nav-links { display: flex; gap: 20px; font-size: 0.82rem; }
+    nav .nav-links a { color: rgba(255,255,255,.8); text-decoration: none; }
+    nav .nav-links a:hover { color: #fff; }
+    nav .model-badge {
+      background: rgba(255,255,255,.15);
+      border: 1px solid rgba(255,255,255,.35);
+      border-radius: 20px;
+      padding: 3px 14px;
+      font-size: 0.76rem;
+      font-weight: 700;
+      color: #ce93d8;
+    }
+
+    .hero {
+      background: linear-gradient(135deg, #4a148c 0%, #6a1b9a 50%, #8e24aa 100%);
+      color: #fff;
+      padding: 52px 24px 44px;
+      text-align: center;
+    }
+    .hero h1 { font-size: 2rem; font-weight: 800; margin-bottom: 8px; letter-spacing: -.5px; }
+    .hero .subtitle { font-size: 0.95rem; opacity: .85; margin-bottom: 32px; }
+
+    .hero-kpis {
+      display: flex;
+      justify-content: center;
+      gap: 20px;
+      flex-wrap: wrap;
+      margin-bottom: 24px;
+    }
+    .hero-kpi {
+      background: rgba(255,255,255,.12);
+      border: 1px solid rgba(255,255,255,.3);
+      border-radius: 12px;
+      padding: 16px 24px;
+      backdrop-filter: blur(4px);
+      min-width: 130px;
+    }
+    .hero-kpi .hk-label { font-size: 0.72rem; opacity: .75; margin-bottom: 4px; font-weight: 600; text-transform: uppercase; }
+    .hero-kpi .hk-val   { font-size: 2rem; font-weight: 800; line-height: 1; }
+    .hero-kpi .hk-sub   { font-size: 0.75rem; opacity: .8; margin-top: 3px; }
+    .hero-kpi.highlight { border-color: #ce93d8; background: rgba(206,147,216,.2); }
+    .hero-kpi .hk-val.green { color: #a5d6a7; }
+
+    .mission-badge {
+      display: inline-block;
+      background: rgba(255,255,255,.15);
+      border: 2px solid rgba(255,255,255,.4);
+      border-radius: 50px;
+      padding: 8px 24px;
+      font-size: 1rem;
+      font-weight: 700;
+      backdrop-filter: blur(4px);
+    }
+
+    .container { max-width: 1100px; margin: 0 auto; padding: 32px 20px 60px; }
+
+    .section { margin-bottom: 44px; }
+    .section-title {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: var(--purple2);
+      border-left: 4px solid var(--purple3);
+      padding-left: 10px;
+      margin-bottom: 16px;
+    }
+
+    .box {
+      background: var(--card);
+      border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.08);
+      padding: 20px 24px;
+      margin-bottom: 20px;
+      overflow-x: auto;
+    }
+
+    /* ─── 年次KPI ─── */
+    .year-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .year-card {
+      background: var(--card);
+      border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.08);
+      padding: 16px 14px;
+      border-top: 4px solid var(--purple3);
+    }
+    .year-card.hl { border-top-color: #2e7d32; }
+    .year-card .yc-label { font-size: 0.72rem; color: #888; font-weight: 600; text-transform: uppercase; margin-bottom: 4px; }
+    .year-card .yc-val   { font-size: 2rem; font-weight: 800; line-height: 1; color: var(--purple2); }
+    .year-card.hl .yc-val { color: var(--green); }
+    .year-card .yc-sub   { font-size: 0.75rem; color: #888; margin-top: 4px; }
+    .year-card .yc-tag   { display:inline-block; padding:2px 10px; border-radius:20px; font-size:0.72rem; font-weight:700; margin-top:6px; }
+    .tag-goal { background:#e8eaf6; color:#3949ab; }
+    .tag-ok   { background:#c8e6c9; color:#1b5e20; }
+
+    /* ─── βバー ─── */
+    .beta-section { margin-bottom: 28px; }
+    .beta-title { font-size: 0.8rem; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 10px; padding-left: 2px; }
+    .beta-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+      font-size: 0.84rem;
+    }
+    .beta-row .br-name { width: 200px; font-weight: 600; color: #333; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .beta-row .br-wrap { flex: 1; height: 20px; display: flex; align-items: center; position: relative; }
+    .beta-row .br-zero { position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: #ddd; }
+    .beta-row .br-bar  { height: 14px; border-radius: 3px; position: absolute; }
+    .beta-row .br-bar.pos { background: linear-gradient(90deg, #9c27b0, #6a1b9a); left: 50%; }
+    .beta-row .br-bar.neg { background: linear-gradient(270deg, #ef5350, #c62828); right: 50%; }
+    .beta-row .br-num  { width: 62px; text-align: right; font-weight: 700; font-size: 0.82rem; }
+    .beta-row .br-desc { font-size: 0.75rem; color: #888; flex: 1; }
+    .br-num.pos { color: var(--purple2); }
+    .br-num.neg { color: var(--red); }
+    .beta-row.isnan { opacity: .6; }
+    .beta-row.isnan .br-name { font-style: italic; font-size: 0.78rem; }
+
+    /* ─── 発見カード ─── */
+    .finding-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    .finding-card {
+      background: var(--card);
+      border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.08);
+      padding: 20px 22px;
+      border-top: 4px solid var(--purple3);
+    }
+    .finding-card .fc-tag  { font-size: 0.72rem; font-weight: 700; color: var(--purple3); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px; }
+    .finding-card .fc-title { font-size: 1rem; font-weight: 800; color: var(--purple); margin-bottom: 10px; line-height: 1.3; }
+    .finding-card .fc-body { font-size: 0.84rem; color: #555; line-height: 1.65; }
+    .finding-card .fc-highlight { background: #f3e5f5; border-radius: 6px; padding: 10px 12px; margin: 10px 0; font-size: 0.84rem; font-family: monospace; }
+    .finding-card .hl-pos { color: #6a1b9a; font-weight: 700; }
+    .finding-card .hl-neg { color: #c62828; font-weight: 700; }
+
+    /* ─── vs比較 ─── */
+    .vs-bar-section { margin: 16px 0; }
+    .vs-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; font-size: 0.84rem; }
+    .vs-row .vr-lbl  { width: 100px; color: #555; font-weight: 600; font-size: 0.82rem; }
+    .vs-row .vr-wrap { flex: 1; background: #eee; border-radius: 4px; height: 22px; overflow: hidden; position: relative; }
+    .vs-row .vr-bar  { height: 100%; border-radius: 4px; display: flex; align-items: center; padding-left: 8px; font-size: 0.75rem; font-weight: 700; color: #fff; }
+    .bar-random  { background: #90a4ae; }
+    .bar-model   { background: linear-gradient(90deg, #9c27b0, #6a1b9a); }
+    .bar-fav     { background: linear-gradient(90deg, #f9a825, #e65100); }
+    .vs-row .vr-num  { width: 55px; text-align: right; font-weight: 800; }
+
+    /* ─── タイムライン ─── */
+    .timeline { list-style: none; position: relative; padding-left: 28px; }
+    .timeline::before {
+      content: ''; position: absolute; left: 8px; top: 8px; bottom: 8px;
+      width: 2px; background: var(--border);
+    }
+    .timeline li { position: relative; margin-bottom: 20px; }
+    .timeline li::before {
+      content: ''; position: absolute; left: -24px; top: 6px;
+      width: 12px; height: 12px; border-radius: 50%;
+      background: var(--purple3); border: 2px solid #fff;
+      box-shadow: 0 0 0 2px var(--purple3);
+    }
+    .timeline li.done::before { background: var(--green); box-shadow: 0 0 0 2px var(--green); }
+    .timeline-title { font-weight: 700; color: var(--purple2); margin-bottom: 3px; }
+    .timeline-body  { font-size: 0.84rem; color: #555; }
+    .tl-acc { display: inline-block; background: #f3e5f5; color: var(--purple2); font-weight: 800; padding: 1px 8px; border-radius: 4px; margin: 0 2px; }
+    .tl-arrow { color: #888; }
+    .tl-meta { font-size: 0.76rem; color: #aaa; margin-top: 2px; }
+
+    /* ─── テーブル ─── */
+    table { border-collapse: collapse; width: 100%; font-size: 0.86rem; }
+    th { background: var(--purple2); color: #fff; padding: 9px 14px; text-align: left; white-space: nowrap; font-size: 0.82rem; }
+    td { padding: 8px 14px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #faf5ff; }
+
+    /* ─── デザイングリッド ─── */
+    .design-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .design-item { background: #faf5ff; border-radius: 8px; padding: 14px 16px; }
+    .design-item .di-label { font-size: 0.75rem; color: #888; font-weight: 600; text-transform: uppercase; margin-bottom: 4px; }
+    .design-item .di-val   { font-weight: 700; color: var(--purple2); }
+
+    footer {
+      text-align: center; padding: 24px; color: #aaa;
+      font-size: 0.78rem; background: var(--bg);
+    }
+
+    @media (max-width: 768px) {
+      .year-grid    { grid-template-columns: repeat(2, 1fr); }
+      .finding-grid { grid-template-columns: 1fr; }
+      .design-grid  { grid-template-columns: 1fr; }
+      nav .nav-links { display: none; }
+      .beta-row .br-desc { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<nav>
+  <span class="brand">🏇 競馬AI v2</span>
+  <div class="nav-links">
+    <a href="#kpi">的中率</a>
+    <a href="#beta">β係数</a>
+    <a href="#findings">発見</a>
+    <a href="#history">探索履歴</a>
+    <a href="#design">設計</a>
+  </div>
+  <span class="model-badge">ACCURACY MODEL</span>
+</nav>
+
+<div class="hero">
+  <h1>的中率最大化モデル</h1>
+  <div class="subtitle">競馬AI v2 — clogit + Isotonic Calibration &nbsp;|&nbsp; ダート長距離（>1400m）&nbsp;|&nbsp; 2026-06-09</div>
+
+  <div class="hero-kpis">
+    <div class="hero-kpi highlight">
+      <div class="hk-label">acc_2325（選択指標）</div>
+      <div class="hk-val green">30.02%</div>
+      <div class="hk-sub">目標30%達成 ✅</div>
+    </div>
+    <div class="hero-kpi">
+      <div class="hk-label">2025 的中率</div>
+      <div class="hk-val">31.49%</div>
+      <div class="hk-sub">最高年</div>
+    </div>
+    <div class="hero-kpi">
+      <div class="hk-label">25+26 合算</div>
+      <div class="hk-val">30.05%</div>
+      <div class="hk-sub">OOS 2年合算</div>
+    </div>
+    <div class="hero-kpi">
+      <div class="hk-label">ランダム比</div>
+      <div class="hk-val">4.08×</div>
+      <div class="hk-sub">ランダム 7.4%</div>
+    </div>
+    <div class="hero-kpi">
+      <div class="hk-label">特徴量 / 次元</div>
+      <div class="hk-val" style="font-size:1.5rem">36 / 40</div>
+      <div class="hk-sub">NaN指示変数 4つ</div>
+    </div>
+  </div>
+
+  <div class="mission-badge">
+    1番人気（34.1%）まで あと <strong>4.1%</strong> &nbsp;—&nbsp; 出走情報のみ・調教データなし
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- ─── 年次的中率 ─── -->
+  <div id="kpi" class="section" style="padding-top:8px;">
+    <div class="section-title">OOS 的中率（指標1位全買い）</div>
+
+    <div class="year-grid">
+      <div class="year-card">
+        <div class="yc-label">2023-24 的中率</div>
+        <div class="yc-val">29.28%</div>
+        <div class="yc-sub">1841R &nbsp;|&nbsp; 参考ROI: -19.23%</div>
+        <span class="yc-tag tag-goal">選択指標に含む</span>
+      </div>
+      <div class="year-card">
+        <div class="yc-label">2025 的中率</div>
+        <div class="yc-val">31.49%</div>
+        <div class="yc-sub">924R &nbsp;|&nbsp; 参考ROI: -12.76%</div>
+        <span class="yc-tag tag-goal">選択指標に含む</span>
+      </div>
+      <div class="year-card hl">
+        <div class="yc-label">acc_2325（選択指標）</div>
+        <div class="yc-val">30.02%</div>
+        <div class="yc-sub">2023〜2025加重平均</div>
+        <span class="yc-tag tag-ok">目標達成 ✅</span>
+      </div>
+      <div class="year-card">
+        <div class="yc-label">2026 的中率</div>
+        <div class="yc-val">26.70%</div>
+        <div class="yc-sub">397R &nbsp;|&nbsp; 参考ROI: -25.74%</div>
+        <span class="yc-tag" style="background:#fff3e0;color:#e65100;">未知OOS</span>
+      </div>
+      <div class="year-card hl">
+        <div class="yc-label">25+26 合算</div>
+        <div class="yc-val">30.05%</div>
+        <div class="yc-sub">参考ROI: -16.66%</div>
+        <span class="yc-tag tag-ok">✅</span>
+      </div>
+    </div>
+
+    <!-- ベースライン比較 -->
+    <div class="box">
+      <div class="section-title" style="margin-bottom:14px;">ベースライン比較（25+26合算）</div>
+      <div class="vs-bar-section">
+        <div class="vs-row">
+          <div class="vr-lbl">ランダム選択</div>
+          <div class="vr-wrap">
+            <div class="vr-bar bar-random" style="width:21.7%">7.4%</div>
+          </div>
+          <div class="vr-num" style="color:#888">7.4%</div>
+        </div>
+        <div class="vs-row">
+          <div class="vr-lbl">本モデル v7</div>
+          <div class="vr-wrap">
+            <div class="vr-bar bar-model" style="width:88.0%">30.0%</div>
+          </div>
+          <div class="vr-num" style="color:#6a1b9a">30.0%</div>
+        </div>
+        <div class="vs-row">
+          <div class="vr-lbl">1番人気（市場）</div>
+          <div class="vr-wrap">
+            <div class="vr-bar bar-fav" style="width:100%">34.1%</div>
+          </div>
+          <div class="vr-num" style="color:#e65100">34.1%</div>
+        </div>
+      </div>
+      <p style="font-size:0.78rem;color:#aaa;margin-top:8px;">
+        ランダム = 全馬均等に選択。1番人気 = 単勝オッズ最低の馬（市場の集合知）。本モデルは出走表情報のみ使用（調教データなし）。
+      </p>
+    </div>
+  </div>
+
+  <!-- ─── β係数 ─── -->
+  <div id="beta" class="section">
+    <div class="section-title">β係数 — 特徴量の重み（絶対値大きい順）</div>
+    <div class="box">
+      <p style="font-size:0.82rem;color:#888;margin-bottom:18px;">
+        中央が0点。<span style="color:#6a1b9a;font-weight:700;">紫バー（右）</span>=高いほど勝率↑、<span style="color:#c62828;font-weight:700;">赤バー（左）</span>=低いほど勝率↑。バー長 = β/0.40 ×100%。
+      </p>
+
+      <div class="beta-section">
+        <div class="beta-title">▌ タイム指数 — 最重要グループ</div>
+
+        <div class="beta-row">
+          <div class="br-name">近5走_タイム指数_max</div>
+          <div class="br-wrap">
+            <div class="br-zero"></div>
+            <div class="br-bar pos" style="width:46.8%"></div>
+          </div>
+          <div class="br-num pos">+0.375</div>
+          <div class="br-desc">最近5走のピーク能力。一度でも速い走りをした馬を重視</div>
+        </div>
+        <div class="beta-row">
+          <div class="br-name">近5走_タイム指数平均</div>
+          <div class="br-wrap">
+            <div class="br-zero"></div>
+            <div class="br-bar pos" style="width:45.9%"></div>
+          </div>
+          <div class="br-num pos">+0.367</div>
+          <div class="br-desc">安定した能力水準。気まぐれではなく継続的に速い馬</div>
+        </div>
+        <div class="beta-row">
+          <div class="br-name">近5走_上り3F平均</div>
+          <div class="br-wrap">
+            <div class="br-zero"></div>
+            <div class="br-bar neg" style="width:36.6%"></div>
+          </div>
+          <div class="br-num neg">−0.293</div>
+          <div class="br-desc">上がりタイムが速い（数値小さい）馬を高評価。末脚の安定性</div>
+        </div>
+        <div class="beta-row isnan">
+          <div class="br-name">近5走_上り3F_std_isnan</div>
+          <div class="br-wrap">
+            <div class="br-zero"></div>
+            <div class="br-bar pos" style="width:8.8%"></div>
+          </div>
+          <div class="br-num pos">+0.070</div>
+          <div class="br-desc">NaN指示変数（上がり実績なし）</div>
+        </div>
+        <div class="beta-row">
+          <div class="br-name">タイム指数_加速度</div>
+          <div class="br-wrap">
+            <div class="br-zero"></div>
+            <div class="br-bar neg" style="width:4.3%"></div>
+          </div>
+          <div class="br-num neg" style="color:#aaa">−0.035</div>
+          <div class="br-desc">タイム指数の上昇/下降傾向（ほぼ無効）</div>
+        </div>
+      </div>
+
+      <div class="beta-section">
+        <div class="beta-title">▌ 近走成績 — 好走パターン</div>
+
+        <div class="beta-row">
+          <div class="br-name">近3走_複勝率</div>
+          <div class="br-wrap">
+            <div class="br-zero"></div>
+            <div class="br-bar pos" style="width:33.8%"></div>
+          </div>
+          <div class="br-num pos">+0.271</div>
+          <div class="br-desc">最近3走で3着以内の割合。好走が「続く」馬を評価</div>
+        </div>
+        <div class="beta-row">
+          <div class="br-name">前走着差タイム</div>
+          <div class="br-wrap">
+            <div class="br-zero"></div>
+            <div class="br-bar neg" style="width:33.8%"></div>
+          </div>
+          <div class="br-num neg">−0.271</div>
+          <div class="br-desc">前走の負け幅が少ない（接戦だった）馬を高評価</div>
+        </div>
+        <div class="beta-row">
+          <div class="br-name">近3走_勝率</div>
+          <div class="br-wrap">
+            <div class="br-zero"></div>
+            <div class="br-bar neg" style="width:22.0%"></div>
+          </div>
+          <div class="br-num neg">−0.176</div>
+          <div class="br-desc">⚡ 逆張りシグナル — 直近3走で勝ちがある馬をやや低評価</div>
+        </div>
+        <div class="beta-row">
+          <div class="br-name">近10走_勝率</div>
+          <div class="br-wrap">
+            <div class="br-zero"></div>
+            <div class="br-bar pos" style="width:18.4%"></div>
+          </div>
+          <div class="br-num pos">+0.147</div>
+          <div class="br-desc">長期的な実勝率。10走スパンでの実力確認</div>
+        </div>
+      </div>
+
+      <div class="beta-section">
+        <div class="beta-title">▌ 前走クラス・着順</div>
+
+        <div class="beta-row">
+          <div class="br-name">1走前_クラス調整着順</div>
+          <div class="br-wrap">
+            <div class="br-zero"></div>
+            <div class="br-bar neg" style="width:29.2%"></div>
+          </div>
+          <div class="br-num neg">−0.234</div>
+          <div class="br-desc">前走のクラスを補正した着順。上位クラスで好走した馬を高評価</div>
+        </div>
+        <div class="beta-row">
+          <div class="br-name">相手レベル_平均着順</div>
+          <div class="br-wrap">
+            <div class="br-zero"></div>
+            <div class="br-bar pos" style="width:16.7%"></div>
+          </div>
+          <div class="br-num pos">+0.133</div>
+          <div class="br-desc">強豪相手と戦ってきた平均着順。格上相手でも好走できる馬を評価</div>
+        </div>
+        <div class="beta-row">
+          <div class="br-name">1走前_クラス差</div>
+          <div class="br-wrap">
+            <div class="br-zero"></div>
+            <div class="br-bar pos" style="width:3.5%"></div>
+          </div>
+          <div class="br-num pos" style="color:#aaa">+0.028</div>
+          <div class="br-desc">直前レースのクラス差</div>
+        </div>
+        <div class="beta-row">
+          <div class="br-name">2走前_クラス差</div>
+          <div class="br-wrap">
+            <div class="br-zero"></div>
+            <div class="br-bar pos" style="width:2.7%"></div>
+          </div>
+          <div class="br-num pos" style="color:#aaa">+0.022</div>
+          <div class="br-desc">2走前のクラス差</div>
+        </div>
+        <div class="beta-row">
+          <div class="br-name">道悪_平均着順_近5走</div>
+          <div class="br-wrap">
+            <div class="br-zero"></div>
+            <div class="br-bar neg" style="width:10.4%"></div>
+          </div>
+          <div class="br-num neg">−0.083</div>
+          <div class="br-desc">道悪での過去着順が良い（小さい）馬を高評価</div>
+        </div>
+        <div class="beta-row isnan">
+          <div class="br-name">道悪_平均着順_近5走_isnan</div>
+          <div class="br-wrap">
+            <div class="br-zero"></div>
+            <div class="br-bar neg" style="width:3.7%"></div>
+          </div>
+          <div class="br-num neg" style="color:#aaa">−0.030</div>
+          <div class="br-desc">NaN指示変数</div>
+        </div>
+      </div>
+
+      <div class="beta-section">
+        <div class="beta-title">▌ 騎手・血統・個馬実績</div>
+
+        <div class="beta-row">
+          <div class="br-name">騎手コース_r100_勝率</div>
+          <div class="br-wrap">
+            <div class="br-zero"></div>
+            <div class="br-bar pos" style="width:20.6%"></div>
+          </div>
+          <div class="br-num pos">+0.165</div>
+          <div class="br-desc">騎手のコース別直近100走勝率。場所を知っている騎手は強い</div>
+        </div>
+        <div class="beta-row">
+          <div class="br-name">騎手会場_r100_勝率</div>
+          <div class="br-wrap">
+            <div class="br-zero"></div>
+            <div class="br-bar pos" style="width:13.8%"></div>
+          </div>
+          <div class="br-num pos">+0.111</div>
+          <div class="br-desc">騎手の会場別実績（コース内の慣れ）</div>
+        </div>
+        <div class="beta-row">
+          <div class="br-name">種牡馬_勝率</div>
+          <div class="br-wrap">
+            <div class="br-zero"></div>
+            <div class="br-bar pos" style="width:11.2%"></div>
+          </div>
+          <div class="br-num pos">+0.090</div>
+          <div class="br-desc">父馬の全体勝率。ダート適性の血統シグナル</div>
+        </div>
+        <div class="beta-row">
+          <div class="br-name">馬距離_勝率</div>
+          <div class="br-wrap">
+            <div class="br-zero"></div>
+            <div class="br-bar pos" style="width:10.7%"></div>
+          </div>
+          <div class="br-num pos">+0.086</div>
+          <div class="br-desc">この馬のこの距離帯での過去勝率</div>
+        </div>
+        <div class="beta-row">
+          <div class="br-name">馬_r20_勝率</div>
+          <div class="br-wrap">
+            <div class="br-zero"></div>
+            <div class="br-bar pos" style="width:10.7%"></div>
+          </div>
+          <div class="br-num pos">+0.086</div>
+          <div class="br-desc">馬の直近20走勝率。現在のコンディション把握</div>
+        </div>
+        <div class="beta-row">
+          <div class="br-name">性別_num</div>
+          <div class="br-wrap">
+            <div class="br-zero"></div>
+            <div class="br-bar neg" style="width:12.4%"></div>
+          </div>
+          <div class="br-num neg">−0.099</div>
+          <div class="br-desc">牝馬の方がやや高評価（牡=1, 牝=0等の定義）</div>
+        </div>
+        <div class="beta-row">
+          <div class="br-name">種牡馬_ダ_勝率</div>
+          <div class="br-wrap">
+            <div class="br-zero"></div>
+            <div class="br-bar pos" style="width:0%"></div>
+          </div>
+          <div class="br-num pos" style="color:#ccc">+0.000</div>
+          <div class="br-desc">ダート専用血統シグナル（種牡馬_勝率と高相関のため無効）</div>
+        </div>
+      </div>
+
+      <div class="beta-section">
+        <div class="beta-title">▌ その他</div>
+        <div class="beta-row">
+          <div class="br-name">斤量</div>
+          <div class="br-wrap"><div class="br-zero"></div><div class="br-bar pos" style="width:8.6%"></div></div>
+          <div class="br-num pos">+0.069</div>
+          <div class="br-desc">重い斤量が課される馬 = 実力馬のシグナル</div>
+        </div>
+        <div class="beta-row">
+          <div class="br-name">1走前_3角</div>
+          <div class="br-wrap"><div class="br-zero"></div><div class="br-bar neg" style="width:8.1%"></div></div>
+          <div class="br-num neg">−0.065</div>
+          <div class="br-desc">3コーナー通過順が前（内）ほど高評価</div>
+        </div>
+        <div class="beta-row">
+          <div class="br-name">距離変化_前走</div>
+          <div class="br-wrap"><div class="br-zero"></div><div class="br-bar neg" style="width:8.8%"></div></div>
+          <div class="br-num neg">−0.070</div>
+          <div class="br-desc">距離短縮が若干有利（マイナスが距離短縮）</div>
+        </div>
+        <div class="beta-row">
+          <div class="br-name">近5走_上り3F_std</div>
+          <div class="br-wrap"><div class="br-zero"></div><div class="br-bar pos" style="width:3.1%"></div></div>
+          <div class="br-num pos" style="color:#aaa">+0.025</div>
+          <div class="br-desc">上がりタイムのバラつき（小さいほど安定）</div>
+        </div>
+        <div class="beta-row">
+          <div class="br-name">コース枠_r200_複勝率</div>
+          <div class="br-wrap"><div class="br-zero"></div><div class="br-bar pos" style="width:2.5%"></div></div>
+          <div class="br-num pos" style="color:#aaa">+0.020</div>
+          <div class="br-desc">コース×枠番の複勝率（過去200走）</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── 発見 ─── -->
+  <div id="findings" class="section">
+    <div class="section-title">モデルが示す3つの発見</div>
+
+    <div class="finding-grid">
+      <!-- 発見1 -->
+      <div class="finding-card">
+        <div class="fc-tag">発見 1 / 最大の逆説</div>
+        <div class="fc-title">「直近に勝った馬」より<br>「コンスタントに入る馬」が強い</div>
+        <div class="fc-body">
+          近3走で勝ちがある馬（勝率高い）はむしろ次走で<em>勝ちにくい</em>。一方で3着以内が続く馬は次も勝ちやすい。
+        </div>
+        <div class="fc-highlight">
+          近3走_複勝率: <span class="hl-pos">β = +0.271</span>（3着以内継続 → 買い）<br>
+          近3走_勝率:   <span class="hl-neg">β = −0.176</span>（直近に勝利 → 逆に売り）
+        </div>
+        <div class="fc-body">
+          ダート長距離では斤量増・クラス昇級の反動が出やすく、「勝った馬の次走」より「惜しい2〜3着が続く馬」の方が信頼できる。
+        </div>
+      </div>
+
+      <!-- 発見2 -->
+      <div class="finding-card">
+        <div class="fc-tag">発見 2 / タイム指数</div>
+        <div class="fc-title">「今の調子」より<br>「本来の実力水準」が支配的</div>
+        <div class="fc-body">
+          タイム指数のピーク（max）と平均がほぼ同じ重みで採用。一方でトレンド（加速度）はほぼ無効。
+        </div>
+        <div class="fc-highlight">
+          近5走_タイム指数_max:  <span class="hl-pos">β = +0.375</span><br>
+          近5走_タイム指数平均: <span class="hl-pos">β = +0.367</span><br>
+          タイム指数_加速度:    β = −0.035（ほぼゼロ）
+        </div>
+        <div class="fc-body">
+          「最近上昇中か下降中か」よりも「そもそも速い馬かどうか」が重要。ダート長距離は能力の絶対値がレースを決める。
+        </div>
+      </div>
+
+      <!-- 発見3 -->
+      <div class="finding-card">
+        <div class="fc-tag">発見 3 / 最後の一押し</div>
+        <div class="fc-title">「相手レベル_平均着順」が<br>30%突破の鍵だった</div>
+        <div class="fc-body">
+          35特徴（29.80%）→ 36特徴（30.02%）の差は「相手レベル_平均着順」1特徴の追加のみ。
+        </div>
+        <div class="fc-highlight">
+          相手レベル_平均着順: <span class="hl-pos">β = +0.133</span><br>
+          追加後: <span class="hl-pos">29.80% → 30.02%</span>（+0.22pp）
+        </div>
+        <div class="fc-body">
+          クラス補正着順との違いは「そのレースにいた全馬の水準」を反映する点。強い相手と戦い続けてきた馬を正しく評価する。
+        </div>
+      </div>
+
+      <!-- 発見4 -->
+      <div class="finding-card">
+        <div class="fc-tag">発見 4 / 血統</div>
+        <div class="fc-title">「種牡馬_ダ_勝率」は<br>「種牡馬_勝率」で代替可能</div>
+        <div class="fc-body">
+          ダート専用血統特徴量（種牡馬_ダ_勝率）を追加したが β=0.000 で全く無効。
+        </div>
+        <div class="fc-highlight">
+          種牡馬_勝率（全体）:  <span class="hl-pos">β = +0.090</span>（有効）<br>
+          種牡馬_ダ_勝率:     β = +0.000（無効）
+        </div>
+        <div class="fc-body">
+          「ダート専用血統」は「全体血統」と高相関のため追加情報ゼロ。このセグメント（ダート長距離）では全体血統だけで十分。
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── 探索履歴 ─── -->
+  <div id="history" class="section">
+    <div class="section-title">探索履歴 — v1 から v7 へ</div>
+    <div class="box">
+      <ul class="timeline">
+        <li>
+          <div class="timeline-title">v1 — 初期探索（10特徴）</div>
+          <div class="timeline-body">ROIモデルの特徴量リストを起点に的中率指標（acc_2325）で greedy forward selection を実行。</div>
+          <div class="tl-meta"><span class="tl-acc">28.10%</span> — ランダム(7.4%)の3.80倍</div>
+        </li>
+        <li>
+          <div class="timeline-title">v2 — v1継続（25特徴）</div>
+          <div class="timeline-body">v1の10特徴から継続し25特徴まで拡張。</div>
+          <div class="tl-meta"><span class="tl-acc">28.43%</span></div>
+        </li>
+        <li class="done">
+          <div class="timeline-title">v3 — 全候補から再探索（25特徴）</div>
+          <div class="timeline-body">
+            新候補（タイム指数トレンド系・輸送有無・コース脚質等）を追加して全候補から再探索。
+            greedy selectionは局所最適に依存するため、シードを変えることで異なる解を発見。
+          </div>
+          <div class="tl-meta"><span class="tl-acc">28.86%</span> <span class="tl-arrow">↑+0.43pp</span></div>
+        </li>
+        <li>
+          <div class="timeline-title">v4 — スタミナ特徴追加（失敗）</div>
+          <div class="timeline-body">前走長距離フラグ等を追加したが acc_2325 が低下。</div>
+          <div class="tl-meta"><span class="tl-acc" style="background:#fce4ec;color:#c62828;">27.99%</span> ←v3より悪化</div>
+        </li>
+        <li class="done">
+          <div class="timeline-title">v5 — v3シードでMAX_FEATS=30（30特徴）</div>
+          <div class="timeline-body">v3の25特徴を起点にさらに5特徴追加。近10走_勝率・2走前_クラス差・道悪着順等が採用。</div>
+          <div class="tl-meta"><span class="tl-acc">29.08%</span> <span class="tl-arrow">↑+0.22pp</span></div>
+        </li>
+        <li class="done">
+          <div class="timeline-title">v6 — 新候補15種追加・MAX_FEATS=35（35特徴）</div>
+          <div class="timeline-body">
+            未使用だった特徴量（馬_r20_勝率・騎手会場_r100_勝率・性別_num・近3走_勝率等）を発掘・追加。
+            <code>馬_r20_勝率</code>(β+0.086)・<code>騎手会場_r100_勝率</code>(β+0.111)・<code>近3走_勝率</code>(β−0.176)が採用。
+          </div>
+          <div class="tl-meta"><span class="tl-acc">29.80%</span> <span class="tl-arrow">↑+0.72pp（最大の1回改善）</span></div>
+        </li>
+        <li class="done">
+          <div class="timeline-title">v7 — MAX_FEATS=40（36特徴）🎯 目標達成</div>
+          <div class="timeline-body">
+            最後に <code>相手レベル_平均着順</code>(β+0.133) が1特徴追加されて30%突破。
+            探索総時間 118秒。
+          </div>
+          <div class="tl-meta"><span class="tl-acc" style="background:#c8e6c9;color:#1b5e20;">30.02% ✅</span> <span class="tl-arrow">↑+0.22pp</span></div>
+        </li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ─── モデル設計 ─── -->
+  <div id="design" class="section">
+    <div class="section-title">モデル設計</div>
+    <div class="box">
+      <div class="design-grid">
+        <div class="design-item">
+          <div class="di-label">モデル</div>
+          <div class="di-val">条件付きロジット (clogit) + Isotonic Calibration</div>
+        </div>
+        <div class="design-item">
+          <div class="di-label">最適化</div>
+          <div class="di-val">Adam (L2=0.006)、val NLL で early stopping</div>
+        </div>
+        <div class="design-item">
+          <div class="di-label">学習期間</div>
+          <div class="di-val">train: 2013-2021 / val: 2022 / OOS: 2023-2026</div>
+        </div>
+        <div class="design-item">
+          <div class="di-label">特徴量選択</div>
+          <div class="di-val">Greedy forward selection、選択指標 = acc_2325（ROIキャップなし）</div>
+        </div>
+        <div class="design-item">
+          <div class="di-label">ROIモデルとの違い</div>
+          <div class="di-val">選択指標が ROI→的中率。保存先 accuracy_model.pkl（final_model.pkl 不変）</div>
+        </div>
+        <div class="design-item">
+          <div class="di-label">NaN指示変数</div>
+          <div class="di-val">train NaN率 &gt;5% の特徴に _isnan 変数を自動追加（4特徴）</div>
+        </div>
+        <div class="design-item">
+          <div class="di-label">セグメント</div>
+          <div class="di-val">ダート & 距離&gt;1400m & クラス_rank≠1.0（新馬・デビュー戦除外）</div>
+        </div>
+        <div class="design-item">
+          <div class="di-label">保存場所</div>
+          <div class="di-val">models/accuracy_model.pkl &nbsp;|&nbsp; キー: <code>'ダ長'</code></div>
+        </div>
+      </div>
+
+      <div style="margin-top:16px;background:#f3e5f5;border-radius:8px;padding:12px 16px;">
+        <div style="font-weight:700;color:#6a1b9a;margin-bottom:6px;">📌 ROIモデルとの比較（ダート長距離）</div>
+        <table>
+          <thead><tr>
+            <th>指標</th>
+            <th>ROIモデル（final_model.pkl）</th>
+            <th>的中率モデル（accuracy_model.pkl）</th>
+          </tr></thead>
+          <tbody>
+            <tr><td>選択指標</td><td>2325合算 OOS ROI（±30%キャップ）</td><td>acc_2325（的中率）</td></tr>
+            <tr><td>特徴数</td><td>10（11次元）</td><td>36（40次元）</td></tr>
+            <tr><td>25+26 ROI</td><td>+1.11%</td><td>−16.66%</td></tr>
+            <tr><td>25+26 的中率</td><td>（未計測）</td><td>30.05%</td></tr>
+            <tr><td>主要特徴</td><td>種牡馬_勝率、クラス差、コース枠勝率</td><td>タイム指数（max/平均）、近3走複勝率</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<footer>
+  競馬AI v2 — 的中率最大化モデル（ダート長距離）&nbsp;|&nbsp; clogit + Isotonic Calibration &nbsp;|&nbsp; 生成: 2026-06-09
+</footer>
+
+</body>
+</html>
