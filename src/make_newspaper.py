@@ -1032,7 +1032,7 @@ def make_newspaper(date_str=None):
 
             try: rank_i = int(float(sort_rank))
             except: rank_i = None
-            rank_s = str(rank_i) if rank_i else '-'
+            ai_rank_s = str(rank_i) if rank_i else '-'
 
             if c_buy:              row_cls = 'row-buy'
             elif rank_i == 1:      row_cls = 'row-r1'
@@ -1077,19 +1077,19 @@ def make_newspaper(date_str=None):
                     bg, fc, fv_disp, pt_s = '#f0f0f0', '#aaa', 'NaN', ''
                 else:
                     fv_disp = fv
-                    rank_s = f'{int(rank_v)}/{n_horses_in_race}位' if not pd.isna(rank_v) else ''
+                    feat_rank_s = f'{int(rank_v)}/{n_horses_in_race}位' if not pd.isna(rank_v) else ''
                     if pd.isna(contrib):
-                        bg, fc, pt_s = '#f5f5f5', '#222', rank_s
+                        bg, fc, pt_s = '#f5f5f5', '#222', feat_rank_s
                     elif contrib > 0:
                         intensity = min(abs(contrib) / 0.5, 1.0)
                         bg = f'rgb(255,{int(255-100*intensity)},{int(255-155*intensity)})'
                         fc = '#222'
-                        pt_s = f'+{contrib:.2f}　{rank_s}' if rank_s else f'+{contrib:.2f}'
+                        pt_s = f'+{contrib:.2f}　{feat_rank_s}' if feat_rank_s else f'+{contrib:.2f}'
                     else:
                         intensity = min(abs(contrib) / 0.5, 1.0)
                         bg = f'rgb({int(200+55*(1-intensity))},{int(210+45*(1-intensity))},255)'
                         fc = '#222'
-                        pt_s = f'{contrib:.2f}　{rank_s}' if rank_s else f'{contrib:.2f}'
+                        pt_s = f'{contrib:.2f}　{feat_rank_s}' if feat_rank_s else f'{contrib:.2f}'
                 sname = short_feat(f)
                 chips.append(
                     f'<span class="feat-chip" style="background:{bg};color:{fc}">'
@@ -1103,7 +1103,7 @@ def make_newspaper(date_str=None):
             rows.append(
                 f'<tr class="{row_cls} expandable" onclick="toggleDetail(\'{detail_id}\')">'
                 f'{jyuni_td}'
-                f'<td class="td-rank">{rank_s}</td>'
+                f'<td class="td-rank">{ai_rank_s}</td>'
                 f'{buy_td}'
                 f'<td class="td-horse">{bango}.{horse}{wt_html}<span class="detail-hint">▾</span></td>'
                 f'<td class="td-jky">{jockey}</td>'
