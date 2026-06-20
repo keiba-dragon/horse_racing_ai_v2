@@ -13,6 +13,17 @@ import os, sys, re, time, argparse
 import urllib.request
 import pandas as pd
 import numpy as np
+
+
+def _decode_html(r) -> str:
+    raw = r.read()
+    ct = r.headers.get('Content-Type', '')
+    if 'euc-jp' in ct.lower():
+        return raw.decode('euc-jp', errors='replace')
+    try:
+        return raw.decode('utf-8')
+    except UnicodeDecodeError:
+        return raw.decode('euc-jp', errors='replace')
 from datetime import datetime, timedelta
 
 sys.stdout.reconfigure(encoding='utf-8')
@@ -53,7 +64,7 @@ def fetch_race_odds(race_id: str) -> dict | None:
     try:
         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
         with urllib.request.urlopen(req, timeout=12) as r:
-            html = r.read().decode('euc-jp', errors='replace')
+            html = _decode_html(r)
         if 'Result_Num' not in html:
             return None   # 未確定レース
         odds_map = {}

@@ -14,6 +14,17 @@ usage:
 import sys, os, re, time, subprocess, urllib.request
 from datetime import datetime, timedelta
 
+
+def _decode_html(r) -> str:
+    raw = r.read()
+    ct = r.headers.get('Content-Type', '')
+    if 'euc-jp' in ct.lower():
+        return raw.decode('euc-jp', errors='replace')
+    try:
+        return raw.decode('utf-8')
+    except UnicodeDecodeError:
+        return raw.decode('euc-jp', errors='replace')
+
 sys.stdout.reconfigure(encoding='utf-8', line_buffering=True)
 
 BASE_DIR    = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -31,7 +42,7 @@ def get_race_times(tgt_date: str) -> list[datetime]:
             f'https://race.netkeiba.com/top/race_list_sub.html?kaisai_date={full_date}',
             headers={'User-Agent': 'Mozilla/5.0'})
         with urllib.request.urlopen(req, timeout=10) as r:
-            html = r.read().decode('euc-jp', errors='replace')
+            html = _decode_html(r)
     except Exception as e:
         print(f'[WARN] レース一覧取得失敗: {e}')
         return []

@@ -42,7 +42,15 @@ def fetch_html(url: str) -> str:
         'Accept-Encoding': 'identity',
     })
     with urllib.request.urlopen(req, timeout=12) as r:
-        return r.read().decode('euc-jp', errors='replace')
+        raw = r.read()
+        # Content-Type ヘッダで charset を確認、なければ UTF-8 を試みる
+        ct = r.headers.get('Content-Type', '')
+        if 'euc-jp' in ct.lower():
+            return raw.decode('euc-jp', errors='replace')
+        try:
+            return raw.decode('utf-8')
+        except UnicodeDecodeError:
+            return raw.decode('euc-jp', errors='replace')
 
 
 def get_race_ids(target_date: str) -> list[str]:
@@ -118,9 +126,17 @@ def parse_shutuba(race_id: str) -> dict | None:
             horse_name   = horse_span.get_text(strip=True) if horse_span else ''
             if not horse_name or horse_name == '馬名':
                 continue
+            # 馬ID: 出馬表HTMLの馬名リンクから取得
+            horse_link = horse_span.find_parent('a') if horse_span else None
+            horse_id = ''
+            if horse_link and horse_link.get('href'):
+                _m = re.search(r'/horse/(\w+)/', str(horse_link.get('href', '')))
+                if _m:
+                    horse_id = _m.group(1)
             seireй_text  = tds[4].get_text(strip=True) if len(tds) > 4 else ''
             kinryo_text  = tds[5].get_text(strip=True) if len(tds) > 5 else ''
             jockey_text  = tds[6].get_text(strip=True) if len(tds) > 6 else ''
+            trainer_text = tds[7].get_text(strip=True) if len(tds) > 7 else ''
             weight_text  = tds[8].get_text(strip=True) if len(tds) > 8 else ''
 
             # 性齢: "牝3" → 性別='牝', 年齢=3
@@ -143,9 +159,11 @@ def parse_shutuba(race_id: str) -> dict | None:
             rows_data.append({
                 '馬番':    umaban,
                 '馬名S':   horse_name,
+                '馬ID':    horse_id,
                 '性別':    sex,
                 '斤量':    kinryo,
                 '騎手':    jockey_text,
+                '調教師':  trainer_text,
                 '馬体重':  weight,
                 '馬体重増減': delta,
             })
@@ -160,7 +178,7 @@ def parse_shutuba(race_id: str) -> dict | None:
         'distance_m': distance_m,
         'baba':       baba,
         'class_str':  class_str,
-        'horses':     rows_data if rows_data else [{'馬番': i+1, '馬名S': h, '性別': '', '斤量': None, '騎手': '', '馬体重': None, '馬体重増減': None} for i, h in enumerate(horse_names)],
+        'horses':     rows_data if rows_data else [{'馬番': i+1, '馬名S': h, '馬ID': '', '性別': '', '斤量': None, '騎手': '', '馬体重': None, '馬体重増減': None} for i, h in enumerate(horse_names)],
     }
 
 
@@ -174,9 +192,11 @@ def build_csv_rows(races: list[dict]) -> list[dict]:
                 '場 R':   f"{race['venue']}{race['r_num']}",
                 '馬番':   h['馬番'],
                 '馬名S':  h['馬名S'],
+                '馬ID':   h.get('馬ID', ''),
                 '性別':   h.get('性別', ''),
                 '斤量':   h.get('斤量', ''),
                 '騎手':   h.get('騎手', ''),
+                '調教師': h.get('調教師', ''),
                 '馬体重': h.get('馬体重', ''),
                 '馬体重増減': h.get('馬体重増減', ''),
                 '芝ダ':   race['surface'],
@@ -227,7 +247,7 @@ def main():
     print(f'\n{len(races)}レース / 合計{sum(len(r["horses"]) for r in races)}頭 取得完了')
 
     # ── 3. CSV保存 ──────────────────────────────────────────────
-    csv_cols = ['日付S', '場 R', '馬番', '馬名S', '性別', '斤量', '騎手',
+    csv_cols = ['日付S', '場 R', '馬番', '馬名S', '馬ID', '性別', '斤量', '騎手', '調教師',
                 '馬体重', '馬体重増減', '芝ダ', '距離', 'クラス']
     rows = build_csv_rows(races)
     csv_path = os.path.join(BASE_DIR, f'出馬表形式{target_date[4:6]}月{int(target_date[6:8])}日_api.csv')
@@ -236,6 +256,34 @@ def main():
         writer.writeheader()
         writer.writerows(rows)
     print(f'CSV保存: {csv_path}')
+
+    # ── 3b. JVLink カードが存在すれば調教師名を正式名に上書き ──────
+    # jvlink_card_builder.py が SE レコードからフルネームで取得した調教師名を使う
+    jvlink_card_path = os.path.join(
+        BASE_DIR, 'data', 'raw', 'cards', 'jvlink', f'{target_date}.csv'
+    )
+    if os.path.exists(jvlink_card_path):
+        try:
+            import pandas as _pd
+            df_netkeiba = _pd.read_csv(csv_path, encoding='cp932')
+            df_jvlink   = _pd.read_csv(jvlink_card_path, encoding='cp932')
+            if '馬名S' in df_jvlink.columns:
+                merged_cols = []
+                for col in ['調教師', '騎手']:
+                    if col in df_jvlink.columns and col in df_netkeiba.columns:
+                        name_map = (df_jvlink.dropna(subset=[col])
+                                    .drop_duplicates('馬名S')
+                                    .set_index('馬名S')[col])
+                        df_netkeiba[col] = df_netkeiba['馬名S'].map(name_map).fillna(df_netkeiba[col])
+                        merged_cols.append(col)
+                df_netkeiba.to_csv(csv_path, index=False, encoding='cp932', errors='replace')
+                print(f'JVLinkマージ完了: {merged_cols} ({jvlink_card_path})')
+            else:
+                print(f'[WARN] JVLinkカードに調教師列なし: {jvlink_card_path}')
+        except Exception as _e:
+            print(f'[WARN] JVLink調教師マージ失敗: {_e}')
+    else:
+        print(f'[INFO] JVLinkカード未生成 ({jvlink_card_path}) → netkeiba略称を使用')
 
     # ── 4. 06_predict_from_card.py 実行 ────────────────────────
     print('\n=== 予測実行 ===')

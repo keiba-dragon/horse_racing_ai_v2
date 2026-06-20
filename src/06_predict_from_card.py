@@ -190,7 +190,14 @@ def _fetch_horse_page_html(horse_id: str) -> str:
         'Accept-Encoding': 'identity',
     })
     with _urlreq.urlopen(req, timeout=12) as r:
-        return r.read().decode('euc-jp', errors='replace')
+        raw = r.read()
+        ct = r.headers.get('Content-Type', '')
+        if 'euc-jp' in ct.lower():
+            return raw.decode('euc-jp', errors='replace')
+        try:
+            return raw.decode('utf-8')
+        except UnicodeDecodeError:
+            return raw.decode('euc-jp', errors='replace')
 
 
 def fetch_horse_last_race(horse_id: str) -> dict | None:

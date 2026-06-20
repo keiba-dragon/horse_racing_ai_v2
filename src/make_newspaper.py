@@ -14,6 +14,17 @@ from bs4 import BeautifulSoup
 sys.stdout.reconfigure(encoding='utf-8')
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+
+def _decode_html(r) -> str:
+    raw = r.read()
+    ct = r.headers.get('Content-Type', '')
+    if 'euc-jp' in ct.lower():
+        return raw.decode('euc-jp', errors='replace')
+    try:
+        return raw.decode('utf-8')
+    except UnicodeDecodeError:
+        return raw.decode('euc-jp', errors='replace')
+
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 SEG_LABEL = {
@@ -339,7 +350,7 @@ def _get_race_ids(tgt_date: str) -> list:
             f'https://race.netkeiba.com/top/race_list_sub.html?kaisai_date={full_date}',
             headers={'User-Agent': 'Mozilla/5.0'})
         with urllib.request.urlopen(req, timeout=10) as r:
-            html = r.read().decode('euc-jp', errors='replace')
+            html = _decode_html(r)
         return list(dict.fromkeys(re.findall(r'race_id=(\d{12})', html)))
     except Exception as e:
         print(f'[WARN] レースID取得失敗 {e}')
@@ -402,7 +413,7 @@ def fetch_horse_weights(race_ids: list) -> dict:
                 f'https://race.netkeiba.com/race/shutuba.html?race_id={race_id}',
                 headers={'User-Agent': 'Mozilla/5.0'})
             with urllib.request.urlopen(req, timeout=10) as r:
-                html = r.read().decode('euc-jp', errors='replace')
+                html = _decode_html(r)
             race_wt = {}
             for m in row_pat.finditer(html):
                 row = m.group(1)
@@ -446,7 +457,7 @@ def fetch_race_results(race_ids: list) -> dict:
                 f'https://race.netkeiba.com/race/result.html?race_id={race_id}',
                 headers={'User-Agent': 'Mozilla/5.0'})
             with urllib.request.urlopen(req, timeout=10) as r:
-                html = r.read().decode('euc-jp', errors='replace')
+                html = _decode_html(r)
             # 確定チェック
             if 'Result_Num' not in html:
                 continue
@@ -854,6 +865,9 @@ def make_newspaper(date_str=None):
   .footer { font-size: 12px; color: #aaa; text-align: right; padding: 6px 10px 16px; }
 </style>"""
 
+    # 買い判定パラメータ
+    EV_MIN = 1.0   # AIの勝率 × 単勝オッズ ≥ 1.0 (期待値プラス) のみ買い
+
     # ═══════════════════════════════════════════════════════════
     # Section 1: 買い目サマリー
     # ═══════════════════════════════════════════════════════════
@@ -877,7 +891,6 @@ def make_newspaper(date_str=None):
 
         for _, r in rd['grp'].iterrows():
             sort_rank1 = r.get('_sort_rank')
-            c_buy  = (sort_rank1 == 1)
             horse  = r.get('馬名S', '')
             acc_prob1 = r.get('_acc_prob', np.nan)
 
@@ -888,9 +901,16 @@ def make_newspaper(date_str=None):
             except (ValueError, TypeError):
                 uma_s1 = '00'
             ov = race_live_odds1.get(uma_s1) or ci.get('単勝オッズ', r.get('単勝オッズ', ''))
-            odds_s = f'{float(ov):.1f}倍' if ov not in ('', None) and str(ov) not in ('nan', '') else '未発表'
+            try:
+                odds_num1 = float(ov) if ov not in ('', None) and str(ov) not in ('nan', '') else np.nan
+            except (ValueError, TypeError):
+                odds_num1 = np.nan
+            odds_s = f'{odds_num1:.1f}倍' if pd.notna(odds_num1) else '未発表'
+            ev1 = acc_prob1 * odds_num1 if pd.notna(acc_prob1) and pd.notna(odds_num1) else np.nan
+            c_buy  = (sort_rank1 == 1) and pd.notna(ev1) and (ev1 >= EV_MIN)
             jockey = str(ci.get('騎手', r.get('dc_騎手', r.get('騎手', '')))).strip()
             prob_disp = f'{acc_prob1:.1%}' if pd.notna(acc_prob1) else ''
+            ev_s = f'EV {ev1:.2f}' if pd.notna(ev1) else ''
 
             chip = f'<span class="seg-chip" style="background:{seg_color}">{seg_lbl}</span>'
             race_lbl = f'{venue_full} {rd["r_num"]}R　{chip}'
@@ -900,7 +920,7 @@ def make_newspaper(date_str=None):
 <div class="buy-card confirmed">
   <div class="card-race">{race_lbl}</div>
   <div class="card-horse">{horse}</div>
-  <div class="card-meta">{jockey}　単勝 {odds_s}　AI {prob_disp}</div>
+  <div class="card-meta">{jockey}　単勝 {odds_s}　AI {prob_disp}　{ev_s}</div>
   <span class="badge-buy">◎ 買い</span>
 </div>''')
 
@@ -986,7 +1006,6 @@ def make_newspaper(date_str=None):
         rn_safe = rd['r_num'].replace(' ', '_')
         for hi, (_, r) in enumerate(grp.iterrows()):
             sort_rank = r.get('_sort_rank', np.nan)
-            c_buy   = (sort_rank == 1)
             c_calib = r.get('_acc_prob')      # accuracy_model の確率
             horse   = r.get('馬名S', '')
             acc_score = r.get('_acc_score', np.nan)
@@ -1001,7 +1020,13 @@ def make_newspaper(date_str=None):
             ov = (race_live_odds.get(uma_s)
                   or (race_res.get('odds', {}).get(uma_s) if race_res else None)
                   or ci.get('単勝オッズ', r.get('単勝オッズ', '')))
-            odds_s  = f'{float(ov):.1f}' if ov not in ('', None) and str(ov) not in ('nan', '') else '-'
+            try:
+                odds_num = float(ov) if ov not in ('', None) and str(ov) not in ('nan', '') else np.nan
+            except (ValueError, TypeError):
+                odds_num = np.nan
+            odds_s  = f'{odds_num:.1f}' if pd.notna(odds_num) else '-'
+            ev = c_calib * odds_num if pd.notna(c_calib) and pd.notna(odds_num) else np.nan
+            c_buy = (sort_rank == 1) and pd.notna(ev) and (ev >= EV_MIN)
             jockey  = str(ci.get('騎手', r.get('dc_騎手', r.get('騎手', '')))).strip()[:5]
             prob_s  = f'{c_calib:.1%}' if pd.notna(c_calib) else '-'
 
@@ -1017,6 +1042,8 @@ def make_newspaper(date_str=None):
 
             if c_buy:
                 buy_td = '<td class="td-buy">◎買</td>'
+            elif sort_rank == 1 and pd.notna(ev):
+                buy_td = f'<td class="td-watch">EV{ev:.1f}</td>'
             else:
                 buy_td = '<td class="td-none">-</td>'
 
