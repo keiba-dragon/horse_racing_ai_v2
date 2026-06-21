@@ -560,6 +560,19 @@ def make_newspaper(date_str=None):
     acc_model  = pickle.load(open(model_path, 'rb'))
     seg_feats  = {k: v['feat_cols'] for k, v in acc_model.items()}
 
+    # ── ROIモデル（final_model.pkl）読み込み（買い絞り込みに使用）──
+    # accuracy_model と同じ seg_key を使うためキーを変換する
+    # final_model のキー: ダ/ダ短/芝短/芝中/芝長 (ダ長 → ダ)
+    _ROI_KEY_MAP = {'ダ長': 'ダ', 'ダ短': 'ダ短', '芝短': '芝短', '芝中': '芝中', '芝長': '芝長'}
+    try:
+        _roi_raw = pickle.load(open(os.path.join(BASE_DIR, 'models', 'final_model.pkl'), 'rb'))
+        _roi_arts = _roi_raw.get('artifacts', {})
+        # seg_key → artifact のマッピングに変換
+        roi_model = {sk: _roi_arts[rk] for sk, rk in _ROI_KEY_MAP.items() if rk in _roi_arts}
+    except Exception as _e:
+        print(f'[WARN] final_model.pkl 読み込み失敗: {_e}')
+        roi_model = {}
+
     # ── 騎手会場_r100_勝率: 騎手コース_r100_勝率で代替 ──────────────
     # 予測パイプラインはjockey名列を持たないため parquet照合不可
     # 騎手コース勝率（同コース・同馬場条件）を近似値として使用
@@ -694,6 +707,34 @@ def make_newspaper(date_str=None):
             grp['_acc_prob']     = np.nan
             grp['_contrib_dict'] = pd.array([{} for _ in range(len(grp))], dtype=object)
             coef_asc_map         = {}
+
+        # ── ROIモデル（final_model.pkl）でもランク付け ────────────────
+        if seg_key and seg_key in roi_model:
+            _rart = roi_model[seg_key]
+            _rfeat = _rart['feat_cols']
+            _rscaler = _rart['scaler']
+            _rcoef = _rart['coef']
+            _rrows = []
+            for _, _rrow in grp.iterrows():
+                _rfv = []
+                for _rf in _rfeat:
+                    if _rf.endswith('_isnan'):
+                        _rfv.append(1.0 if pd.isna(_rrow.get(_rf[:-6])) else 0.0)
+                    else:
+                        _rv = _rrow.get(_rf, np.nan)
+                        try:
+                            _rfv.append(float(_rv) if not pd.isna(_rv) else 0.0)
+                        except (ValueError, TypeError):
+                            _rfv.append(0.0)
+                _rrows.append(_rfv)
+            try:
+                _rX = _rscaler.transform(np.array(_rrows, dtype=float))
+                _rscores = _rX @ _rcoef
+                grp['_roi_rank'] = pd.Series(_rscores, index=grp.index).rank(ascending=False, method='first')
+            except Exception:
+                grp['_roi_rank'] = np.nan
+        else:
+            grp['_roi_rank'] = np.nan
         # 表示は馬番順（AI順位は列に保持）
         bango_col = 'dc_馬番' if 'dc_馬番' in grp.columns else ('馬番' if '馬番' in grp.columns else None)
         if bango_col:
@@ -907,7 +948,8 @@ def make_newspaper(date_str=None):
                 odds_num1 = np.nan
             odds_s = f'{odds_num1:.1f}倍' if pd.notna(odds_num1) else '未発表'
             ev1 = acc_prob1 * odds_num1 if pd.notna(acc_prob1) and pd.notna(odds_num1) else np.nan
-            c_buy  = (sort_rank1 == 1) and pd.notna(ev1) and (ev1 >= EV_MIN)
+            roi_rank1 = r.get('_roi_rank', np.nan)
+            c_buy  = (sort_rank1 == 1) and pd.notna(ev1) and (ev1 >= EV_MIN) and (roi_rank1 == 1)
             jockey = str(ci.get('騎手', r.get('dc_騎手', r.get('騎手', '')))).strip()
             prob_disp = f'{acc_prob1:.1%}' if pd.notna(acc_prob1) else ''
             ev_s = f'EV {ev1:.2f}' if pd.notna(ev1) else ''
@@ -1026,7 +1068,8 @@ def make_newspaper(date_str=None):
                 odds_num = np.nan
             odds_s  = f'{odds_num:.1f}' if pd.notna(odds_num) else '-'
             ev = c_calib * odds_num if pd.notna(c_calib) and pd.notna(odds_num) else np.nan
-            c_buy = (sort_rank == 1) and pd.notna(ev) and (ev >= EV_MIN)
+            roi_rank = r.get('_roi_rank', np.nan)
+            c_buy = (sort_rank == 1) and pd.notna(ev) and (ev >= EV_MIN) and (roi_rank == 1)
             jockey  = str(ci.get('騎手', r.get('dc_騎手', r.get('騎手', '')))).strip()[:5]
             prob_s  = f'{c_calib:.1%}' if pd.notna(c_calib) else '-'
 
@@ -1218,7 +1261,7 @@ def make_newspaper(date_str=None):
   {tab_panes}
 
   <div class="footer">
-    的中率最大化モデル (accuracy_model.pkl) | clogit + isotonic calibration | rank=1 全買い
+    的中率モデル(rank=1) × ROIモデル(rank=1) 両方一致のみ買い推奨 | clogit + isotonic calibration
     <br>生成日時: {generated_at}
   </div>
 </div>
