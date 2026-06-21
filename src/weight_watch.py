@@ -124,8 +124,9 @@ def main():
 
     if not triggers:
         print('本日の実行タイミングがすべて過去です。今すぐ実行します。')
-        if run_newspaper():
-            git_push('即時')
+        run_newspaper()
+        run_result_report(tgt_date)
+        git_push('即時+夜間レポート')
         return
 
     print(f'実行予定: {[t.strftime("%H:%M")+"("+k+")" for t, k in triggers]}')
