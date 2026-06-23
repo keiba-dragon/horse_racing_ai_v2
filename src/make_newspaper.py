@@ -560,18 +560,12 @@ def make_newspaper(date_str=None):
     acc_model  = pickle.load(open(model_path, 'rb'))
     seg_feats  = {k: v['feat_cols'] for k, v in acc_model.items()}
 
-    # ── ROIモデル（final_model.pkl）読み込み（買い絞り込みに使用）──
-    # accuracy_model と同じ seg_key を使うためキーを変換する
-    # final_model のキー: ダ/ダ短/芝短/芝中/芝長 (ダ長 → ダ)
-    _ROI_KEY_MAP = {'ダ長': 'ダ', 'ダ短': 'ダ短', '芝短': '芝短', '芝中': '芝中', '芝長': '芝長'}
-    try:
-        _roi_raw = pickle.load(open(os.path.join(BASE_DIR, 'models', 'final_model.pkl'), 'rb'))
-        _roi_arts = _roi_raw.get('artifacts', {})
-        # seg_key → artifact のマッピングに変換
-        roi_model = {sk: _roi_arts[rk] for sk, rk in _ROI_KEY_MAP.items() if rk in _roi_arts}
-    except Exception as _e:
-        print(f'[WARN] final_model.pkl 読み込み失敗: {_e}')
-        roi_model = {}
+    # 印のz-score閾値
+    # ◎: z<1.2 (混戦でモデルが優勢) 全OOS +37.8%
+    # ○: 1.2<=z<1.5                 全OOS  +7.1%
+    # ▲: z>=1.5 (モデルが強く確信=人気馬) 全OOS -4.5% → 買わない
+    Z_MARU   = 1.2
+    Z_SANKAKU = 1.5
 
     # ── 騎手会場_r100_勝率: 騎手コース_r100_勝率で代替 ──────────────
     # 予測パイプラインはjockey名列を持たないため parquet照合不可
@@ -708,33 +702,22 @@ def make_newspaper(date_str=None):
             grp['_contrib_dict'] = pd.array([{} for _ in range(len(grp))], dtype=object)
             coef_asc_map         = {}
 
-        # ── ROIモデル（final_model.pkl）でもランク付け ────────────────
-        if seg_key and seg_key in roi_model:
-            _rart = roi_model[seg_key]
-            _rfeat = _rart['feat_cols']
-            _rscaler = _rart['scaler']
-            _rcoef = _rart['coef']
-            _rrows = []
-            for _, _rrow in grp.iterrows():
-                _rfv = []
-                for _rf in _rfeat:
-                    if _rf.endswith('_isnan'):
-                        _rfv.append(1.0 if pd.isna(_rrow.get(_rf[:-6])) else 0.0)
-                    else:
-                        _rv = _rrow.get(_rf, np.nan)
-                        try:
-                            _rfv.append(float(_rv) if not pd.isna(_rv) else 0.0)
-                        except (ValueError, TypeError):
-                            _rfv.append(0.0)
-                _rrows.append(_rfv)
-            try:
-                _rX = _rscaler.transform(np.array(_rrows, dtype=float))
-                _rscores = _rX @ _rcoef
-                grp['_roi_rank'] = pd.Series(_rscores, index=grp.index).rank(ascending=False, method='first')
-            except Exception:
-                grp['_roi_rank'] = np.nan
-        else:
-            grp['_roi_rank'] = np.nan
+        # ── per-race z-score → 印を付与 ──────────────────────────────
+        # z = (score_rank1 - mean) / std within race
+        # 低z（混戦）= 市場も迷ってる = 高オッズ = ROI良
+        _sc = grp['_acc_score'].values
+        _mean, _std = _sc.mean(), _sc.std(ddof=0)
+        grp['_z'] = (_sc - _mean) / _std if _std > 0 else np.zeros(len(_sc))
+
+        def _mark(row):
+            if row.get('_sort_rank') != 1:
+                return ''
+            z = row.get('_z', np.nan)
+            if pd.isna(z):   return ''
+            if z < Z_MARU:   return '◎'
+            if z < Z_SANKAKU: return '○'
+            return '▲'
+        grp['_mark'] = [_mark(r) for _, r in grp.iterrows()]
         # 表示は馬番順（AI順位は列に保持）
         bango_col = 'dc_馬番' if 'dc_馬番' in grp.columns else ('馬番' if '馬番' in grp.columns else None)
         if bango_col:
@@ -847,10 +830,11 @@ def make_newspaper(date_str=None):
                         font-size: 15px; font-weight: bold; overflow: hidden; }
   table.race-table td { padding: 4px 5px; border: 1px solid #e0e0e0;
                         text-align: center; overflow: hidden; }
-  .row-buy td { background: #fde8e8 !important; outline: 2px solid #c0392b; }
-  .row-r1 td  { background: #fef5f5 !important; }
-  .row-r2 td  { background: #fef9ee !important; }
-  .row-r3 td  { background: #f3faf5 !important; }
+  .row-buy td  { background: #fde8e8 !important; outline: 2px solid #c0392b; }
+  .row-maru td { background: #fff3e0 !important; outline: 2px solid #e67e22; }
+  .row-r1 td   { background: #fef5f5 !important; }
+  .row-r2 td   { background: #fef9ee !important; }
+  .row-r3 td   { background: #f3faf5 !important; }
 
   .td-rank  { font-weight: bold; width: 32px; min-width: 32px; max-width: 32px; }
   .td-horse { text-align: left !important; font-weight: bold; font-size: 18px;
@@ -948,8 +932,8 @@ def make_newspaper(date_str=None):
                 odds_num1 = np.nan
             odds_s = f'{odds_num1:.1f}倍' if pd.notna(odds_num1) else '未発表'
             ev1 = acc_prob1 * odds_num1 if pd.notna(acc_prob1) and pd.notna(odds_num1) else np.nan
-            roi_rank1 = r.get('_roi_rank', np.nan)
-            c_buy  = (sort_rank1 == 1) and pd.notna(ev1) and (ev1 >= EV_MIN) and (roi_rank1 == 1)
+            mark1 = r.get('_mark', '')
+            c_buy  = (sort_rank1 == 1) and (mark1 in ('◎', '○'))
             jockey = str(ci.get('騎手', r.get('dc_騎手', r.get('騎手', '')))).strip()
             prob_disp = f'{acc_prob1:.1%}' if pd.notna(acc_prob1) else ''
             ev_s = f'EV {ev1:.2f}' if pd.notna(ev1) else ''
@@ -958,16 +942,17 @@ def make_newspaper(date_str=None):
             race_lbl = f'{venue_full} {rd["r_num"]}R　{chip}'
 
             if c_buy:
+                badge_color = '#c0392b' if mark1 == '◎' else '#e67e22'
                 buy_cards.append(f'''
 <div class="buy-card confirmed">
   <div class="card-race">{race_lbl}</div>
   <div class="card-horse">{horse}</div>
   <div class="card-meta">{jockey}　単勝 {odds_s}　AI {prob_disp}　{ev_s}</div>
-  <span class="badge-buy">◎ 買い</span>
+  <span class="badge-buy" style="background:{badge_color}">{mark1} 買い</span>
 </div>''')
 
     buy_html = '<div class="buy-section">'
-    buy_html += '<div class="section-title buy">◎ 本日の買い目</div>'
+    buy_html += '<div class="section-title buy">◎○ 本日の買い目　<small style="font-weight:normal;font-size:12px">◎混戦穴(z&lt;1.2) ○やや混戦(z&lt;1.5)</small></div>'
     if buy_cards:
         buy_html += f'<div class="buy-grid">{"".join(buy_cards)}</div>'
     else:
@@ -1068,8 +1053,8 @@ def make_newspaper(date_str=None):
                 odds_num = np.nan
             odds_s  = f'{odds_num:.1f}' if pd.notna(odds_num) else '-'
             ev = c_calib * odds_num if pd.notna(c_calib) and pd.notna(odds_num) else np.nan
-            roi_rank = r.get('_roi_rank', np.nan)
-            c_buy = (sort_rank == 1) and pd.notna(ev) and (ev >= EV_MIN) and (roi_rank == 1)
+            mark = r.get('_mark', '')
+            c_buy = (sort_rank == 1) and (mark in ('◎', '○'))
             jockey  = str(ci.get('騎手', r.get('dc_騎手', r.get('騎手', '')))).strip()[:5]
             prob_s  = f'{c_calib:.1%}' if pd.notna(c_calib) else '-'
 
@@ -1077,16 +1062,19 @@ def make_newspaper(date_str=None):
             except: rank_i = None
             ai_rank_s = str(rank_i) if rank_i else '-'
 
-            if c_buy:              row_cls = 'row-buy'
+            if mark == '◎':        row_cls = 'row-buy'
+            elif mark == '○':      row_cls = 'row-maru'
             elif rank_i == 1:      row_cls = 'row-r1'
             elif rank_i == 2:      row_cls = 'row-r2'
             elif rank_i == 3:      row_cls = 'row-r3'
             else:                  row_cls = ''
 
-            if c_buy:
-                buy_td = '<td class="td-buy">◎買</td>'
-            elif sort_rank == 1 and pd.notna(ev):
-                buy_td = f'<td class="td-watch">EV{ev:.1f}</td>'
+            if mark == '◎':
+                buy_td = '<td class="td-buy" style="color:#c0392b;font-weight:bold">◎</td>'
+            elif mark == '○':
+                buy_td = '<td class="td-buy" style="color:#e67e22;font-weight:bold">○</td>'
+            elif mark == '▲':
+                buy_td = '<td class="td-watch" style="color:#27ae60;font-weight:bold">▲</td>'
             else:
                 buy_td = '<td class="td-none">-</td>'
 
@@ -1261,7 +1249,7 @@ def make_newspaper(date_str=None):
   {tab_panes}
 
   <div class="footer">
-    的中率モデル(rank=1) × ROIモデル(rank=1) 両方一致のみ買い推奨 | clogit + isotonic calibration
+    ◎z&lt;1.2(混戦穴) ○z&lt;1.5(やや混戦) ▲z&gt;=1.5(人気) | accuracy_model clogit + isotonic
     <br>生成日時: {generated_at}
   </div>
 </div>
