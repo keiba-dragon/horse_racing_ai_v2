@@ -4,7 +4,7 @@ save_shiba_short_nv3.py - 芝短距離 10特徴モデル保存 (nv3)
   特徴量(10個): nv1ベース4 + 馬体重, 前走着差タイム, 馬距離_勝率, 近5走_上り3F平均, コース枠_r200_勝率, 馬番
   選択指標: 2323 OOS ROI (+27.05%, nv1ベース+32.50%から-5.45pp)
   セグメント: 芝 ≤1400m
-  final_model.pkl の '芝短' artifact を上書き更新。
+  roi_model.pkl の '芝短' artifact を上書き更新。
   2323: +27.05%  2025: -42.50%  2026: -13.17%  25+26: -36.63%
 """
 import sys, os, pickle, shutil
@@ -161,7 +161,7 @@ def main():
     comb = (r25*n25 + r26*n26) / (n25+n26) if n25+n26 > 0 else float('nan')
     print(f'  25+26合算: ROI={comb:+.2%}')
 
-    final_pkl   = os.path.join(MODEL_DIR, 'final_model.pkl')
+    final_pkl   = os.path.join(MODEL_DIR, 'roi_model.pkl')
     backup_path = os.path.join(MODEL_DIR, 'final_model_pre_shiba_short_nv3.pkl')
     with open(final_pkl, 'rb') as f:
         existing_pkg = pickle.load(f)

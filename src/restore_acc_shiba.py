@@ -93,7 +93,7 @@ def main():
     for col in df.columns:
         if '馬場状態' in col and col != '馬場状態': df[col] = df[col].map(baba_map)
 
-    acc_pkl = os.path.join(BASE_DIR, 'models', 'accuracy_model.pkl')
+    acc_pkl = os.path.join(BASE_DIR, 'models', 'hitrate_model.pkl')
     existing = pickle.load(open(acc_pkl, 'rb'))
 
     SEG_MASKS = {

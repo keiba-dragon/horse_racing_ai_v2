@@ -230,7 +230,7 @@ def main():
         'val_roi_confirmed': -0.1209,
         'note': 'surface_clogit v1 beta + class-specific hybrid ranking',
     }
-    out_pkl = os.path.join(out_dir, 'final_model.pkl')
+    out_pkl = os.path.join(out_dir, 'roi_model.pkl')
     with open(out_pkl, 'wb') as f:
         pickle.dump(final_pkg, f)
     print(f'\n保存完了: {out_pkl}')

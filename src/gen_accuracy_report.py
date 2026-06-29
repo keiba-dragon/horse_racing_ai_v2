@@ -4,22 +4,178 @@ gen_accuracy_report.py  - 的中率モデル HTML レポート生成
 model_report_20260608.html と同スタイル（インディゴ・KPIカード・タブ・beta値）
 usage: python src/gen_accuracy_report.py
 """
-import os, sys, pickle
+import os, sys, pickle, warnings
 import numpy as np
+import pandas as pd
 from datetime import date
 
+warnings.filterwarnings('ignore')
 sys.stdout.reconfigure(encoding='utf-8')
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BASE_DIR  = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DATA_FILE = os.path.join(BASE_DIR, 'data', 'processed', 'all_venues_features.parquet')
 
-with open(os.path.join(BASE_DIR, 'models', 'accuracy_model.pkl'), 'rb') as f:
+with open(os.path.join(BASE_DIR, 'models', 'hitrate_model.pkl'), 'rb') as f:
     MODEL = pickle.load(f)
 
-TODAY = date.today().strftime('%Y-%m-%d')
+TODAY  = date.today().strftime('%Y-%m-%d')
+Z_MARU = 1.2
+Z_SAN  = 1.5
 
 FAV  = {'ダ長': 0.3403, 'ダ短': 0.3490, '芝短': 0.2869, '芝中': 0.3321, '芝長': 0.3605}
 COND = {'芝長': '芝 &gt;2000m', '芝中': '芝 1401–2000m', '芝短': '芝 ≤1400m',
         'ダ長': 'ダ &gt;1400m', 'ダ短': 'ダ ≤1400m'}
 ORDER = ['芝長', '芝中', '芝短', 'ダ長', 'ダ短']
+
+# ─── OOS スコア・統計計算 ──────────────────────────────────────────────────────
+def _seg_key(surf, dist_m):
+    if pd.isna(dist_m): return None
+    surf = str(surf).strip()
+    if surf == '芝':
+        if dist_m <= 1400:  return '芝短'
+        elif dist_m <= 2000: return '芝中'
+        else:               return '芝長'
+    elif surf == 'ダ':
+        return 'ダ短' if dist_m <= 1400 else 'ダ長'
+    return None
+
+def _score_seg(grp, art):
+    """セグメント分のスコアを numpy で一括計算"""
+    feat_cols = art['feat_cols']
+    scaler    = art['scaler']
+    coef      = art['coef']
+    n = len(grp)
+    X = np.zeros((n, len(feat_cols)), dtype=float)
+    for j, f in enumerate(feat_cols):
+        if f.endswith('_isnan'):
+            base = f[:-6]
+            X[:, j] = (~grp[base].notna()).astype(float).values if base in grp.columns else 1.0
+        else:
+            col = grp[f] if f in grp.columns else pd.Series(np.nan, index=grp.index)
+            X[:, j] = pd.to_numeric(col, errors='coerce').fillna(0.0).values
+    try:
+        return scaler.transform(X) @ coef
+    except Exception:
+        return np.zeros(n)
+
+def _compute_seg_stats():
+    try:
+        from save_v3 import add_computed_features
+        df = pd.read_parquet(DATA_FILE)
+    except Exception as e:
+        print(f'[WARN] データ読み込み失敗: {e}')
+        return {}
+
+    df['日付_num'] = pd.to_numeric(df['日付'], errors='coerce')
+    df['着順_num'] = pd.to_numeric(df['着順_num'], errors='coerce')
+    df = df.dropna(subset=['日付_num', '着順_num'])
+    df = df[df['着順_num'] < 99]
+    df['race_id'] = (df['日付_num'].astype(int).astype(str) + '_' +
+                     df['開催'].astype(str).str.strip() + '_' +
+                     df['Ｒ'].astype(str).str.strip())
+    df = df[df['開催'].notna()].copy()
+    df['_surf']   = df['距離'].astype(str).str.strip().str.extract(r'^([芝ダ])')[0].fillna('不明')
+    df['_dist_m'] = pd.to_numeric(df['距離'].astype(str).str.extract(r'(\d+)')[0], errors='coerce')
+    df['クラス_rank'] = pd.to_numeric(df['クラス_rank'], errors='coerce')
+    df = df[df['クラス_rank'] != 1.0].copy()
+    df['seg_key'] = [_seg_key(s, d) for s, d in zip(df['_surf'], df['_dist_m'])]
+    df = df[df['seg_key'].notna()].copy()
+    df['dist_m'] = df['_dist_m']
+    df = add_computed_features(df)
+    baba_map = {'良': 0, '稍重': 1, '重': 2, '不良': 3}
+    for col in df.columns:
+        if '馬場状態' in col and col != '馬場状態':
+            df[col] = df[col].map(baba_map)
+    df['単勝オッズ'] = pd.to_numeric(df['単勝オッズ'], errors='coerce')
+
+    # OOS のみ
+    df_oos = df[df['日付_num'] >= 230101].copy()
+
+    # セグメント別スコア付け
+    scored = []
+    for seg, grp in df_oos.groupby('seg_key'):
+        if seg not in MODEL: continue
+        g = grp.copy()
+        g['_score'] = _score_seg(g, MODEL[seg])
+        scored.append(g)
+    if not scored:
+        return {}
+    df_sc = pd.concat(scored)
+
+    # per-race rank & z-score（transform で一括）
+    df_sc = df_sc.reset_index(drop=True)
+    df_sc['_rank'] = df_sc.groupby('race_id')['_score'].rank(ascending=False, method='first').astype(int)
+    _mean = df_sc.groupby('race_id')['_score'].transform('mean')
+    _std  = df_sc.groupby('race_id')['_score'].transform(lambda x: x.std(ddof=0))
+    df_sc['_z'] = (df_sc['_score'] - _mean) / _std.replace(0, np.nan).fillna(1.0)
+
+    OOS = {'2324': (230101, 250101), '2025': (250101, 260101), '2026': (260101, 300101)}
+    PERIOD_LABEL = {'2324': '2023-24', '2025': '2025', '2026': '2026'}
+
+    stats = {}
+    for seg in ORDER:
+        sd = df_sc[df_sc['seg_key'] == seg]
+        if len(sd) == 0:
+            stats[seg] = {}
+            continue
+        n_races = sd['race_id'].nunique()
+        avg_field = len(sd) / n_races if n_races > 0 else 1.0
+        rand_wr   = 1.0 / avg_field
+
+        # ランク別勝率・3着以内率（全OOS, rank 1-18）
+        rank_rows = []
+        for r in range(1, 19):
+            sub = sd[sd['_rank'] == r]
+            n    = len(sub)
+            wr   = float((sub['着順_num'] == 1).mean())  if n >= 10 else float('nan')
+            p3r  = float((sub['着順_num'] <= 3).mean())  if n >= 10 else float('nan')
+            lift = wr / rand_wr if (n >= 10 and rand_wr > 0) else float('nan')
+            rank_rows.append({'rank': r, 'n': n, 'wr': wr, 'p3r': p3r, 'lift': lift})
+
+        # 年別 rank=1 勝率
+        year_rows = []
+        for pid, (d0, d1) in OOS.items():
+            sub = sd[(sd['日付_num'] >= d0) & (sd['日付_num'] < d1) & (sd['_rank'] == 1)]
+            n   = len(sub)
+            wr  = float((sub['着順_num'] == 1).mean()) if n > 0 else float('nan')
+            year_rows.append({'period': PERIOD_LABEL[pid], 'n': n, 'wr': wr})
+
+        # z帯別統計（rank=1 のみ）
+        r1 = sd[sd['_rank'] == 1].copy()
+        def _mark(z):
+            if pd.isna(z): return ''
+            if z < Z_MARU: return '◎'
+            if z < Z_SAN:  return '○'
+            return '▲'
+        r1['_mark'] = r1['_z'].apply(_mark)
+        z_rows = []
+        for mark, label in [('◎', '◎  z < 1.2  混戦穴'),
+                             ('○', '○  1.2 ≤ z < 1.5'),
+                             ('▲', '▲  z ≥ 1.5  人気寄り')]:
+            sub = r1[r1['_mark'] == mark]
+            n   = len(sub)
+            if n == 0:
+                z_rows.append({'mark': mark, 'label': label, 'n': 0,
+                               'wr': float('nan'), 'avg_odds': float('nan'), 'roi': float('nan')})
+                continue
+            won  = sub['着順_num'] == 1
+            wr   = float(won.mean())
+            avg_odds = float(sub['単勝オッズ'].mean())
+            payout   = float((sub['単勝オッズ'][won] * 100).sum())
+            roi      = payout / (n * 100) - 1
+            z_rows.append({'mark': mark, 'label': label, 'n': n,
+                           'wr': wr, 'avg_odds': avg_odds, 'roi': roi})
+
+        stats[seg] = {
+            'rank_rows': rank_rows,
+            'year_rows': year_rows,
+            'z_rows':    z_rows,
+            'rand_wr':   rand_wr,
+        }
+    return stats
+
+print('OOSデータ読み込み・スコア計算中...')
+SEG_STATS = _compute_seg_stats()
+print('完了')
 
 # 改善経緯
 TIMELINE = [
@@ -121,6 +277,103 @@ def feat_cards(seg):
         cards += f'<div class="{cls}"><div class="feat-name">{label}</div><div class="feat-beta">β = <span class="{bcls}">{sign}{b:.4f}</span></div></div>'
     return f'<div class="feat-grid">{cards}</div>'
 
+# ─── ランク別勝率テーブル ────────────────────────────────────────────────────
+def rank_stats_html(seg):
+    s = SEG_STATS.get(seg, {})
+    if not s:
+        return '<p style="color:#aaa;font-size:0.8rem">統計データなし</p>'
+    rand_wr   = s['rand_wr']
+    rank_rows = s['rank_rows']
+    year_rows = s['year_rows']
+
+    r_trs = ''
+    for rs in rank_rows[:6]:
+        r, n, wr, p3r, lift = rs['rank'], rs['n'], rs['wr'], rs['p3r'], rs['lift']
+        wr_s    = f'{wr*100:.1f}%'  if not (wr  != wr)  else '-'
+        p3r_s   = f'{p3r*100:.1f}%' if not (p3r != p3r) else '-'
+        lift_s  = f'{lift:.2f}x'    if not (lift != lift) else '-'
+        cls     = 'ok-row' if r == 1 else ''
+        wr_cls  = 'roi-pos' if (not (wr != wr)) and wr >= rand_wr else 'roi-neg'
+        r_trs += f'<tr class="{cls}"><td>{"◎ " if r==1 else ""}ランク{r}</td><td class="num">{n}頭</td><td class="num {wr_cls}">{wr_s}</td><td class="num">{p3r_s}</td><td class="num">{lift_s}</td></tr>'
+
+    y_trs = ''
+    for ys in year_rows:
+        wr = ys['wr']
+        wr_s   = f'{wr*100:.1f}%' if not (wr != wr) else '-'
+        wr_cls = 'roi-pos' if (not (wr != wr)) and wr >= rand_wr else 'roi-neg'
+        y_trs += f'<tr><td>{ys["period"]}</td><td class="num">{ys["n"]}頭</td><td class="num {wr_cls}">{wr_s}</td></tr>'
+
+    rand_s = f'{rand_wr*100:.1f}%'
+    return f'''<div class="stats-grid">
+      <div>
+        <div class="stats-title">ランク別勝率（全OOS 2023–）</div>
+        <div style="font-size:0.75rem;color:#888;margin-bottom:6px">ランダム選択 ≈ {rand_s}</div>
+        <table class="stats-tbl"><thead><tr><th>ランク</th><th>頭数</th><th>勝率</th><th>3着以内率</th><th>リフト</th></tr></thead>
+        <tbody>{r_trs}</tbody></table>
+      </div>
+      <div>
+        <div class="stats-title">ランク1位 年別勝率</div>
+        <div style="font-size:0.75rem;color:#888;margin-bottom:6px">1位の勝率が安定しているか確認</div>
+        <table class="stats-tbl"><thead><tr><th>期間</th><th>頭数</th><th>勝率</th></tr></thead>
+        <tbody>{y_trs}</tbody></table>
+      </div>
+    </div>'''
+
+# ─── z帯別統計テーブル ────────────────────────────────────────────────────────
+MARK_COLOR = {'◎': '#c0392b', '○': '#e67e22', '▲': '#27ae60'}
+
+def z_stats_html(seg):
+    s = SEG_STATS.get(seg, {})
+    if not s:
+        return ''
+    z_rows = s['z_rows']
+    trs = ''
+    for zs in z_rows:
+        mark, label, n = zs['mark'], zs['label'], zs['n']
+        wr, avg_odds, roi = zs['wr'], zs['avg_odds'], zs['roi']
+        col   = MARK_COLOR.get(mark, '#333')
+        wr_s  = f'{wr*100:.1f}%'                  if not (wr != wr)       else '-'
+        od_s  = f'{avg_odds:.1f}倍'               if not (avg_odds != avg_odds) else '-'
+        if not (roi != roi):
+            sign   = '+' if roi >= 0 else ''
+            roi_s  = f'{sign}{roi*100:.1f}%'
+            roi_cl = 'roi-pos' if roi >= 0 else 'roi-neg'
+        else:
+            roi_s, roi_cl = '-', ''
+        trs += f'<tr><td><strong style="color:{col}">{label}</strong></td><td class="num">{n}R</td><td class="num">{wr_s}</td><td class="num">{od_s}</td><td class="num {roi_cl}">{roi_s}</td></tr>'
+    return f'''<div class="stats-title" style="margin-top:16px">z帯別統計（指標1位 rank=1 馬）</div>
+    <div style="font-size:0.75rem;color:#888;margin-bottom:6px">z = (1位スコア − 全馬平均) / 全馬標準偏差　|　低z = 混戦 = 高オッズ = 高ROI</div>
+    <table class="stats-tbl"><thead><tr><th>印</th><th>R数</th><th>勝率</th><th>平均オッズ</th><th>単勝ROI</th></tr></thead>
+    <tbody>{trs}</tbody></table>'''
+
+# ─── rank4-18 3着以内率テーブル ──────────────────────────────────────────────
+def bottom_rank_html(seg):
+    s = SEG_STATS.get(seg, {})
+    if not s:
+        return ''
+    rank_rows = s['rank_rows']
+    trs = ''
+    for rs in rank_rows:
+        r, n, p3r = rs['rank'], rs['n'], rs['p3r']
+        if r < 4: continue
+        if n < 10 or (p3r != p3r): continue
+        p3_s = f'{p3r*100:.1f}%'
+        bar_w = p3r * 120   # 100%で120px
+        trs += f'''<tr>
+          <td>rank{r}</td>
+          <td class="num">{n}</td>
+          <td class="num">
+            {p3_s}
+            <div style="display:inline-block;width:{bar_w:.0f}px;height:8px;background:#3949ab;border-radius:2px;margin-left:6px;vertical-align:middle;opacity:0.6"></div>
+          </td>
+        </tr>'''
+    if not trs:
+        return ''
+    return f'''<div class="stats-title" style="margin-top:16px">消し馬参考：rank4–18 の3着以内率（全OOS 2023–）</div>
+    <div style="font-size:0.75rem;color:#888;margin-bottom:6px">低いほど安心して消せる / 芝短・芝長はほぼフラットで参考度低め</div>
+    <table class="stats-tbl" style="max-width:320px"><thead><tr><th>ランク</th><th>頭数</th><th>3着以内率</th></tr></thead>
+    <tbody>{trs}</tbody></table>'''
+
 # ─── セグメント詳細パネル ─────────────────────────────────────────────────────
 def seg_panels():
     out = ''
@@ -167,6 +420,12 @@ def seg_panels():
           <div class="di-val" style="font-family:monospace;font-size:0.9rem">{ver}</div>
           <div style="font-size:0.8rem;color:#888;margin-top:4px">{n} 特徴量</div>
         </div>
+      </div>
+      <div class="section-title" style="margin-bottom:12px">OOS 統計（勝率・印別ROI）</div>
+      <div class="box" style="background:#f8f9ff;padding:16px 20px;margin-bottom:16px">
+        {rank_stats_html(seg)}
+        {z_stats_html(seg)}
+        {bottom_rank_html(seg)}
       </div>
       <div class="section-title" style="margin-bottom:12px">使用特徴量 ({n}個) と係数</div>
       {feat_cards(seg)}
@@ -275,6 +534,15 @@ html = f'''<!DOCTYPE html>
     .di-label {{ font-size:0.75rem; color:#888; font-weight:600; text-transform:uppercase; margin-bottom:4px; }}
     .di-val   {{ font-weight:700; color:var(--indigo); }}
 
+    .stats-grid {{ display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:8px; }}
+    .stats-title {{ font-size:0.82rem; font-weight:700; color:var(--indigo2); border-left:3px solid var(--indigo3); padding-left:8px; margin-bottom:8px; }}
+    .stats-tbl {{ border-collapse:collapse; width:100%; font-size:0.82rem; }}
+    .stats-tbl th {{ background:var(--indigo2); color:#fff; padding:6px 10px; text-align:left; font-size:0.78rem; white-space:nowrap; }}
+    .stats-tbl td {{ padding:5px 10px; border-bottom:1px solid var(--border); white-space:nowrap; }}
+    .stats-tbl tr:last-child td {{ border-bottom:none; }}
+    .stats-tbl tr:hover td {{ background:#f0f2ff; }}
+    .stats-tbl .ok-row td {{ background:#f1f8e9; }}
+
     .timeline {{ list-style:none; position:relative; padding-left:28px; }}
     .timeline::before {{ content:''; position:absolute; left:8px; top:8px; bottom:8px; width:2px; background:var(--border); }}
     .timeline li {{ position:relative; margin-bottom:20px; }}
@@ -376,7 +644,7 @@ html = f'''<!DOCTYPE html>
 </div>
 
 <footer>
-  競馬AI v2 — 的中率最大化モデル | 生成: {TODAY} | accuracy_model.pkl<br>
+  競馬AI v2 — 的中率最大化モデル | 生成: {TODAY} | hitrate_model.pkl<br>
   clogit + Isotonic Calibration | 新馬除外済み | JVLink API 出馬表データのみ使用
 </footer>
 

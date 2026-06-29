@@ -24,7 +24,7 @@ oos['odds_num'] = pd.to_numeric(oos['単勝オッズ'], errors='coerce')
 oos['yr'] = (oos['日付_num'] // 10000).astype(int)
 print(f'OOS: {len(oos):,}行 / {oos["race_id"].nunique():,}レース')
 
-with open('models/final_model.pkl', 'rb') as f:
+with open('models/roi_model.pkl', 'rb') as f:
     pkg = pickle.load(f)
 
 MISSING_AT_PRED = [

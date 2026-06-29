@@ -13,7 +13,10 @@ RA（距離・コース）+ SE（未確定 = 出馬表）から netkeibanote 互
   → convert_card_to_base_format() で読み込める netkeibanote 互換形式
 
 注意:
-  - 斤量・単オッズ・騎手 は JV-Link RACE spec に含まれないため NaN
+  - 斤量 は SE record Unicode char 174-177（0.1kg単位）から取得
+  - 騎手名 は SE record Unicode char 192-200（8文字フィールド）から取得
+  - 調教師名 は SE record Unicode char 72-76（馬名直後の4文字フィールド）から取得
+  - 単オッズ は JV-Link RACE spec に含まれないため NaN
   - 障害レース (track>=55 or ==52 except ダ) は自動除外
 """
 import sys, io, os, csv, argparse, time
@@ -127,11 +130,20 @@ def fetch_upcoming_races(from_date_str, to_date_str=None):
             uma = data[40:58].strip() if len(data) > 58 else ''
             umaban_raw = data[28:30].strip() if len(data) > 30 else ''
             umaban = int(umaban_raw) if umaban_raw.isdigit() and int(umaban_raw) > 0 else None
+            # 騎手名 (Unicode char 192-200) / 調教師名 (Unicode char 72-76) / 斤量 (174-177, 単位0.1kg)
+            jockey = data[192:200].strip() if len(data) > 200 else ''
+            # 調教師名: 馬名フィールド(40-58)の直後 [72:76] (4 Unicode chars = 4 kanji max)
+            trainer = data[72:76].strip() if len(data) > 76 else ''
+            jinryo_raw = data[174:177].strip() if len(data) > 177 else ''
+            try:
+                jinryo = int(jinryo_raw) / 10.0 if jinryo_raw.isdigit() and int(jinryo_raw) > 0 else np.nan
+            except Exception:
+                jinryo = np.nan
             if not uma:
                 continue
             if chakujun == '00':
                 # 未確定 → 出馬表エントリー
-                se_upcoming[key].append((uma, umaban))
+                se_upcoming[key].append((uma, umaban, jockey, jinryo, trainer))
                 n_se_up += 1
             else:
                 n_se_done += 1
@@ -161,7 +173,7 @@ def build_card_df(ra_data, se_upcoming, exclude_shoegai=True):
         date_s = kaisai_to_date_s(kd)
         ba_r = f"{jyo}{int(rn)}"
 
-        for horse, umaban in horses:
+        for horse, umaban, jockey, jinryo, trainer in horses:
             rows.append({
                 '日付S':   date_s,
                 '場 R':   ba_r,
@@ -170,7 +182,9 @@ def build_card_df(ra_data, se_upcoming, exclude_shoegai=True):
                 '芝ダ':   surface,
                 '距離':   int(dist),
                 '単オッズ': np.nan,
-                '斤量':   np.nan,
+                '斤量':   jinryo,
+                '騎手':   jockey if jockey else np.nan,
+                '調教師':  trainer if trainer else np.nan,
             })
 
     return pd.DataFrame(rows)

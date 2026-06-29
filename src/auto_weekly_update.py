@@ -360,7 +360,7 @@ def rebuild_parquet():
 
 
 def retrain_model():
-    """clogit再学習 → final_model.pkl 生成（完全自動化パイプライン）"""
+    """clogit再学習 → roi_model.pkl 生成（完全自動化パイプライン）"""
     print('  save_conditional_logit.py を実行中（30〜60分）...')
     r = subprocess.run([sys.executable, TRAIN_CLOGIT], cwd=BASE_DIR)
     if r.returncode != 0:

@@ -4,7 +4,7 @@ save_shiba_mid_10feat.py - 芝中距離 10特徴モデル保存
   特徴量(10個): AI5 + 馬番, 前走着差タイム, 良馬場_平均着順_近5走, 2走前_クラス差, コース枠_r200_勝率
   選択指標: 2323 OOS ROI (-6.52%, AIベース-17.73%から+11.21pp)
   セグメント: 芝 1401m-2000m
-  final_model.pkl の '芝中' artifact を上書き更新。
+  roi_model.pkl の '芝中' artifact を上書き更新。
 """
 import sys, os, pickle, shutil
 import numpy as np
@@ -156,7 +156,7 @@ def main():
     comb = (r25*n25 + r26*n26) / (n25+n26) if n25+n26 > 0 else float('nan')
     print(f'  25+26合算: ROI={comb:+.2%}')
 
-    final_pkl   = os.path.join(MODEL_DIR, 'final_model.pkl')
+    final_pkl   = os.path.join(MODEL_DIR, 'roi_model.pkl')
     backup_path = os.path.join(MODEL_DIR, 'final_model_pre_shiba_mid_10feat.pkl')
     with open(final_pkl, 'rb') as f:
         existing_pkg = pickle.load(f)

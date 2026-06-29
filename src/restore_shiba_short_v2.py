@@ -1,5 +1,5 @@
 # coding: utf-8
-"""shiba_short_acc_v2を再計算して accuracy_model.pkl を修復する"""
+"""shiba_short_acc_v2を再計算して hitrate_model.pkl を修復する"""
 import os, sys, pickle
 import numpy as np, pandas as pd
 from sklearn.isotonic import IsotonicRegression
@@ -119,7 +119,7 @@ print(f'acc_2325={acc_2325:.4f}  25+26_acc={acc_2526:.4f}  ROI={roi_2526:+.2%}')
 pkg={'segment':'芝短','scaler':scaler,'coef':beta,'feat_cols':valid,'isotonic':iso,
      'acc_2325':acc_2325,'acc_2526':acc_2526,'oos_roi_2526':roi_2526,
      'version':'shiba_short_acc_v2','note':f'shiba_short_acc_v2 restored: acc_2325={acc_2325:.4f}'}
-acc_pkl=os.path.join(BASE_DIR,'models','accuracy_model.pkl')
+acc_pkl=os.path.join(BASE_DIR,'models','hitrate_model.pkl')
 m=pickle.load(open(acc_pkl,'rb')); m['芝短']=pkg
 with open(acc_pkl,'wb') as f: pickle.dump(m,f)
 print('芝短 shiba_short_acc_v2 を修復しました')

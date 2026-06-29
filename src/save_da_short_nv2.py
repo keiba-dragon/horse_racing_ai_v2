@@ -3,7 +3,7 @@
 save_da_short_nv2.py - ダート短距離 nv2 モデル保存
   特徴量: 近5走_上り3F平均, コース枠_r200_勝率, 1走前_馬場状態, 1走前_クラス差, 2走前_クラス差
   セグメント: ダ & 距離≤1400m (新馬=クラス_rank==1.0 除外)
-  final_model.pkl に 'ダ短' artifact として追加。
+  roi_model.pkl に 'ダ短' artifact として追加。
   25+26 OOS ROI: -3.05%  ベースライン比: +11.51pp (-14.56% → -3.05%)
 """
 import sys, os, pickle, shutil
@@ -154,8 +154,8 @@ def main():
     comb = (r25*n25 + r26*n26) / (n25+n26) if n25+n26 > 0 else float('nan')
     print(f'  25+26合算: ROI={comb:+.2%}')
 
-    # final_model.pkl に 'ダ短' artifact として追加
-    final_pkl   = os.path.join(MODEL_DIR, 'final_model.pkl')
+    # roi_model.pkl に 'ダ短' artifact として追加
+    final_pkl   = os.path.join(MODEL_DIR, 'roi_model.pkl')
     backup_path = os.path.join(MODEL_DIR, 'final_model_pre_da_short_nv2.pkl')
     print(f'\n既存モデル読み込み中: {final_pkl}')
     with open(final_pkl, 'rb') as f:

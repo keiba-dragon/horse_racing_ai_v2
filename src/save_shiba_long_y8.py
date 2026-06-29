@@ -3,7 +3,7 @@
 save_shiba_long_y8.py - 芝長距離 Y8 モデル保存
   特徴量: 前走着差タイム, 距離変化_前走, 1走前_クラス差, 馬距離_勝率, 間隔 (5特徴, L2=0.006)
   セグメント: 芝 2001m以上 (クラス_rank notna 障害除外)
-  final_model.pkl に '芝長' artifact として追加。
+  roi_model.pkl に '芝長' artifact として追加。
   25+26 OOS ROI: -3.03%  filtered baseline比: +17.50pp (-20.53% → -3.03%)
 """
 import sys, os, pickle, shutil
@@ -156,8 +156,8 @@ def main():
     comb = (r25*n25 + r26*n26) / (n25+n26) if n25+n26 > 0 else float('nan')
     print(f'  25+26合算: ROI={comb:+.2%}')
 
-    # final_model.pkl に '芝長' artifact として追加
-    final_pkl  = os.path.join(MODEL_DIR, 'final_model.pkl')
+    # roi_model.pkl に '芝長' artifact として追加
+    final_pkl  = os.path.join(MODEL_DIR, 'roi_model.pkl')
     backup_path = os.path.join(MODEL_DIR, 'final_model_pre_shiba_long_y8.pkl')
     print(f'\n既存モデル読み込み中: {final_pkl}')
     with open(final_pkl, 'rb') as f:

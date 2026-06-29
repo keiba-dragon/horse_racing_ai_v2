@@ -4,7 +4,7 @@ save_shiba_long_v2.py - 芝長距離モデル保存 (v2.0: 2325選択指標)
   特徴量(5個): ['馬番', '斤量', 'ブリンカー変更', '間隔', '馬体重']
   選択指標: 2325 OOS ROI (+28.22%)
   セグメント: 芝 2001m以上
-  final_model.pkl の '芝長' artifact を上書き更新。
+  roi_model.pkl の '芝長' artifact を上書き更新。
   2325: +28.22%  2323: +69.78%  2025: +24.37%  2026: +4.96%
 """
 import sys, os, pickle, shutil
@@ -177,7 +177,7 @@ def main():
     comb = (r25*n25 + r26*n26) / (n25+n26) if n25+n26 > 0 else float('nan')
     print(f'  25+26合算: ROI={comb:+.2%}')
 
-    final_pkl   = os.path.join(MODEL_DIR, 'final_model.pkl')
+    final_pkl   = os.path.join(MODEL_DIR, 'roi_model.pkl')
     backup_path = os.path.join(MODEL_DIR, 'final_model_pre_shiba_long_v2.pkl')
     with open(final_pkl, 'rb') as f:
         existing_pkg = pickle.load(f)

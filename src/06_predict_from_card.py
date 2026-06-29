@@ -455,7 +455,7 @@ def predict_date(base_dir, target_date_num, card_df=None):
     _clogit_softmax   = None
     _clogit_newfeats  = None
     _clogit_pacefeats = None
-    _clogit_path = os.path.join(base_dir, 'models', 'final_model.pkl')
+    _clogit_path = os.path.join(base_dir, 'models', 'roi_model.pkl')
     if os.path.exists(_clogit_path):
         try:
             import sys as _sys
@@ -515,7 +515,7 @@ def predict_date(base_dir, target_date_num, card_df=None):
                 _need.update(_a['feat_cols'])
             _need.add('前走日付')  # 休養日数計算用
         # accuracy_model の特徴量も読み込む
-        _acc_model_path2 = os.path.join(base_dir, 'models', 'accuracy_model.pkl')
+        _acc_model_path2 = os.path.join(base_dir, 'models', 'hitrate_model.pkl')
         if os.path.exists(_acc_model_path2):
             try:
                 with open(_acc_model_path2, 'rb') as _af2:
@@ -688,7 +688,7 @@ def predict_date(base_dir, target_date_num, card_df=None):
                 _clogit_feats_fb.update(_a['feat_cols'])
         # accuracy_model の特徴量も pq_cols に含める
         _acc_feats_fb = set()
-        _acc_model_path = os.path.join(base_dir, 'models', 'accuracy_model.pkl')
+        _acc_model_path = os.path.join(base_dir, 'models', 'hitrate_model.pkl')
         if os.path.exists(_acc_model_path):
             try:
                 with open(_acc_model_path, 'rb') as _af:

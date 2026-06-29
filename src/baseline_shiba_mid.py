@@ -23,7 +23,7 @@ def comb2526(r25, n25, r26, n26):
     return (r25 * n25 + r26 * n26) / (n25 + n26)
 
 print("モデル読み込み中...")
-with open(os.path.join(MODEL_DIR, 'final_model.pkl'), 'rb') as f:
+with open(os.path.join(MODEL_DIR, 'roi_model.pkl'), 'rb') as f:
     pkg = pickle.load(f)
 art           = pkg['artifacts']['芝']
 beta          = art['coef']

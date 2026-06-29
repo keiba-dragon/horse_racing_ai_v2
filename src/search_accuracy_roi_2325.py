@@ -6,7 +6,7 @@ search_accuracy_roi_2325.py - 的中率モデル用 Greedy forward selection (RO
   選択指標: 単勝ROI 2325合算 (23-24 + 2025, 単年±30%キャップ)
   特徴候補: search_acc_random.py の ALL_CANDS (タイム指数系・スロープ等を含む広いセット)
   特徴数: 最大 MAX_FEATS
-  保存先: accuracy_model.pkl (新聞のランキングに使用)
+  保存先: hitrate_model.pkl (新聞のランキングに使用)
 
 usage:
   python src/search_accuracy_roi_2325.py ダ長
@@ -284,8 +284,8 @@ def main():
     iso = IsotonicRegression(out_of_bounds='clip')
     iso.fit(raw_val, y_va_f)
 
-    # ── accuracy_model.pkl に保存 ─────────────────────────────────────────────
-    model_path = os.path.join(BASE_DIR, 'models', 'accuracy_model.pkl')
+    # ── hitrate_model.pkl に保存 ─────────────────────────────────────────────
+    model_path = os.path.join(BASE_DIR, 'models', 'hitrate_model.pkl')
     try:
         with open(model_path, 'rb') as f:
             pkg = pickle.load(f)

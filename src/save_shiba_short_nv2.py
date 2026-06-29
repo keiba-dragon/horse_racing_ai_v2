@@ -5,7 +5,7 @@ save_shiba_short_nv2.py - 芝短距離 nv2 モデル保存
                間隔, 近5走_上り3F平均, コース脚質_r200_勝率,
                同会場_平均着順_近5走, 性別_num, 2走前_クラス差
   セグメント: 芝 ≤1400m (千直1000m等は距離フィルタで自然除外)
-  final_model.pkl の '芝短' artifact を上書き更新。
+  roi_model.pkl の '芝短' artifact を上書き更新。
   25+26 OOS ROI: +32.28%  nv1比: +17.43pp
   タイ率: 0.8% (nv1の29.9%から激減)
 """
@@ -159,8 +159,8 @@ def main():
     comb = (r25*n25 + r26*n26) / (n25+n26) if n25+n26 > 0 else float('nan')
     print(f'  25+26合算: ROI={comb:+.2%}')
 
-    # final_model.pkl の '芝短' artifact を上書き
-    final_pkl   = os.path.join(MODEL_DIR, 'final_model.pkl')
+    # roi_model.pkl の '芝短' artifact を上書き
+    final_pkl   = os.path.join(MODEL_DIR, 'roi_model.pkl')
     backup_path = os.path.join(MODEL_DIR, 'final_model_pre_shiba_short_nv2.pkl')
     print(f'\n既存モデル読み込み中: {final_pkl}')
     with open(final_pkl, 'rb') as f:

@@ -1,0 +1,2 @@
+﻿EV関連列: []
+列一覧（一部）: ['_surface', '_dist_band', '_cls_group', '_nan_count', '_nan_total', '_nan_features']

@@ -4,7 +4,7 @@ save_shiba_mid_ai.py - 芝中距離 AI モデル保存
   特徴量: 調教師コース_r100_勝率, 馬距離_勝率, 1走前_クラス調整着順,
           近5走_クラス調整_平均着順, 間隔 (5特徴, L2=0.006)
   セグメント: 芝 1401m-2000m
-  final_model.pkl に '芝中' artifact として追加。
+  roi_model.pkl に '芝中' artifact として追加。
   25+26 OOS ROI: +8.81%  ベースライン比: +31.02pp (旧-22.21%)
 """
 import sys, os, pickle, shutil
@@ -153,8 +153,8 @@ def main():
     comb = (r25*n25 + r26*n26) / (n25+n26) if n25+n26 > 0 else float('nan')
     print(f'  25+26合算: ROI={comb:+.2%}')
 
-    # final_model.pkl に '芝中' artifact として追加
-    final_pkl  = os.path.join(MODEL_DIR, 'final_model.pkl')
+    # roi_model.pkl に '芝中' artifact として追加
+    final_pkl  = os.path.join(MODEL_DIR, 'roi_model.pkl')
     backup_path = os.path.join(MODEL_DIR, 'final_model_pre_shiba_mid_ai.pkl')
     print(f'\n既存モデル読み込み中: {final_pkl}')
     with open(final_pkl, 'rb') as f:

@@ -658,7 +658,7 @@ def main():
     print("データ読み込み中...")
     df_all, dm_all = load_all()
 
-    with open(os.path.join(MODEL_DIR, 'final_model.pkl'), 'rb') as f:
+    with open(os.path.join(MODEL_DIR, 'roi_model.pkl'), 'rb') as f:
         pkg = pickle.load(f)
 
     all_seg_data = []

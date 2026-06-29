@@ -4,7 +4,7 @@ save_shiba_short_v2.py - 芝短距離モデル保存 (v2.0: 2325選択指標)
   特徴量(4個): ['馬番', '斤量', '馬体重', 'コース脚質_r200_勝率']
   選択指標: 2325 OOS ROI (+6.97%)
   セグメント: 芝 ≤1400m
-  final_model.pkl の '芝短' artifact を上書き更新。
+  roi_model.pkl の '芝短' artifact を上書き更新。
   2325: +6.97%  2323: +18.67%  2025: -16.54%  2026: -50.49%
 """
 import sys, os, pickle, shutil
@@ -22,8 +22,9 @@ from save_v3 import add_computed_features
 MODEL_DIR = os.path.join(BASE_DIR, 'models')
 
 FEATS = ['馬番', '斤量', '馬体重', '馬距離_勝率',
-         '1走前_脚質_num', '性別_num', '1走前_3角',
-         'コース脚質_r200_勝率', '近5走_上り3F平均', 'ブリンカー変更']
+         'コース枠_r200_勝率', '性別_num',
+         '近5走_上り3F平均', '近5走_上り3F_std',
+         '距離変化_前走', 'ブリンカー変更']
 L2 = 0.006
 NAN_IND_THRESHOLD = 0.05
 
@@ -177,7 +178,7 @@ def main():
     comb = (r25*n25 + r26*n26) / (n25+n26) if n25+n26 > 0 else float('nan')
     print(f'  25+26合算: ROI={comb:+.2%}')
 
-    final_pkl   = os.path.join(MODEL_DIR, 'final_model.pkl')
+    final_pkl   = os.path.join(MODEL_DIR, 'roi_model.pkl')
     backup_path = os.path.join(MODEL_DIR, 'final_model_pre_shiba_short_v2.pkl')
     with open(final_pkl, 'rb') as f:
         existing_pkg = pickle.load(f)

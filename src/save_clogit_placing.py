@@ -2,7 +2,7 @@
 """
 Placing model (top-2 / top-3) calibration.
 
-勝率モデル (final_model.pkl) の raw softmax 確率を入力として
+勝率モデル (roi_model.pkl) の raw softmax 確率を入力として
 isotonic regression で P(top-2) / P(top-3) をキャリブレーション。
 
 P(top2) >= P(win) が保証される。係数の再学習なし。
@@ -66,14 +66,14 @@ def main():
     ap.add_argument('--out-dir',   default=MODEL_DIR)
     ap.add_argument('--data-file', default=None)
     ap.add_argument('--base-dir',  default=MODEL_DIR,
-                    help='final_model.pkl の読み込み元')
+                    help='roi_model.pkl の読み込み元')
     args, _ = ap.parse_known_args()
     out_dir   = args.out_dir
     data_file = args.data_file or DATA_FILE
     os.makedirs(out_dir, exist_ok=True)
 
-    # ── 勝率モデル読み込み（final_model.pkl を使用） ──────────
-    model_path = os.path.join(args.base_dir, 'final_model.pkl')
+    # ── 勝率モデル読み込み（roi_model.pkl を使用） ──────────
+    model_path = os.path.join(args.base_dir, 'roi_model.pkl')
     print(f"勝率モデル読み込み: {model_path}")
     with open(model_path, 'rb') as f:
         main_pkg = pickle.load(f)

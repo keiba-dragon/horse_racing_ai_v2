@@ -202,7 +202,7 @@ def save_seg(name, feats, seg, version_name):
         'version':version_name,
         'note':f'{version_name}: {len(feats)}特徴 acc_2325={acc_2325:.4f} 1番人気{FAV[name]:.2%}',
     }
-    acc_pkl=os.path.join(BASE_DIR,'models','accuracy_model.pkl')
+    acc_pkl=os.path.join(BASE_DIR,'models','hitrate_model.pkl')
     existing=pickle.load(open(acc_pkl,'rb'))
     existing[name]=acc_pkg
     with open(acc_pkl,'wb') as f: pickle.dump(existing,f)
@@ -297,7 +297,7 @@ def main():
                 print(f'  *** 1番人気超え! {name}: {best_score:.4f} > {FAV[name]:.4f} ***'); break
 
         summary[name]=best_score
-        acc_pkl=os.path.join(BASE_DIR,'models','accuracy_model.pkl')
+        acc_pkl=os.path.join(BASE_DIR,'models','hitrate_model.pkl')
         existing_acc=0.0
         if os.path.exists(acc_pkl):
             pkg=pickle.load(open(acc_pkl,'rb'))

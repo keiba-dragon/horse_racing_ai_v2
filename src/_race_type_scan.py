@@ -37,7 +37,7 @@ df['n_horses'] = df.groupby('race_id')['race_id'].transform('count')
 # 月
 df['month'] = (df['日付_num'] % 10000 // 100).astype(int)
 
-with open(os.path.join(MODEL_DIR, 'final_model.pkl'), 'rb') as f:
+with open(os.path.join(MODEL_DIR, 'roi_model.pkl'), 'rb') as f:
     pkg = pickle.load(f)
 artifacts     = pkg['artifacts']
 FACTOR_MAIDEN = pkg['factor_maiden']

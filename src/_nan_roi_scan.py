@@ -1,5 +1,5 @@
 # coding: utf-8
-"""買い推奨 × NaN率 長期ROI分析 (final_model.pkl ベース)"""
+"""買い推奨 × NaN率 長期ROI分析 (roi_model.pkl ベース)"""
 import os, sys, pickle
 import pandas as pd
 import numpy as np
@@ -8,7 +8,7 @@ base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 
 # ── モデル読み込み ──────────────────────────────────────────
-with open(os.path.join(base, 'models', 'final_model.pkl'), 'rb') as f:
+with open(os.path.join(base, 'models', 'roi_model.pkl'), 'rb') as f:
     m = pickle.load(f)
 
 artifacts     = m['artifacts']

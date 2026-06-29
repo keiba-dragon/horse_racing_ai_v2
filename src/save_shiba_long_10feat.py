@@ -4,7 +4,7 @@ save_shiba_long_10feat.py - 芝長距離 10特徴モデル保存
   特徴量(10個): Y8ベース5 + 芝ダ転向, 2走前_クラス差, 斤量, 馬番, 近5走_上り3F_std
   選択指標: 2323 OOS ROI (+3.41%, Y8ベース-19.50%から+22.91pp)
   セグメント: 芝 > 2000m
-  final_model.pkl の '芝長' artifact を上書き更新。
+  roi_model.pkl の '芝長' artifact を上書き更新。
   2323: +3.41%  2025: +6.04%  2026: +26.02%  25+26: +11.59%
 """
 import sys, os, pickle, shutil
@@ -157,7 +157,7 @@ def main():
     comb = (r25*n25 + r26*n26) / (n25+n26) if n25+n26 > 0 else float('nan')
     print(f'  25+26合算: ROI={comb:+.2%}')
 
-    final_pkl   = os.path.join(MODEL_DIR, 'final_model.pkl')
+    final_pkl   = os.path.join(MODEL_DIR, 'roi_model.pkl')
     backup_path = os.path.join(MODEL_DIR, 'final_model_pre_shiba_long_10feat.pkl')
     with open(final_pkl, 'rb') as f:
         existing_pkg = pickle.load(f)

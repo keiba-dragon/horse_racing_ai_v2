@@ -3,7 +3,7 @@
 save_shiba_short_nv1.py - 芝短距離 nv1 モデル保存
   特徴量: 1走前_3角, 芝ダ転向, 距離変化_前走, 1走前_脚質_num (4特徴, L2=0.006)
   セグメント: 芝 1200m+1400m (千直1000m除外)
-  final_model.pkl に '芝短' artifact として追加。
+  roi_model.pkl に '芝短' artifact として追加。
   '芝' (中長距離用旧320特徴) / 'ダ' (ダ中長距離BASE_25) は維持。
   25+26 OOS ROI: +14.85%  ベースライン比: +40.39pp (旧-26.54%)
 """
@@ -152,8 +152,8 @@ def main():
     comb = (r25*n25 + r26*n26) / (n25+n26) if n25+n26 > 0 else float('nan')
     print(f'  25+26合算: ROI={comb:+.2%}')
 
-    # final_model.pkl に '芝短' artifact として追加
-    final_pkl  = os.path.join(MODEL_DIR, 'final_model.pkl')
+    # roi_model.pkl に '芝短' artifact として追加
+    final_pkl  = os.path.join(MODEL_DIR, 'roi_model.pkl')
     backup_path = os.path.join(MODEL_DIR, 'final_model_pre_shiba_short_nv1.pkl')
     print(f'\n既存モデル読み込み中: {final_pkl}')
     with open(final_pkl, 'rb') as f:

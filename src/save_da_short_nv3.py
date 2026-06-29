@@ -4,7 +4,7 @@ save_da_short_nv3.py - ダ短距離 nv3 モデル保存
   特徴量(10個): nv2ベース5 + 性別_num, 斤量, 同会場_平均着順_近5走, 馬体重, 馬距離_勝率
   選択指標: 2323 OOS ROI (+8.81%)
   セグメント: ダ & ≤1400m & クラス_rank≠1.0
-  final_model.pkl の 'ダ短' artifact を上書き更新。
+  roi_model.pkl の 'ダ短' artifact を上書き更新。
   2023-24: +8.81%  2025: -30.97%  2026: +3.01%  25+26: -21.30%
 """
 import sys, os, pickle, shutil
@@ -158,7 +158,7 @@ def main():
     comb = (r25*n25 + r26*n26) / (n25+n26) if n25+n26 > 0 else float('nan')
     print(f'  25+26合算: ROI={comb:+.2%}')
 
-    final_pkl   = os.path.join(MODEL_DIR, 'final_model.pkl')
+    final_pkl   = os.path.join(MODEL_DIR, 'roi_model.pkl')
     backup_path = os.path.join(MODEL_DIR, 'final_model_pre_da_short_nv3.pkl')
     print(f'\n既存モデル読み込み中: {final_pkl}')
     with open(final_pkl, 'rb') as f:

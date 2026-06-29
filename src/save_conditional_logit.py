@@ -22,10 +22,54 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from save_lambdarank_pace import add_pace_features, EXCLUDE, ODDS_REMOVE, PACE_COLS
 
 NEW_FEATURE_COLS = [
-    '休養日数', '斤量変化', '距離変化_m', 'クラス変化', '近走着順トレンド',
-    # 以下は相関が高くノイズになったためコメントアウト
-    # '出走月', '枠番比率', '短期休養フラグ', '長期休養フラグ',
-    # '近走最良着順', '連続top3', '前走相対着順', '近5走_相対着順平均',
+    '休養日数', '斤量変化', '距離変化_m', '近走着順トレンド',
+    # タイム × 内容 交互作用
+    '前走_タイム×PCI', '前走_上り×RPCI', '前走_タイム×4角', '前走_4角×上り',
+    'タイム傾き×距離変化',
+    '近5_タイム×RPCI', '近5_上り×RPCI', '近5_タイム×4角', '近5_4角×上り',
+    # B: 前走着差タイム × 距離変化
+    '前走着差×距離変化', '前走着差×クラス補正',
+    # C: 年齢トレンド
+    '年齢_peak_diff', '年齢_peak_abs',
+]
+
+# v2 lean: greedy feature search で収束した21特徴量（exp_v302_best）
+V2_LEAN_FEATURES = [
+    # 前走スピード（絶対値・上がり・着差の3角度）
+    '1走前_タイム指数',
+    '1走前_上り3F',
+    '前走着差タイム',
+    # ペース文脈
+    '1走前_RPCI',
+    # 中期実力（平均＋ポテンシャル）
+    '近5走_タイム指数平均',
+    '近5走_タイム指数_max',
+    # 調子トレンド
+    'タイム指数_近3走_slope',
+    # 着順（クラス補正版）
+    '1走前_クラス調整着順',
+    '近5走_クラス調整_平均着順',
+    # 枠
+    '馬番',
+    'コース枠_r200_勝率',
+    # 騎手
+    '騎手コース_r100_勝率',
+    '騎手変更',
+    # 調教師
+    '調教師コース_r100_勝率',
+    # コース×脚質
+    'コース脚質_r200_勝率',
+    # 前走脚質
+    '1走前_脚質_num',
+    # 血統（greedy searchで追加）
+    '種牡馬_勝率',
+    '種牡馬_ダ_勝率',
+    # 負担重量（greedy searchで追加）
+    '斤量',
+    # 芝ダ転向シグナル（greedy searchで追加）
+    '芝ダ転向',
+    # 前走間隔（greedy searchで追加）
+    '間隔',
 ]
 
 # レース内平均+オッズ調整で補完する列と方向 (+1=高い方が良い, -1=低い方が良い, 0=調整なし)
@@ -115,9 +159,6 @@ def add_new_features(df: pd.DataFrame) -> pd.DataFrame:
     dist_now  = _col(df, '今回_距離_m') if '今回_距離_m' in df.columns else _col(df, '距離')
     df['距離変化_m'] = dist_now - _col(df, '1走前_距離')
 
-    # ── 4. クラス変化 ────────────────────────────────────────────────────────
-    df['クラス変化'] = _col(df, 'クラス_rank') - _col(df, '1走前_クラス_rank')
-
     # ── 5. 近走着順トレンド（線形傾き, 正=上昇形） ───────────────────────────
     finish_cols = [c for c in ['1走前_着順_num', '2走前_着順_num', '3走前_着順_num',
                                 '4走前_着順_num', '5走前_着順_num'] if c in df.columns]
@@ -137,6 +178,44 @@ def add_new_features(df: pd.DataFrame) -> pd.DataFrame:
         df['近走着順トレンド'] = slopes
     else:
         df['近走着順トレンド'] = np.nan
+
+    # ── 6. タイム × 内容 交互作用特徴量 ──────────────────────────────────────
+    # 前走
+    t1 = _col(df, '1走前_タイム指数')
+    p1 = _col(df, '1走前_PCI')
+    r1 = _col(df, '1走前_RPCI')
+    u1 = _col(df, '1走前_上り3F')
+    k1 = _col(df, '1走前_4角')
+    df['前走_タイム×PCI']  = t1 * p1
+    df['前走_上り×RPCI']   = u1 * r1
+    df['前走_タイム×4角']  = t1 * k1
+    df['前走_4角×上り']    = k1 * u1
+    # トレンド × 距離変化
+    df['タイム傾き×距離変化'] = _col(df, 'タイム指数_近3走_slope') * _col(df, '距離変化_m')
+    # 近5走版
+    t5 = _col(df, '近5走_タイム指数平均')
+    r5 = _col(df, '近5走_RPCI平均')
+    u5 = _col(df, '近5走_上り3F平均')
+    k5 = _col(df, '近5走_平均4角位置')
+    df['近5_タイム×RPCI']  = t5 * r5
+    df['近5_上り×RPCI']    = u5 * r5
+    df['近5_タイム×4角']   = t5 * k5
+    df['近5_4角×上り']     = k5 * u5
+
+    # ── 7. B: 前走着差タイム × 距離変化 / クラス変化 ────────────────────────────
+    atd = _col(df, '前走着差タイム')
+    df['前走着差×距離変化']  = atd * _col(df, '距離変化_m')
+    df['前走着差×クラス補正'] = _col(df, '前走着差タイム_クラス補正') * _col(df, '距離変化_m')
+
+    # ── 8. C: 年齢トレンド（ピーク4歳からの距離） ───────────────────────────────
+    age = pd.to_numeric(df.get('年齢', np.nan), errors='coerce')
+    df['年齢_peak_diff'] = age - 4.0          # 正=ピーク超え, 負=ピーク前
+    df['年齢_peak_abs']  = (age - 4.0).abs()  # ピークからの距離（大きいほど不利）
+
+    # ── 9. 間隔フラグ（パーケットに入っていないため実行時に計算）──────────────────
+    if '間隔_長_flag' not in df.columns or df['間隔_長_flag'].isna().all():
+        interval = pd.to_numeric(df.get('間隔', pd.Series(np.nan, index=df.index)), errors='coerce')
+        df['間隔_長_flag'] = (interval >= 60).astype(float)
 
     return df
 
@@ -171,6 +250,29 @@ def neg_log_lik_and_grad(beta, X, y, group_starts, n, n_races):
     residuals = y - probs
     loss = (-log_lik + ALPHA * np.sum(beta ** 2)) / n_races
     grad = (-(X.T @ residuals) + 2 * ALPHA * beta) / n_races
+    return loss, grad
+
+
+def neg_log_lik_fukusho_and_grad(beta, X, y_top3, group_starts, n, n_races):
+    """
+    複勝版損失・勾配。
+    P(複勝) = sum_{i in top3} softmax_i
+    L = -mean_race log P(複勝) + L2
+    """
+    scores = X @ beta
+    probs  = segment_softmax(scores, group_starts, n)
+    group_sizes = np.diff(np.append(group_starts, n))
+
+    # レースごとの P(top3) = sum P_i for i in top3
+    top3_sum = np.add.reduceat(probs * y_top3, group_starts)
+    log_lik  = np.sum(np.log(np.clip(top3_sum, 1e-15, 1.0)))
+
+    # 勾配: residual_i = y_i * P_i / P_top3(race) - P_i
+    top3_per_horse = np.repeat(top3_sum, group_sizes)
+    residuals = y_top3 * probs / np.clip(top3_per_horse, 1e-15, 1.0) - probs
+
+    loss = (-log_lik + ALPHA * np.sum(beta ** 2)) / n_races
+    grad = -(X.T @ residuals) / n_races + 2 * ALPHA * beta / n_races
     return loss, grad
 
 
@@ -259,6 +361,14 @@ def main():
                     help='入力parquetパスの上書き（実験用。未指定なら通常パス）')
     ap.add_argument('--race-impute-alpha', type=float, default=None,
                     help='レース内平均+オッズ調整 NaN補完のα（未指定=補完なし）')
+    ap.add_argument('--feat-include', default=None,
+                    help='カンマ区切りキーワード。いずれかを含む特徴量だけ使用（実験用）')
+    ap.add_argument('--lean', action='store_true',
+                    help='v2 lean モード: 前走タイム・着順・枠・騎手・コース適正・脚質のみ')
+    ap.add_argument('--min-career', type=int, default=0,
+                    help='キャリア最小戦数フィルタ（例: 5 → 5走前_着順_numが非NaNの馬のみ）')
+    ap.add_argument('--dist-split', action='store_true',
+                    help='距離帯分割: 短距離(≤1400m)/中距離(1401-2000m)/長距離(>2000m) × 芝/ダ = 6モデル')
     args, _ = ap.parse_known_args()
     out_dir    = args.out_dir
     data_file  = args.data_file or DATA_FILE
@@ -285,197 +395,276 @@ def main():
     if len(df) < before:
         print(f'  開催NaN行を除外: {before - len(df):,}行')
 
-    print('展開予想特徴量を追加中...')
-    df = add_pace_features(df)
-
-    print('新規特徴量を追加中（休養日数・斤量変化・距離変化・クラス変化・近走トレンド）...')
-    df = add_new_features(df)
-    added = [c for c in NEW_FEATURE_COLS if c in df.columns]
-    print(f'  追加: {added}')
-
-    if args.race_impute_alpha is not None:
-        df = apply_race_impute(df, alpha=args.race_impute_alpha)
-        n_filled = sum(df[c].isna().sum() for c in RACE_IMPUTE_COLS if c in df.columns)
-        print(f'レース内平均NaN補完適用 (α={args.race_impute_alpha}) → 残NaN: {n_filled:,}')
-
-    num_cols  = df.select_dtypes(include='number').columns.tolist()
-    feat_cols = [c for c in num_cols if c not in EXCLUDE and c not in ODDS_REMOVE]
-    print(f'基本特徴量: {len(feat_cols)}列')
-
-    # ── lambdarankの重要度で交互作用対象を選ぶ ────────────────────────────
-    lgbm_info_path = os.path.join(MODEL_DIR, 'lambdarank_pace_info.json')
-    top_idx = None
-    if os.path.exists(lgbm_info_path):
-        lgbm_model_path = os.path.join(MODEL_DIR, 'lambdarank_pace.pkl')
-        with open(lgbm_model_path, 'rb') as f:
-            lgbm_model = pickle.load(f)
-        with open(lgbm_info_path, encoding='utf-8') as f:
-            lgbm_info = json.load(f)
-        lgbm_feats = lgbm_info['feat_cols']
-        importances = lgbm_model.feature_importance(importance_type='gain')
-        # feat_cols と lgbm_feats の共通列でソート
-        feat_set = set(feat_cols)
-        ranked = sorted(
-            [(lgbm_feats[i], importances[i]) for i in range(len(lgbm_feats)) if lgbm_feats[i] in feat_set],
-            key=lambda x: -x[1]
-        )
-        top_names  = [f for f, _ in ranked[:TOP_K]]
-        top_idx    = np.array([feat_cols.index(f) for f in top_names if f in feat_cols])
-        n_inter2 = len(top_idx) * (len(top_idx) - 1) // 2
-        print(f'2-way対象 Top-{len(top_idx)}: {top_names[:5]}... ({n_inter2}件)')
-        # 3-way は val_loss 悪化のため無効化
+    if args.lean:
+        print('[lean モード] 前走タイム・着順・枠・騎手・コース適正・脚質のみ使用')
+        feat_cols = [c for c in V2_LEAN_FEATURES if c in df.columns]
+        missing_lean = [c for c in V2_LEAN_FEATURES if c not in df.columns]
+        if missing_lean:
+            print(f'  [警告] lean特徴量に欠損列: {missing_lean}')
+        print(f'  lean特徴量: {len(feat_cols)}列 → {feat_cols}')
+        top_idx  = None
         top_idx3 = None
     else:
-        top_idx3 = None
-        print('lambdarank_pace モデルが見つからない → 交互作用なし')
+        print('展開予想特徴量を追加中...')
+        df = add_pace_features(df)
 
-    trn = df[(df['日付_num'] >= 130101) & (df['日付_num'] <  220101)]
-    val = df[(df['日付_num'] >= 220101) & (df['日付_num'] <= 221231)]
-    print(f'学習: {len(trn):,}行 / valid: {len(val):,}行')
+        print('新規特徴量を追加中（休養日数・斤量変化・距離変化・クラス変化・近走トレンド）...')
+        df = add_new_features(df)
+        added = [c for c in NEW_FEATURE_COLS if c in df.columns]
+        print(f'  追加: {added}')
 
-    X_tr, y_tr, gs_tr, n_tr, nr_tr, scaler, poly2, iscaler2, poly3, iscaler3 = prepare(
-        trn, feat_cols, top_idx=top_idx, top_idx3=top_idx3, fit=True)
-    X_va, y_va, gs_va, n_va, nr_va, *_ = prepare(
-        val, feat_cols, scaler=scaler,
-        poly2=poly2, inter_scaler2=iscaler2, top_idx=top_idx,
-        poly3=poly3, inter_scaler3=iscaler3, top_idx3=top_idx3)
+        if args.race_impute_alpha is not None:
+            df = apply_race_impute(df, alpha=args.race_impute_alpha)
+            n_filled = sum(df[c].isna().sum() for c in RACE_IMPUTE_COLS if c in df.columns)
+            print(f'レース内平均NaN補完適用 (α={args.race_impute_alpha}) → 残NaN: {n_filled:,}')
 
-    print(f'拡張後の特徴量次元: {X_tr.shape[1]}')
-    print(f'勾配ノルム確認（beta=0）: ', end='')
-    probs0   = np.repeat(
-        1.0 / np.diff(np.append(gs_tr, n_tr)),
-        np.diff(np.append(gs_tr, n_tr))
-    )
-    grad0_norm = np.linalg.norm(-(X_tr.T @ (y_tr - probs0)) / nr_tr)
-    print(f'{grad0_norm:.2f}')
+        num_cols  = df.select_dtypes(include='number').columns.tolist()
+        feat_cols = [c for c in num_cols if c not in EXCLUDE and c not in ODDS_REMOVE]
+        if args.feat_include:
+            keywords = [k.strip() for k in args.feat_include.split(',')]
+            feat_cols = [c for c in feat_cols if any(k in c for k in keywords)]
+            print(f'--feat-include フィルタ ({keywords}): {len(feat_cols)}列')
+        print(f'基本特徴量: {len(feat_cols)}列')
 
-    print(f'\nAdam最適化開始 (lr={LR}, max_epochs={N_EPOCHS}, alpha={ALPHA})...')
-    d     = X_tr.shape[1]
-    beta  = np.zeros(d)
-    m     = np.zeros(d)
-    v     = np.zeros(d)
-    b1, b2, eps_adam = 0.9, 0.999, 1e-8
-    t            = 0
-    best_val     = np.inf
-    best_beta    = beta.copy()
-    no_improve   = 0
-    CHECK_EVERY  = 10
+        # ── lambdarankの重要度で交互作用対象を選ぶ ────────────────────────────
+        lgbm_info_path = os.path.join(MODEL_DIR, 'lambdarank_pace_info.json')
+        top_idx = None
+        if os.path.exists(lgbm_info_path):
+            lgbm_model_path = os.path.join(MODEL_DIR, 'lambdarank_pace.pkl')
+            with open(lgbm_model_path, 'rb') as f:
+                lgbm_model = pickle.load(f)
+            with open(lgbm_info_path, encoding='utf-8') as f:
+                lgbm_info = json.load(f)
+            lgbm_feats = lgbm_info['feat_cols']
+            importances = lgbm_model.feature_importance(importance_type='gain')
+            feat_set = set(feat_cols)
+            ranked = sorted(
+                [(lgbm_feats[i], importances[i]) for i in range(len(lgbm_feats)) if lgbm_feats[i] in feat_set],
+                key=lambda x: -x[1]
+            )
+            top_names  = [f for f, _ in ranked[:TOP_K]]
+            top_idx    = np.array([feat_cols.index(f) for f in top_names if f in feat_cols])
+            n_inter2 = len(top_idx) * (len(top_idx) - 1) // 2
+            print(f'2-way対象 Top-{len(top_idx)}: {top_names[:5]}... ({n_inter2}件)')
+            top_idx3 = None
+        else:
+            top_idx3 = None
+            print('lambdarank_pace モデルが見つからない → 交互作用なし')
 
-    # epoch=0 のベースライン（beta=0）
-    vl0, _ = neg_log_lik_and_grad(beta, X_va, y_va, gs_va, n_va, nr_va)
-    print(f'  epoch=   0  val_loss={vl0:.4f}  (beta=0 ベースライン)')
+    # surface列付与・不明行除外（障害は距離先頭が '障' のため自動除外）
+    df['surface'] = df['距離'].astype(str).str.strip().str.extract(r'^([芝ダ])')[0].fillna('不明')
+    df = df[df['surface'].isin(['芝', 'ダ'])].copy()
+    # 新馬（クラス_rank=1）除外
+    if 'クラス_rank' in df.columns:
+        before_shinma = len(df)
+        df = df[df['クラス_rank'] != 1.0].copy()
+        print(f'  新馬除外: {before_shinma - len(df):,}行')
+    # キャリア戦数フィルタ
+    if args.min_career > 0:
+        career_col = f'{args.min_career}走前_着順_num'
+        if career_col in df.columns:
+            before_c = len(df)
+            df = df[df[career_col].notna()].copy()
+            print(f'  キャリア{args.min_career}戦以上フィルタ: {before_c - len(df):,}行除外 → {len(df):,}行')
+        else:
+            print(f'  [警告] {career_col} が見つからないのでフィルタをスキップ')
+    print(f'有効データ: {len(df):,}行 (芝: {(df["surface"]=="芝").sum():,}行, ダ: {(df["surface"]=="ダ").sum():,}行)')
 
-    for epoch in range(1, N_EPOCHS + 1):
-        loss, grad = neg_log_lik_and_grad(beta, X_tr, y_tr, gs_tr, n_tr, nr_tr)
-        t += 1
-        m = b1 * m + (1 - b1) * grad
-        v = b2 * v + (1 - b2) * grad ** 2
-        m_hat = m / (1 - b1 ** t)
-        v_hat = v / (1 - b2 ** t)
-        beta -= LR * m_hat / (np.sqrt(v_hat) + eps_adam)
+    if args.dist_split:
+        df['dist_m'] = pd.to_numeric(
+            df['距離'].astype(str).str.extract(r'(\d+)')[0], errors='coerce')
+        # 芝: 短距離(≤1400) / 中距離(1401-2000) / 長距離(>2000)
+        # ダ: 短距離(≤1400) / 中長距離(>1400) ← 長距離はサンプル少なく中と統合
+        dm = df['dist_m']
+        shi = df['surface'] == '芝'
+        da  = df['surface'] == 'ダ'
+        df['dist_band'] = ''
+        df.loc[shi & (dm <= 1400),              'dist_band'] = '短距離'
+        df.loc[shi & (dm > 1400) & (dm <= 2000),'dist_band'] = '中距離'
+        df.loc[shi & (dm > 2000),               'dist_band'] = '長距離'
+        df.loc[da  & (dm <= 1400),              'dist_band'] = '短距離'
+        df.loc[da  & (dm > 1400),               'dist_band'] = '中長距離'
+        print(f'距離帯分布:\n{df.groupby(["surface", "dist_band"], observed=True).size().to_string()}')
+        segments = [('芝', '短距離'), ('芝', '中距離'), ('芝', '長距離'),
+                    ('ダ', '短距離'), ('ダ', '中長距離')]
+    else:
+        segments = [(s, None) for s in ['芝', 'ダ']]
 
-        if epoch % CHECK_EVERY == 0:
-            vl, _ = neg_log_lik_and_grad(beta, X_va, y_va, gs_va, n_va, nr_va)
-            marker = ''
-            if vl < best_val:
-                best_val  = vl
-                best_beta = beta.copy()
-                no_improve = 0
-                marker = ' ← best'
-            else:
-                no_improve += 1
+    all_artifacts  = {}
+    all_top_feats  = {}
+    last_X_tr_dim  = None
+    all_oos_top1   = []
 
-            if epoch % 50 == 0 or marker:
-                print(f'  epoch={epoch:4d}  tr_loss={loss:.4f}  val_loss={vl:.4f}{marker}')
+    for surf, dist_band in segments:
+        seg_key   = f'{surf}_{dist_band}' if dist_band is not None else surf
+        print(f'\n{"="*60}')
+        print(f'  {seg_key} モデル学習')
+        print(f'{"="*60}')
+        if dist_band is not None:
+            df_s = df[(df['surface'] == surf) & (df['dist_band'] == dist_band)].copy()
+        else:
+            df_s = df[df['surface'] == surf].copy()
 
-            if no_improve >= PATIENCE // CHECK_EVERY:
-                print(f'  早期停止: epoch={epoch} (patience={PATIENCE})')
-                break
+        trn = df_s[(df_s['日付_num'] >= 130101) & (df_s['日付_num'] <  220101)]
+        val = df_s[(df_s['日付_num'] >= 220101) & (df_s['日付_num'] <= 221231)]
+        print(f'学習: {len(trn):,}行 / valid: {len(val):,}行')
 
-    print(f'最適化完了 (best val={best_val:.4f})')
-    beta = best_beta
+        X_tr, y_tr, gs_tr, n_tr, nr_tr, scaler, poly2, iscaler2, poly3, iscaler3 = prepare(
+            trn, feat_cols, top_idx=top_idx, top_idx3=top_idx3, fit=True)
+        X_va, y_va, gs_va, n_va, nr_va, *_ = prepare(
+            val, feat_cols, scaler=scaler,
+            poly2=poly2, inter_scaler2=iscaler2, top_idx=top_idx,
+            poly3=poly3, inter_scaler3=iscaler3, top_idx3=top_idx3)
 
-    # ── OOS評価 ───────────────────────────────────────────────────────────
-    print('\n=== OOS評価 (2023+) ===')
-    oos = df[df['日付_num'] >= 230101].copy()
-    X_oos, y_oos, gs_oos, n_oos, nr_oos, *_ = prepare(
-        oos, feat_cols, scaler=scaler,
-        poly2=poly2, inter_scaler2=iscaler2, top_idx=top_idx,
-        poly3=poly3, inter_scaler3=iscaler3, top_idx3=top_idx3)
+        print(f'拡張後の特徴量次元: {X_tr.shape[1]}')
+        print(f'勾配ノルム確認（beta=0）: ', end='')
+        probs0 = np.repeat(
+            1.0 / np.diff(np.append(gs_tr, n_tr)),
+            np.diff(np.append(gs_tr, n_tr))
+        )
+        grad0_norm = np.linalg.norm(-(X_tr.T @ (y_tr - probs0)) / nr_tr)
+        print(f'{grad0_norm:.2f}')
 
-    scores_oos = X_oos @ beta
-    probs_oos  = segment_softmax(scores_oos, gs_oos, n_oos)
+        print(f'\nAdam最適化開始 (lr={LR}, max_epochs={N_EPOCHS}, alpha={ALPHA})...')
+        d    = X_tr.shape[1]
+        beta = np.zeros(d)
+        m    = np.zeros(d)
+        v    = np.zeros(d)
+        b1, b2, eps_adam = 0.9, 0.999, 1e-8
+        t           = 0
+        best_val    = np.inf
+        best_beta   = beta.copy()
+        no_improve  = 0
+        CHECK_EVERY = 10
 
-    oos = oos.sort_values('race_id').reset_index(drop=True)
-    oos['model_prob']  = probs_oos
-    oos['rank_model']  = oos.groupby('race_id')['model_prob'].rank(ascending=False, method='first')
-    oos['pop_num']     = pd.to_numeric(oos['人気'], errors='coerce')
-    oos['odds_num']    = pd.to_numeric(oos['単勝オッズ'], errors='coerce')
-    oos['market_prob'] = 1.0 / oos['odds_num']
-    oos['ev_score']    = oos['model_prob'] - oos['market_prob'] * 0.8
-    oos['yr']          = oos['日付_num'] // 10000
+        vl0, _ = neg_log_lik_and_grad(beta, X_va, y_va, gs_va, n_va, nr_va)
+        print(f'  epoch=   0  val_loss={vl0:.4f}  (beta=0 ベースライン)')
 
-    top1 = oos[oos['rank_model'] == 1]
-    roi_table(top1, 'rank=1 全体')
-    roi_table(top1[top1['pop_num'] >= 2], 'rank=1 × 2番人気以下')
+        for epoch in range(1, N_EPOCHS + 1):
+            loss, grad = neg_log_lik_and_grad(beta, X_tr, y_tr, gs_tr, n_tr, nr_tr)
+            t += 1
+            m = b1 * m + (1 - b1) * grad
+            v = b2 * v + (1 - b2) * grad ** 2
+            m_hat = m / (1 - b1 ** t)
+            v_hat = v / (1 - b2 ** t)
+            beta -= LR * m_hat / (np.sqrt(v_hat) + eps_adam)
 
-    # EV フィルタ効果
-    for thr in [0.0, 0.01, 0.02, 0.03]:
-        ev_top1 = oos[(oos['rank_model'] == 1) & (oos['ev_score'] > thr)]
-        if len(ev_top1) >= 100:
-            won = ev_top1['着順_num'] == 1
-            r   = (ev_top1.loc[won, 'odds_num'] * 100).sum() / (len(ev_top1) * 100) - 1
-            print(f'rank=1 × EV>{thr:.2f}: {len(ev_top1)}件  ROI={r:+.3f}')
+            if epoch % CHECK_EVERY == 0:
+                vl, _ = neg_log_lik_and_grad(beta, X_va, y_va, gs_va, n_va, nr_va)
+                marker = ''
+                if vl < best_val:
+                    best_val  = vl
+                    best_beta = beta.copy()
+                    no_improve = 0
+                    marker = ' ← best'
+                else:
+                    no_improve += 1
 
-    # キャリブレーション
-    print('\n=== キャリブレーション ===')
-    oos['prob_bin'] = pd.qcut(oos['model_prob'], 10, labels=False, duplicates='drop')
-    cal = oos.groupby('prob_bin').agg(
-        pred_prob=('model_prob', 'mean'),
-        actual_win=('着順_num', lambda x: (x == 1).mean()),
-        n=('model_prob', 'count'),
-    )
-    for _, row in cal.iterrows():
-        print(f'  pred={row.pred_prob:.3f}  actual={row.actual_win:.3f}  n={int(row.n):6d}')
+                if epoch % 50 == 0 or marker:
+                    print(f'  epoch={epoch:4d}  tr_loss={loss:.4f}  val_loss={vl:.4f}{marker}')
+
+                if no_improve >= PATIENCE // CHECK_EVERY:
+                    print(f'  早期停止: epoch={epoch} (patience={PATIENCE})')
+                    break
+
+        print(f'最適化完了 (best val={best_val:.4f})')
+        beta = best_beta
+        last_X_tr_dim = X_tr.shape[1]
+
+        # ── OOS評価 ───────────────────────────────────────────────────────
+        print(f'\n=== OOS評価 ({seg_key}, 2023+) ===')
+        oos_s = df_s[df_s['日付_num'] >= 230101].copy()
+        X_oos, y_oos, gs_oos, n_oos, nr_oos, *_ = prepare(
+            oos_s, feat_cols, scaler=scaler,
+            poly2=poly2, inter_scaler2=iscaler2, top_idx=top_idx,
+            poly3=poly3, inter_scaler3=iscaler3, top_idx3=top_idx3)
+
+        scores_oos = X_oos @ beta
+        probs_oos  = segment_softmax(scores_oos, gs_oos, n_oos)
+
+        oos_s = oos_s.sort_values('race_id').reset_index(drop=True)
+        oos_s['model_prob'] = probs_oos
+        oos_s['rank_model'] = oos_s.groupby('race_id')['model_prob'].rank(ascending=False, method='first')
+        oos_s['pop_num']    = pd.to_numeric(oos_s['人気'], errors='coerce')
+        oos_s['odds_num']   = pd.to_numeric(oos_s['単勝オッズ'], errors='coerce')
+        oos_s['ev_score']   = oos_s['model_prob'] - (1.0 / oos_s['odds_num']) * 0.8
+        oos_s['yr']         = oos_s['日付_num'] // 10000
+
+        top1 = oos_s[oos_s['rank_model'] == 1]
+        all_oos_top1.append(top1)
+        roi_table(top1, f'{seg_key} rank=1 全体')
+        roi_table(top1[top1['pop_num'] >= 2], f'{seg_key} rank=1 × 2番人気以下')
+
+        for thr in [0.0, 0.01, 0.02, 0.03]:
+            ev_top1 = oos_s[(oos_s['rank_model'] == 1) & (oos_s['ev_score'] > thr)]
+            if len(ev_top1) >= 100:
+                won = ev_top1['着順_num'] == 1
+                r   = (ev_top1.loc[won, 'odds_num'] * 100).sum() / (len(ev_top1) * 100) - 1
+                print(f'{seg_key} rank=1 × EV>{thr:.2f}: {len(ev_top1)}件  ROI={r:+.3f}')
+
+        # キャリブレーション
+        print(f'\n=== キャリブレーション ({seg_key}) ===')
+        oos_s['prob_bin'] = pd.qcut(oos_s['model_prob'], 10, labels=False, duplicates='drop')
+        cal = oos_s.groupby('prob_bin').agg(
+            pred_prob=('model_prob', 'mean'),
+            actual_win=('着順_num', lambda x: (x == 1).mean()),
+            n=('model_prob', 'count'),
+        )
+        for _, row in cal.iterrows():
+            print(f'  pred={row.pred_prob:.3f}  actual={row.actual_win:.3f}  n={int(row.n):6d}')
+
+        # artifact構築
+        artifact = {
+            'scaler':        scaler,
+            'poly2':         poly2,
+            'inter_scaler2': iscaler2,
+            'top_idx':       top_idx,
+            'poly3':         poly3,
+            'inter_scaler3': iscaler3,
+            'top_idx3':      top_idx3,
+            'coef':          beta,
+            'feat_cols':     feat_cols,
+        }
+        all_artifacts[seg_key] = artifact
+
+        abs_c = np.abs(beta)
+        top20 = np.argsort(abs_c)[::-1][:20]
+        n_orig = len(feat_cols)
+        top_feats_info = []
+        for i in top20:
+            name = feat_cols[i] if i < n_orig else f'inter_{i - n_orig}'
+            top_feats_info.append((name, float(beta[i])))
+        all_top_feats[seg_key] = top_feats_info
+        print(f'{seg_key} Top-5特徴量: {top_feats_info[:5]}')
+
+    # ── 全セグメント合計ROI ────────────────────────────────────────────────
+    if len(all_oos_top1) > 1:
+        combined = pd.concat(all_oos_top1, ignore_index=True)
+        roi_table(combined, '全セグメント合計 rank=1')
 
     # ── 保存 ───────────────────────────────────────────────────────────────
-    os.makedirs(MODEL_DIR, exist_ok=True)
-    artifact = {
-        'scaler':        scaler,
-        'poly2':         poly2,
-        'inter_scaler2': iscaler2,
-        'top_idx':       top_idx,
-        'poly3':         poly3,
-        'inter_scaler3': iscaler3,
-        'top_idx3':      top_idx3,
-        'coef':          beta,
-        'feat_cols':     feat_cols,
+    os.makedirs(out_dir, exist_ok=True)
+    pkg = {
+        'artifacts': all_artifacts,
+        'feat_cols': feat_cols,
     }
     with open(model_path, 'wb') as f:
-        pickle.dump(artifact, f)
-
-    # 係数絶対値でtop20（feature名は省略でインデックスのみ）
-    abs_c   = np.abs(beta)
-    top20   = np.argsort(abs_c)[::-1][:20]
-    n_orig  = len(feat_cols)
-    top_feats_info = []
-    for i in top20:
-        name = feat_cols[i] if i < n_orig else f'inter_{i - n_orig}'
-        top_feats_info.append((name, float(beta[i])))
+        pickle.dump(pkg, f)
 
     info = {
-        'feat_cols':    feat_cols,
-        'n_features':   len(feat_cols),
-        'n_interactions': int(X_tr.shape[1]) - len(feat_cols),
-        'total_dim':    int(X_tr.shape[1]),
-        'top_k':        TOP_K,
-        'alpha':        ALPHA,
-        'top_features': top_feats_info,
-        'train_range':  [130101, 201231],
+        'feat_cols':     feat_cols,
+        'n_features':    len(feat_cols),
+        'total_dim':     last_X_tr_dim,
+        'top_k':         TOP_K,
+        'alpha':         ALPHA,
+        'top_features':  all_top_feats,
+        'train_range':   [130101, 221231],
+        'surface_split': True,
+        'dist_split':    args.dist_split,
     }
     with open(info_path, 'w', encoding='utf-8') as f:
         json.dump(info, f, ensure_ascii=False, indent=2)
-    print(f'\n保存完了: {model_path}  (特徴量次元={X_tr.shape[1]})')
+    print(f'\n保存完了: {model_path}  (surface分割モデル, 特徴量次元={last_X_tr_dim})')
 
 
 if __name__ == '__main__':

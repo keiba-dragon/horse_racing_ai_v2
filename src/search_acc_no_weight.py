@@ -109,7 +109,7 @@ def eval_feats(feats, dfs):
 
 
 def main():
-    acc_pkl = os.path.join(BASE_DIR, 'models', 'accuracy_model.pkl')
+    acc_pkl = os.path.join(BASE_DIR, 'models', 'hitrate_model.pkl')
     existing = pickle.load(open(acc_pkl, 'rb'))
     existing_acc = existing[SEG_NAME].get('acc_2325', 0.0) if SEG_NAME in existing else 0.0
     # シードは既存特徴から体重系を除いたもの

@@ -32,7 +32,7 @@ df['n_horses']  = df.groupby('race_id')['race_id'].transform('count')
 df['fukusho_pay'] = pd.to_numeric(df['複勝配当'], errors='coerce')
 df['fuku_odds']   = df['fukusho_pay'] / 100.0
 
-with open(os.path.join(MODEL_DIR, 'final_model.pkl'), 'rb') as f:
+with open(os.path.join(MODEL_DIR, 'roi_model.pkl'), 'rb') as f:
     pkg = pickle.load(f)
 artifacts     = pkg['artifacts']
 FACTOR_MAIDEN = pkg['factor_maiden']

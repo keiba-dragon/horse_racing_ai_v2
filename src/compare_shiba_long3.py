@@ -144,7 +144,7 @@ def evaluate_set(df_trn, df_val, oos_2324, oos_2025, oos_2026, feats):
 
 def baseline_old_model(df):
     """旧芝artifactで filteredデータ上のROIを確認"""
-    with open(os.path.join(MODEL_DIR, 'final_model.pkl'), 'rb') as f:
+    with open(os.path.join(MODEL_DIR, 'roi_model.pkl'), 'rb') as f:
         pkg = pickle.load(f)
     art = pkg['artifacts']['芝']
     beta, scaler, feats = art['coef'], art['scaler'], art['feat_cols']

@@ -1,0 +1,65 @@
+﻿対象日: 20260531
+  venue=08 キー検索... kai=3 nichi=12
+  venue=05 キー検索... kai=2 nichi=12
+  [京] kai=3 nichi=12... 12R 162頭
+  [東] kai=2 nichi=12... 12R 347頭
+odds保存: 347頭 → 20260531.odds.json
+CHANGED=1
+python :   [WARN] fetch失敗: https://sports.yahoo.co.jp/keiba/race/denma/2608011005: HTTP Error 500: Internal Server Error
+At line:1 char:27
++ ... cing_ai_v2; python src/yahoo_odds_fetch.py --date 20260531 2>&1 | Out ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (  [WARN] fetch失...al Server Error:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+  [WARN] fetch失敗: https://sports.yahoo.co.jp/keiba/race/denma/2608011002: HTTP Error 500: Internal Server Error
+  [WARN] fetch失敗: https://sports.yahoo.co.jp/keiba/race/denma/2608011006: HTTP Error 500: Internal Server Error
+  [WARN] fetch失敗: https://sports.yahoo.co.jp/keiba/race/denma/2608011001: HTTP Error 500: Internal Server Error
+  [WARN] fetch失敗: https://sports.yahoo.co.jp/keiba/race/denma/2608011105: HTTP Error 500: Internal Server Error
+  [WARN] fetch失敗: https://sports.yahoo.co.jp/keiba/race/denma/2608011102: HTTP Error 500: Internal Server Error
+  [WARN] fetch失敗: https://sports.yahoo.co.jp/keiba/race/denma/2608011106: HTTP Error 500: Internal Server Error
+  [WARN] fetch失敗: https://sports.yahoo.co.jp/keiba/race/denma/2608011101: HTTP Error 500: Internal Server Error
+  [WARN] fetch失敗: https://sports.yahoo.co.jp/keiba/race/denma/2608011205: HTTP Error 500: Internal Server Error
+  [WARN] fetch失敗: https://sports.yahoo.co.jp/keiba/race/denma/2608011202: HTTP Error 500: Internal Server Error
+  [WARN] fetch失敗: https://sports.yahoo.co.jp/keiba/race/denma/2608011206: HTTP Error 500: Internal Server Error
+  [WARN] fetch失敗: https://sports.yahoo.co.jp/keiba/race/denma/2608011201: HTTP Error 500: Internal Server Error
+  [WARN] fetch失敗: https://sports.yahoo.co.jp/keiba/race/denma/2608020705: HTTP Error 500: Internal Server Error
+  [WARN] fetch失敗: https://sports.yahoo.co.jp/keiba/race/denma/2608020702: HTTP Error 500: Internal Server Error
+  [WARN] fetch失敗: https://sports.yahoo.co.jp/keiba/race/denma/2608020706: HTTP Error 500: Internal Server Error
+  [WARN] fetch失敗: https://sports.yahoo.co.jp/keiba/race/denma/2608020701: HTTP Error 500: Internal Server Error
+  [WARN] fetch失敗: https://sports.yahoo.co.jp/keiba/race/denma/2608020805: HTTP Error 500: Internal Server Error
+  [WARN] fetch失敗: https://sports.yahoo.co.jp/keiba/race/denma/2608020802: HTTP Error 500: Internal Server Error
+  [WARN] fetch失敗: https://sports.yahoo.co.jp/keiba/race/denma/2608020806: HTTP Error 500: Internal Server Error
+  [WARN] fetch失敗: https://sports.yahoo.co.jp/keiba/race/denma/2608020801: HTTP Error 500: Internal Server Error
+  [WARN] fetch失敗: https://sports.yahoo.co.jp/keiba/race/denma/2608020905: HTTP Error 500: Internal Server Error
+  [WARN] fetch失敗: https://sports.yahoo.co.jp/keiba/race/denma/2608020902: HTTP Error 500: Internal Server Error
+  [WARN] fetch失敗: https://sports.yahoo.co.jp/keiba/race/denma/2608020906: HTTP Error 500: Internal Server Error
+  [WARN] fetch失敗: https://sports.yahoo.co.jp/keiba/race/denma/2608020901: HTTP Error 500: Internal Server Error
+  [WARN] fetch失敗: https://sports.yahoo.co.jp/keiba/race/denma/2608021005: HTTP Error 500: Internal Server Error
+  [WARN] fetch失敗: https://sports.yahoo.co.jp/keiba/race/denma/2608021002: HTTP Error 500: Internal Server Error
+  [WARN] fetch失敗: https://sports.yahoo.co.jp/keiba/race/denma/2608021006: HTTP Error 500: Internal Server Error
+  [WARN] fetch失敗: https://sports.yahoo.co.jp/keiba/race/denma/2608021001: HTTP Error 500: Internal Server Error
+  [WARN] fetch失敗: https://sports.yahoo.co.jp/keiba/race/denma/2608021105: HTTP Error 500: Internal Server Error
+  [WARN] fetch失敗: https://sports.yahoo.co.jp/keiba/race/denma/2608021102: HTTP Error 500: Internal Server Error
+  [WARN] fetch失敗: https://sports.yahoo.co.jp/keiba/race/denma/2608021106: HTTP Error 500: Internal Server Error
+  [WARN] fetch失敗: https://sports.yahoo.co.jp/keiba/race/denma/2608021101: HTTP Error 500: Internal Server Error
+  [WARN] fetch失敗: https://sports.yahoo.co.jp/keiba/race/denma/2608021205: HTTP Error 500: Internal Server Error
+  [WARN] fetch失敗: https://sports.yahoo.co.jp/keiba/race/denma/2608021202: HTTP Error 500: Internal Server Error
+  [WARN] fetch失敗: https://sports.yahoo.co.jp/keiba/race/denma/2608021206: HTTP Error 500: Internal Server Error
+  [WARN] fetch失敗: https://sports.yahoo.co.jp/keiba/race/denma/2608021201: HTTP Error 500: Internal Server Error
+  [WARN] fetch失敗: https://sports.yahoo.co.jp/keiba/race/denma/2605010905: HTTP Error 500: Internal Server Error
+  [WARN] fetch失敗: https://sports.yahoo.co.jp/keiba/race/denma/2605010902: HTTP Error 500: Internal Server Error
+  [WARN] fetch失敗: https://sports.yahoo.co.jp/keiba/race/denma/2605010906: HTTP Error 500: Internal Server Error
+  [WARN] fetch失敗: https://sports.yahoo.co.jp/keiba/race/denma/2605010901: HTTP Error 500: Internal Server Error
+  [WARN] fetch失敗: https://sports.yahoo.co.jp/keiba/race/denma/2605011005: HTTP Error 500: Internal Server Error
+  [WARN] fetch失敗: https://sports.yahoo.co.jp/keiba/race/denma/2605011002: HTTP Error 500: Internal Server Error
+  [WARN] fetch失敗: https://sports.yahoo.co.jp/keiba/race/denma/2605011006: HTTP Error 500: Internal Server Error
+  [WARN] fetch失敗: https://sports.yahoo.co.jp/keiba/race/denma/2605011001: HTTP Error 500: Internal Server Error
+  [WARN] fetch失敗: https://sports.yahoo.co.jp/keiba/race/denma/2605011105: HTTP Error 500: Internal Server Error
+  [WARN] fetch失敗: https://sports.yahoo.co.jp/keiba/race/denma/2605011102: HTTP Error 500: Internal Server Error
+  [WARN] fetch失敗: https://sports.yahoo.co.jp/keiba/race/denma/2605011106: HTTP Error 500: Internal Server Error
+  [WARN] fetch失敗: https://sports.yahoo.co.jp/keiba/race/denma/2605011101: HTTP Error 500: Internal Server Error
+  [WARN] fetch失敗: https://sports.yahoo.co.jp/keiba/race/denma/2605011205: HTTP Error 500: Internal Server Error
+  [WARN] fetch失敗: https://sports.yahoo.co.jp/keiba/race/denma/2605011202: HTTP Error 500: Internal Server Error
+  [WARN] fetch失敗: https://sports.yahoo.co.jp/keiba/race/denma/2605011206: HTTP Error 500: Internal Server Error
+  [WARN] fetch失敗: https://sports.yahoo.co.jp/keiba/race/denma/2605011201: HTTP Error 500: Internal Server Error

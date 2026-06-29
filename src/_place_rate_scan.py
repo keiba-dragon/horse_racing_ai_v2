@@ -29,7 +29,7 @@ df = df[df['surface'].isin(['芝', 'ダ'])].copy()
 df['is_maiden'] = (df['クラス_rank'] == 2)
 df['n_horses']  = df.groupby('race_id')['race_id'].transform('count')
 
-with open(os.path.join(MODEL_DIR, 'final_model.pkl'), 'rb') as f:
+with open(os.path.join(MODEL_DIR, 'roi_model.pkl'), 'rb') as f:
     pkg = pickle.load(f)
 artifacts     = pkg['artifacts']
 FACTOR_MAIDEN = pkg['factor_maiden']

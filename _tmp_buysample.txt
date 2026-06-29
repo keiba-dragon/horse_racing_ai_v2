@@ -1,0 +1,10 @@
+race_no: 5
+badge_text: ">★買い gap 0.76
+ctx:
+an class="course">🌿芝1200m</span>
+      <span class="n-horses">9頭</span>
+      <span class="badge-buy">★買い</span> <span class="gap-tag">gap 0.76</span>
+    </div>
+    <table class="race-table">
+      <
+

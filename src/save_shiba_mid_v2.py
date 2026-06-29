@@ -4,7 +4,7 @@ save_shiba_mid_v2.py - 芝中距離モデル保存 (v2.0: 2325選択指標)
   特徴量(5個): ['馬番', '斤量', '馬距離_勝率', '3走前_クラス差', '性別_num']
   選択指標: 2325 OOS ROI (+1.77%)
   セグメント: 芝 1401m-2000m
-  final_model.pkl の '芝中' artifact を上書き更新。
+  roi_model.pkl の '芝中' artifact を上書き更新。
   2325: +1.77%  2323: -2.64%  2025: +10.38%  2026: -54.13%
 """
 import sys, os, pickle, shutil
@@ -177,7 +177,7 @@ def main():
     comb = (r25*n25 + r26*n26) / (n25+n26) if n25+n26 > 0 else float('nan')
     print(f'  25+26合算: ROI={comb:+.2%}')
 
-    final_pkl   = os.path.join(MODEL_DIR, 'final_model.pkl')
+    final_pkl   = os.path.join(MODEL_DIR, 'roi_model.pkl')
     backup_path = os.path.join(MODEL_DIR, 'final_model_pre_shiba_mid_v2.pkl')
     with open(final_pkl, 'rb') as f:
         existing_pkg = pickle.load(f)

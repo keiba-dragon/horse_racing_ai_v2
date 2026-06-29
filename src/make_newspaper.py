@@ -556,7 +556,7 @@ def make_newspaper(date_str=None):
         result[_c] = _s.where(_s.between(0, 3), other=np.nan)
 
     # ── モデル読み込み（的中率最大化モデル）────────────────────────
-    model_path = os.path.join(BASE_DIR, 'models', 'accuracy_model.pkl')
+    model_path = os.path.join(BASE_DIR, 'models', 'hitrate_model.pkl')
     acc_model  = pickle.load(open(model_path, 'rb'))
     seg_feats  = {k: v['feat_cols'] for k, v in acc_model.items()}
 

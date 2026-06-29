@@ -1,0 +1,9 @@
+﻿着順分布:
+着順
+0    361
+Name: count, dtype: int64
+
+1着馬数: 0 / 12R
+Empty DataFrame
+Columns: [会場, レースNo, 馬名, 単勝オッズ]
+Index: []

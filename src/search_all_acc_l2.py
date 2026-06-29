@@ -19,7 +19,7 @@ L2 = float(sys.argv[1]) if len(sys.argv) > 1 else 0.003
 NAN_IND_THRESHOLD = 0.05
 MAX_FEATS = 50
 
-# 正しいSEED（accuracy_model.pkl の feat_cols ベース）
+# 正しいSEED（hitrate_model.pkl の feat_cols ベース）
 SEEDS = {
     'ダ長': ['馬番','斤量','近3走_複勝率','騎手コース_r100_勝率','1走前_クラス調整着順',
              '近5走_タイム指数_max','馬距離_勝率','種牡馬_勝率','タイム指数_加速度',
@@ -200,7 +200,7 @@ def save_seg(name, feats, seg, version_suffix):
         'acc_2325':acc_2325,'acc_2526':acc_2526,'oos_roi_2526':roi_2526,
         'version':ver, 'note':f'{ver}: {len(feats)}特徴 L2={L2} acc_2325={acc_2325:.4f} 1番人気{FAV[name]:.2%}',
     }
-    acc_pkl=os.path.join(BASE_DIR,'models','accuracy_model.pkl')
+    acc_pkl=os.path.join(BASE_DIR,'models','hitrate_model.pkl')
     existing=pickle.load(open(acc_pkl,'rb'))
     existing[name]=acc_pkg
     with open(acc_pkl,'wb') as f: pickle.dump(existing,f)
@@ -280,7 +280,7 @@ def main():
                 print(f'  *** 1番人気超え! {name}: {best_score:.4f} > {FAV[name]:.4f} ***'); break
 
         summary[name]=best_score
-        acc_pkl=os.path.join(BASE_DIR,'models','accuracy_model.pkl')
+        acc_pkl=os.path.join(BASE_DIR,'models','hitrate_model.pkl')
         existing_acc=0.0
         if os.path.exists(acc_pkl):
             pkg=pickle.load(open(acc_pkl,'rb'))

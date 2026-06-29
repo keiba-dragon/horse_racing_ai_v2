@@ -166,7 +166,7 @@ def main():
     print("データ読み込み中...")
     df, dm = load_all()
 
-    with open(os.path.join(MODEL_DIR, 'final_model.pkl'), 'rb') as f:
+    with open(os.path.join(MODEL_DIR, 'roi_model.pkl'), 'rb') as f:
         pkg = pickle.load(f)
 
     years = [('train', 130101, 211231),

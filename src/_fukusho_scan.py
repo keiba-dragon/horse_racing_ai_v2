@@ -48,7 +48,7 @@ df['fuku_hit'] = df.apply(fukusho_hit, axis=1).astype(int)
 df['fuku_odds'] = df['fukusho_pay'] / 100.0
 
 # ── モデル ────────────────────────────────────────────────────────────────
-with open(os.path.join(MODEL_DIR, 'final_model.pkl'), 'rb') as f:
+with open(os.path.join(MODEL_DIR, 'roi_model.pkl'), 'rb') as f:
     pkg = pickle.load(f)
 artifacts     = pkg['artifacts']
 FACTOR_MAIDEN = pkg['factor_maiden']

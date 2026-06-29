@@ -1,0 +1,5 @@
+﻿keys: ['scaler', 'poly2', 'inter_scaler2', 'top_idx', 'poly3', 'inter_scaler3', 'top_idx3', 'coef', 'feat_cols']
+coef shape: (916,)
+feat_cols: 321
+top_idx is None: False
+top_idx len: 35

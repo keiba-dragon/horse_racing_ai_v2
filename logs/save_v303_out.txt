@@ -1,0 +1,28 @@
+読み込み: C:\horse_racing_ai_v2\data\processed\all_venues_features.parquet
+有効行: 591,607
+
+[芝_短距離] 20特徴量  train:62726 val:6360 oos:20980
+  OOS: 1421R  ROI=-0.1583  勝率=24.1%
+  保存: C:\horse_racing_ai_v2\models\exp_v303_best\芝_短距離.pkl
+
+[芝_中距離] 25特徴量  train:100931 val:10589 oos:37156
+  OOS: 2826R  ROI=-0.1749  勝率=28.2%
+  保存: C:\horse_racing_ai_v2\models\exp_v303_best\芝_中距離.pkl
+
+[芝_長距離] 21特徴量  train:30583 val:3369 oos:11467
+  OOS: 949R  ROI=-0.1378  勝率=30.2%
+  保存: C:\horse_racing_ai_v2\models\exp_v303_best\芝_長距離.pkl
+
+[ダ_短距離] 24特徴量  train:96313 val:10193 oos:33812
+  OOS: 2286R  ROI=-0.1613  勝率=27.2%
+  保存: C:\horse_racing_ai_v2\models\exp_v303_best\ダ_短距離.pkl
+
+[ダ_中長距離] 20特徴量  train:112283 val:12413 oos:42432
+  OOS: 3124R  ROI=-0.2306  勝率=26.4%
+  保存: C:\horse_racing_ai_v2\models\exp_v303_best\ダ_中長距離.pkl
+
+=== OOS合計: 10606R  ROI=-0.1828 ===
+
+メタデータ保存: C:\horse_racing_ai_v2\models\exp_v303_best\meta.json
+特徴量マップ保存: C:\horse_racing_ai_v2\models\exp_v303_best\seg_feats.json
+exp_v303_best 保存完了

@@ -1,0 +1,4 @@
+class="row-buy">
+          <td class="mark" style="color:#cc0000">◎</td>
+          <td class="umaban">7</td>
+          <td class="horse"><a href="https://db.netkeiba.com/?pid=horse_list&word=%E3%83%9F%E3%83%AB%E3%83%88%E3%83%99%E3%82%B9%E3%83%88" target="_blank" class="horse-link">ミルトベスト</a> <span class="nan-high" title="110/334件 NaN&#10;馬体重&#10;前2角&#10;4走前_間隔&#10;4走前_馬体重増減&#10;4走前_前走着差タイム&#10;5走前_着順_num&#10;5走前_クラス_rank&#10;5走前_頭数&#10;5走前_間隔&#10;5走前_馬体重&#10;5走前_馬体重増減&#10;5走前_斤量&#10;5走前_4角&#10;5
