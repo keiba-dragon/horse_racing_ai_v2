@@ -550,20 +550,50 @@ def predict_date(base_dir, target_date_num, card_df=None):
             return None
         # フォールバック: parquet最新行 + card_df から特徴量構築
         print("フォールバック: parquet最新行 + card_df から特徴量を構築")
-        # df_all が未ロードの場合（CSVルート経由）はロード
-        if 'df_all' not in locals() and os.path.exists(feat_pq):
-            df_all = pd.read_parquet(feat_pq)
-            df_all['日付_num'] = pd.to_numeric(df_all['日付'], errors='coerce')
-        if 'df_all' not in locals():
+        # hitrate_model特徴量を先に収集（列フィルタリングに使用）
+        _acc_feats_for_fb = set()
+        _acc_model_path_fb = os.path.join(base_dir, 'models', 'hitrate_model.pkl')
+        if os.path.exists(_acc_model_path_fb):
+            try:
+                with open(_acc_model_path_fb, 'rb') as _af_fb:
+                    _am_fb = pickle.load(_af_fb)
+                for _a_fb in _am_fb.values():
+                    _acc_feats_for_fb.update(_a_fb.get('feat_cols', []))
+            except Exception:
+                pass
+        # フォールバック用: 必要最小限の列のみでparquetを再読み込み（メモリ節約）
+        _fb_min_need = set(_essential) | _acc_feats_for_fb | {'日付', '前走日付', '前走_距離_m', '前走_surface', '前走着順_num', '前走脚質_num', '着差', '脚質_num'}
+        if not os.path.exists(feat_pq):
             print("エラー: parquetが見つかりません")
             return None
+        try:
+            import pyarrow.parquet as _pq_mod_fb
+            _avail_fb = set(_pq_mod_fb.read_schema(feat_pq).names)
+            _fb_load_cols = [c for c in _avail_fb
+                             if c in _fb_min_need or re.match(r'^\d+走前_', c)]
+            df_all = pd.read_parquet(feat_pq, columns=_fb_load_cols)
+        except Exception as _fb_e:
+            print(f"[WARN] フォールバック列絞り込み失敗: {_fb_e}")
+            df_all = pd.read_parquet(feat_pq, columns=list(_fb_min_need & set(_essential)))
+        df_all['日付_num'] = pd.to_numeric(df_all['日付'], errors='coerce')
+        print(f"フォールバック用parquet読み込み: {df_all.shape[1]}列")
         # 各馬の当日より前の最新行を取得
         # 着順_num=0（競走中止/取消/失格）はタイム指数が異常値になるため除外
-        df_hist = df_all[df_all['日付_num'] < target_date_num]
-        _atch = pd.to_numeric(df_hist.get('着順_num', pd.Series(dtype=float)), errors='coerce')
-        df_hist = df_hist[(_atch > 0) | _atch.isna()].copy()
-        df_latest = (df_hist.sort_values('日付_num')
-                     .groupby('馬名S', sort=False).last().reset_index())
+        # メモリ節約: 3列(馬名S,日付_num,着順_num)で行インデックスを先に特定してから全列取得
+        _meta3 = df_all[['馬名S', '日付_num', '着順_num']].copy() if '着順_num' in df_all.columns \
+                 else df_all[['馬名S', '日付_num']].copy()
+        _meta3_hist = _meta3[_meta3['日付_num'] < target_date_num]
+        _atch_m = pd.to_numeric(
+            _meta3_hist['着順_num'] if '着順_num' in _meta3_hist.columns
+            else pd.Series(dtype=float, index=_meta3_hist.index),
+            errors='coerce')
+        _valid_m = (_atch_m > 0) | _atch_m.isna()
+        _meta3_valid = _meta3_hist.loc[_valid_m]
+        # 馬ごとに最新（最大日付）行のインデックスを取得
+        _last_idx = (_meta3_valid.sort_values('日付_num')
+                     .groupby('馬名S', sort=False)
+                     .apply(lambda g: g.index[-1]))
+        df_latest = df_all.loc[_last_idx.values].reset_index(drop=True)
         # N走前シフト補正: df_latestの最新行自体が「前走」になるため
         # 1走前_f = latest行のf, 2走前_f = latest行の1走前_f, ... とシフト
         _nmaebo_re = re.compile(r'^(\d+)走前_(.+)$')
