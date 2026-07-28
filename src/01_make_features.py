@@ -10,6 +10,54 @@ import re
 
 FINISH_MAP = {'止': 99, '除': 99, '取': 99, '中': 99, '失': 99, '降': 99}
 
+import unicodedata
+_MARK_RE = re.compile(r'[☆▲△▼○●◎◇◆★]')
+_DOT_RE  = re.compile(r'[．.]')
+
+
+def _norm_name(s):
+    return _MARK_RE.sub('', str(s)).strip()
+
+
+def _norm_jkn(s):
+    return _DOT_RE.sub('', unicodedata.normalize('NFKC', _norm_name(s)))
+
+
+def _char_overlap(short, full):
+    """shortの全文字がfullに含まれる割合（略称が全名の部分集合かを測る）"""
+    return sum(1 for c in short if c in full) / len(short) if short else 0
+
+
+def canonicalize_jockey_names(names: pd.Series) -> pd.Series:
+    """騎手名の表記ゆれ（フルネーム vs 略称）を統一する。
+    netkeiba/JVLink経由の一部データ（主に2026年分）は騎手名が
+    「戸崎圭」のような略称で入っており、historical masterのフルネーム
+    （「戸崎圭太」）と別人扱いされてローリング統計がNaN化するため、
+    より出現数の多い名前へ寄せて統一する（make_newspaper.pyのpatch_jockey_statsと同種のロジック）。
+    """
+    counts = names.value_counts()
+    norm_map = {}
+    for name in counts.index:
+        norm_map.setdefault(_norm_jkn(name), []).append(name)
+
+    canonical = {}
+    for name, cnt in counts.items():
+        name_n = _norm_jkn(name)
+        candidates = {fn: counts[fn] for fn in counts.index
+                      if fn != name and (_norm_jkn(fn).startswith(name_n) or name_n.startswith(_norm_jkn(fn)))}
+        if len(name) >= 2:
+            surname = name[:2]
+            for fn in counts.index:
+                if fn != name and fn.startswith(surname) and _char_overlap(name, fn) >= 1.0:
+                    candidates.setdefault(fn, counts[fn])
+        if candidates:
+            best_name, best_cnt = max(candidates.items(), key=lambda x: x[1])
+            if best_cnt > cnt:
+                canonical[name] = best_name
+    if canonical:
+        print(f'  騎手名の表記統一: {len(canonical)}件 (例: {list(canonical.items())[:5]})')
+    return names.map(lambda n: canonical.get(n, n))
+
 def calc_rolling_stats(df, group_col, dnum_col, window, min_periods, prefix):
     """点-in-time ローリング勝率/複勝率（shift(1)で当該レース除外・リークなし）"""
     df_s = df.sort_values(dnum_col).copy()
@@ -365,7 +413,20 @@ def main():
                     extra_c['距離'] = extra_c.apply(
                         lambda r: str(r['芝・ダ']).strip() + str(int(r['距離'])) if pd.notna(r.get('距離')) and pd.notna(r.get('芝・ダ')) else r.get('距離'), axis=1
                     )
-                common_c = [c for c in df_race.columns if c in extra_c.columns]
+                # クラス（"３歳未勝利"等の生テキスト）を レース名 に転写。
+                # card_extra はレース名を持たず、common列フィルタで単純concatすると
+                # レース名がNaN→後段で「開催_R_R」の代理IDに置き換わり、
+                # encode_class()がクラスキーワードを見つけられず クラス_rank がNaN化する
+                # （新馬除外フィルタ クラス_rank!=1.0 をすり抜ける原因にもなっていた）。
+                if 'クラス' in extra_c.columns:
+                    extra_c = extra_c.copy()
+                    if 'レース名' not in extra_c.columns:
+                        extra_c['レース名'] = extra_c['クラス']
+                    else:
+                        extra_c['レース名'] = extra_c['レース名'].fillna(extra_c['クラス'])
+                common_c = [c for c in df_race.columns if c in extra_c.columns] + (
+                    ['レース名'] if 'レース名' in extra_c.columns and 'レース名' not in df_race.columns else []
+                )
                 df_race = pd.concat([df_race, extra_c[common_c]], ignore_index=True)
                 print(f"  card_extra.csv から追加: {len(extra_c):,}行")
     else:
@@ -623,6 +684,8 @@ def main():
         df['着順_num'].notna() & (df['着順_num'] < 99)
     )
     print("騎手・調教師・血統の成績をエンコードしています...")
+    if '騎手' in df.columns:
+        df['騎手'] = canonicalize_jockey_names(df['騎手'])
     if '騎手' in df.columns and '着順_num' in df.columns:
         jockey_stats = df[df['_stat_mask']].groupby('騎手')['着順_num'].agg(
             騎手_勝率   = lambda x: (x == 1).mean(),

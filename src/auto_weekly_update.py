@@ -10,6 +10,7 @@
 ターゲットFrontier（JV-Link）が起動している必要がある。
 """
 import sys, io, os, subprocess, argparse, glob as _glob
+from datetime import datetime
 import pandas as pd
 import numpy as np
 
@@ -381,6 +382,48 @@ def delete_parquet():
         print('  parquet削除（次回予測時に再生成されます）')
 
 
+class _Tee:
+    """stdout/stderrを画面とログファイルの両方に書き出す。"""
+    def __init__(self, *streams):
+        self.streams = streams
+
+    def write(self, data):
+        for s in self.streams:
+            s.write(data)
+            s.flush()
+
+    def flush(self):
+        for s in self.streams:
+            s.flush()
+
+
+def _notify_discord(content: str):
+    """discord_config.json のwebhookへ送信する（未設定なら黙って諦める）。
+    discord_notify.pyはimport時にsys.stdoutを再ラップするため、
+    このファイル自身のTee済みstdoutと衝突して壊れる（二重ラップでバッファが
+    閉じられる既知の問題）。importせず送信ロジックのみ直接実装する。
+    """
+    try:
+        import json
+        import requests
+        config_path = os.path.join(BASE_DIR, 'config', 'discord_config.json')
+        with open(config_path, encoding='utf-8') as f:
+            cfg = json.load(f)
+        webhook_url = cfg.get('webhook_url', '').strip()
+        if not webhook_url or 'YOUR_WEBHOOK' in webhook_url:
+            print('  [WARN] discord_config.json の webhook_url 未設定。通知スキップ')
+            return
+        r = requests.post(webhook_url, json={'content': content}, timeout=10, verify=False)
+        if r.status_code not in (200, 204):
+            print(f'  [WARN] Discord通知失敗: {r.status_code} {r.text[:200]}')
+    except Exception as e:
+        print(f'  [WARN] Discord通知失敗: {e}')
+
+
+class UpdateFailure(Exception):
+    pass
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--no-fetch',   action='store_true', help='fetchをスキップ（変換・再生成のみ）')
@@ -388,52 +431,78 @@ def main():
     ap.add_argument('--no-train',   action='store_true', help='モデル再学習をスキップ')
     args = ap.parse_args()
 
-    print('=' * 50)
-    print('  競馬AI 週次自動更新')
-    print('=' * 50)
+    log_dir = os.path.join(BASE_DIR, 'logs')
+    os.makedirs(log_dir, exist_ok=True)
+    ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+    log_path = os.path.join(log_dir, f'weekly_update_{ts}.log')
+    log_f = open(log_path, 'w', encoding='utf-8')
+    orig_stdout, orig_stderr = sys.stdout, sys.stderr
+    sys.stdout = _Tee(orig_stdout, log_f)
+    sys.stderr = _Tee(orig_stderr, log_f)
 
-    # Step 1: JV-Link fetch
-    if not args.no_fetch:
-        print('\n[1/4] JV-Link から結果を取得...')
-        if not run_fetch():
-            print('  ERROR: fetch失敗。ターゲットFrontierが起動しているか確認してください。')
-            sys.exit(1)
-        print('\n[1b/4] 海外競走データを取得...')
-        run_fetch_overseas()  # 失敗しても続行
-    else:
-        print('\n[1/4] fetch スキップ')
+    try:
+        print('=' * 50)
+        print(f'  競馬AI 週次自動更新  {datetime.now().strftime("%Y-%m-%d %H:%M")}')
+        print('=' * 50)
 
-    # Step 2: 変換
-    print('\n[2/4] results → supplement 変換...')
-    n = convert_results()
-    print('\n[2b/4] overseas → overseas_supplement 変換...')
-    n_overseas = convert_overseas()
-
-    # Step 2.5: master_horse 更新（新馬の種牡馬/母父馬を UM_DATA から追記）
-    print('\n[2.5/4] master_horse 新馬追記...')
-    update_master_horse()
-
-    # Step 3: parquet 再生成
-    if n > 0:
-        print('\n[3/5] parquet 再生成...')
-        if args.no_rebuild:
-            delete_parquet()
+        # Step 1: JV-Link fetch
+        if not args.no_fetch:
+            print('\n[1/4] JV-Link から結果を取得...')
+            if not run_fetch():
+                raise UpdateFailure('fetch失敗。ターゲットFrontierが起動しているか確認してください。')
+            print('\n[1b/4] 海外競走データを取得...')
+            run_fetch_overseas()  # 失敗しても続行
         else:
-            if not rebuild_parquet():
-                print('  WARNING: 01_make_features.py が失敗しました。手動で確認してください。')
-                sys.exit(1)
+            print('\n[1/4] fetch スキップ')
 
-        # Step 4: モデル再学習
-        if not args.no_train:
-            print('\n[4/5] モデル再学習...')
-            if not retrain_model():
-                print('  WARNING: モデル再学習失敗。前回モデルのまま継続。')
+        # Step 2: 変換
+        print('\n[2/4] results → supplement 変換...')
+        n = convert_results()
+        print('\n[2b/4] overseas → overseas_supplement 変換...')
+        n_overseas = convert_overseas()
+
+        # Step 2.5: master_horse 更新（新馬の種牡馬/母父馬を UM_DATA から追記）
+        print('\n[2.5/4] master_horse 新馬追記...')
+        update_master_horse()
+
+        # Step 3: parquet 再生成
+        if n > 0:
+            print('\n[3/5] parquet 再生成...')
+            if args.no_rebuild:
+                delete_parquet()
+            else:
+                if not rebuild_parquet():
+                    raise UpdateFailure('01_make_features.py が失敗しました。手動で確認してください。')
+
+            # Step 4: モデル再学習
+            if not args.no_train:
+                print('\n[4/5] モデル再学習...')
+                if not retrain_model():
+                    print('  WARNING: モデル再学習失敗。前回モデルのまま継続。')
+            else:
+                print('\n[4/5] モデル再学習 スキップ')
+
+            print('\n[5/5] 完了。')
+            _notify_discord(f'✅ 競馬AI 週次自動更新 成功\n新規{n:,}行 追加\nログ: {os.path.basename(log_path)}')
         else:
-            print('\n[4/5] モデル再学習 スキップ')
+            print('\n更新データなし。parquet・モデルはそのまま。')
+            _notify_discord('ℹ️ 競馬AI 週次自動更新: 新規データなし（正常終了）')
 
-        print('\n[5/5] 完了。')
+    except UpdateFailure as e:
+        print(f'\n[ERROR] {e}')
+        _notify_discord(f'🚨 競馬AI 週次自動更新 失敗\n{e}\nログ: {os.path.basename(log_path)}')
+        sys.stdout, sys.stderr = orig_stdout, orig_stderr
+        log_f.close()
+        sys.exit(1)
+    except Exception as e:
+        print(f'\n[ERROR] 予期しない例外: {e}')
+        _notify_discord(f'🚨 競馬AI 週次自動更新 失敗（予期しない例外）\n{e}\nログ: {os.path.basename(log_path)}')
+        sys.stdout, sys.stderr = orig_stdout, orig_stderr
+        log_f.close()
+        sys.exit(1)
     else:
-        print('\n更新データなし。parquet・モデルはそのまま。')
+        sys.stdout, sys.stderr = orig_stdout, orig_stderr
+        log_f.close()
 
 
 if __name__ == '__main__':

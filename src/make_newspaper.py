@@ -125,6 +125,43 @@ VENUE_LETTER_TO_CODE = {
 }
 
 
+CODE_TO_VENUE_SHORT = {v: k for k, v in VENUE_LETTER_TO_CODE.items() if k != '名'}
+
+
+def kaikai_display_venue(kaikai, table=None):
+    """開催文字列 → 表示用会場略称。数値コード表記('3_1')も解決する。"""
+    kaikai = str(kaikai)
+    table = table or {}
+    hit = next((v for k, v in table.items() if k in kaikai), None)
+    if hit:
+        return hit
+    m_num = re.match(r'(\d+)_', kaikai)
+    if m_num:
+        return CODE_TO_VENUE_SHORT.get(m_num.group(1).zfill(2), kaikai[:2])
+    return kaikai[:2]
+
+
+_VENUE_KEYS_BY_LEN = sorted(VENUE_LETTER_TO_CODE.keys(), key=len, reverse=True)
+
+
+def kaikai_to_venue_code(kaikai) -> str:
+    """開催文字列 → JVLink2桁会場コード。
+    netkeiba由来は漢字表記('1福1')、results_supplement(JVLink)由来は
+    生の会場コード表記('3_1')、旧マスタ由来は末尾に開催組を示す文字が付く
+    ('1小A')ことがあるため、いずれの表記にも対応する。
+    """
+    kaikai = str(kaikai)
+    m_num = re.match(r'(\d+)_', kaikai)
+    if m_num:
+        return m_num.group(1).zfill(2)
+    m_letter = re.search(r'[^\d]+', kaikai)
+    non_digit = m_letter.group().strip() if m_letter else ''
+    for key in _VENUE_KEYS_BY_LEN:
+        if non_digit.startswith(key):
+            return VENUE_LETTER_TO_CODE[key]
+    return ''
+
+
 _MARK_RE = re.compile(r'[☆▲△▼○●◎◇◆★]')
 _DOT_RE  = re.compile(r'[．.]')
 _STABLE_RE = re.compile(r'^(栗東|美浦)')
@@ -527,6 +564,21 @@ def make_newspaper(date_str=None):
         print(f'キャッシュが見つかりません: {cache_dir}')
         return
 
+    if date_str:
+        want_date = int(date_str[2:]) if len(date_str) == 8 else int(date_str)
+        matched = []
+        for f in caches:
+            try:
+                with open(os.path.join(cache_dir, f), 'rb') as _f:
+                    if pickle.load(_f).get('target_date') == want_date:
+                        matched.append(f)
+            except Exception:
+                continue
+        if matched:
+            caches = matched
+        else:
+            print(f'[WARN] date={date_str} に一致するキャッシュがありません。最新キャッシュを使用します。')
+
     cache_file = os.path.join(cache_dir, caches[0])
     print(f'キャッシュ読み込み: {caches[0]}')
     with open(cache_file, 'rb') as f:
@@ -592,6 +644,17 @@ def make_newspaper(date_str=None):
                 '単勝オッズ': cr.get('単勝オッズ', cr.get('単オッズ', '')),
             }
 
+    # ── 新馬（デビュー戦）馬名セット ──────────────────────────────
+    # CLAUDE.md方針: 新馬は前走情報が全てNaNとなりモデルの歪みの原因になるため
+    # 全セグメント共通で予測対象から除外する（学習時と同じ扱いに揃える）
+    shinba_horses = set()
+    if not card_df.empty and 'クラス' in card_df.columns and '馬名S' in card_df.columns:
+        shinba_horses = set(card_df.loc[
+            card_df['クラス'].astype(str).str.contains('新馬', na=False), '馬名S'
+        ])
+        if shinba_horses:
+            print(f'新馬（対象外）: {len(shinba_horses)}頭')
+
     # ── 騎手統計 NaN 補完 ─────────────────────────────────────────
     data_file = os.path.join(BASE_DIR, 'data', 'processed', 'all_venues_features.parquet')
     result = patch_jockey_stats(result.copy(), card_df, data_file)
@@ -609,8 +672,7 @@ def make_newspaper(date_str=None):
                 uma_s2 = str(int(float(row.get(bango_col_r, 0)))).zfill(2)
             except (ValueError, TypeError):
                 continue
-            _vm2 = re.search(r'[^\d]+', kaikai)
-            _vcode2 = VENUE_LETTER_TO_CODE.get(_vm2.group().strip() if _vm2 else '', '')
+            _vcode2 = kaikai_to_venue_code(kaikai)
             wt_str2 = horse_weights.get((_vcode2, r_num_int2), {}).get(uma_s2, '')
             m_wt = re.match(r'(\d{3,})\(([+\-]?\d+)\)', str(wt_str2))
             if m_wt:
@@ -645,6 +707,9 @@ def make_newspaper(date_str=None):
         dist_m = pd.to_numeric(m.group() if m else '', errors='coerce')
         surf   = str(shiba_da).strip() if shiba_da else str(kyori_raw)[:1]
         seg_key = get_seg_key(surf, dist_m)
+        # 新馬戦は前走情報が全てNaNとなりモデルの歪みの原因になるため対象外
+        if shinba_horses and grp['馬名S'].isin(shinba_horses).any():
+            seg_key = None
         feats   = seg_feats.get(seg_key, []) if seg_key else []
 
         # accuracy_model でスコア計算してランク付け
@@ -903,11 +968,9 @@ def make_newspaper(date_str=None):
         seg_key = rd['seg_key']
         seg_color = SEG_COLOR.get(seg_key, '#888')
         seg_lbl   = SEG_LABEL.get(seg_key, seg_key or '?')
-        venue_full = next((v for k, v in V_FULL.items() if k in rd['kaikai']), rd['kaikai'][:3])
+        venue_full = kaikai_display_venue(rd['kaikai'], V_FULL)
 
-        _vm1 = re.search(r'[^\d]+', rd['kaikai'])
-        _vletter1 = _vm1.group().strip() if _vm1 else ''
-        _vcode1 = VENUE_LETTER_TO_CODE.get(_vletter1, '')
+        _vcode1 = kaikai_to_venue_code(rd['kaikai'])
         try:
             _rn_int1 = int(rd['r_num'])
         except (ValueError, TypeError):
@@ -978,13 +1041,11 @@ def make_newspaper(date_str=None):
 
         seg_color = SEG_COLOR.get(seg_key, '#888')
         seg_lbl   = SEG_LABEL.get(seg_key, seg_key or '?')
-        venue_s   = next((v for k, v in V_SHORT.items() if k in rd['kaikai']), rd['kaikai'][:2])
+        venue_s   = kaikai_display_venue(rd['kaikai'], V_SHORT)
         dist_str  = f'{int(dist_m)}m' if pd.notna(dist_m) else '?m'
 
         # ライブオッズ: kaikai から venue_code を抽出して該当レースを引く
-        _vm = re.search(r'[^\d]+', rd['kaikai'])
-        _vletter = _vm.group().strip() if _vm else ''
-        _vcode = VENUE_LETTER_TO_CODE.get(_vletter, '')
+        _vcode = kaikai_to_venue_code(rd['kaikai'])
         try:
             _rn_int = int(rd['r_num'])
         except (ValueError, TypeError):
@@ -1105,7 +1166,7 @@ def make_newspaper(date_str=None):
                 contrib = contrib_dict.get(f, np.nan)
                 rank_v  = feat_rank.get(f, {}).get(r.name, np.nan)
                 if fv is None:
-                    bg, fc, fv_disp, pt_s = '#f0f0f0', '#aaa', 'NaN', ''
+                    bg, fc, fv_disp, pt_s = '#f0f0f0', '#aaa', 'N/A', ''
                 else:
                     fv_disp = fv
                     feat_rank_s = f'{int(rank_v)}/{n_horses_in_race}位' if not pd.isna(rank_v) else ''
@@ -1217,7 +1278,7 @@ def make_newspaper(date_str=None):
 
     for vk in venue_order:
         races = race_groups[vk]
-        venue_full = next((v for k, v in V_FULL.items() if k in vk), vk[:3])
+        venue_full = kaikai_display_venue(vk, V_FULL)
         tab_id = f'v-{vk.replace(" ", "_")}'
         buy_cnt = sum(1 for _, _, h in races if '◎買' in h)
         buy_marker = f' <span style="color:#c0392b;font-size:10px">({buy_cnt}買)</span>' if buy_cnt else ''

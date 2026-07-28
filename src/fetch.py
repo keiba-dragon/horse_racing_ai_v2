@@ -85,7 +85,7 @@ RA_POS = {
 }
 
 CSV_FIELDS = [
-    '日付', '会場コード', '会場', 'レースNo', '距離', '芝ダ', '馬場状態',
+    '日付', '会場コード', '会場', 'レースNo', 'レース名', '距離', '芝ダ', '馬場状態',
     '頭数', '馬番', '馬名', '着順', '単勝オッズ',
     '斤量', '騎手名', '調教師', '馬体重', '馬体重変化',
     '走破タイム', '上り3F', '1角', '2角', '3角', '4角',
@@ -119,6 +119,7 @@ def parse_ra(rec):
         track_cd    = rec[p['track_cd'][0]:p['track_cd'][1]].strip()
         shusso      = rec[p['shusso_tosu'][0]:p['shusso_tosu'][1]].strip()
         baba        = rec[p['baba_state'][0]:p['baba_state'][1]].strip()
+        kyoso_meisho = rec[p['kyoso_meisho'][0]:p['kyoso_meisho'][1]].strip()
 
         if not kaisai_date.isdigit() or len(kaisai_date) != 8:
             return None
@@ -134,6 +135,7 @@ def parse_ra(rec):
             'surface':     surface,
             'shusso_tosu': shusso,
             'baba_state':  baba,
+            'kyoso_meisho': kyoso_meisho,
         }
     except Exception:
         return None
@@ -370,6 +372,7 @@ def fetch_range(jv, from_date, to_date, skip_dates=None, setup_mode=1):
                 '会場コード':  se['venue_cd'],
                 '会場':        venue_name,
                 'レースNo':    se['race_no'],
+                'レース名':    ra.get('kyoso_meisho', ''),
                 '距離':        ra.get('distance', ''),
                 '芝ダ':        ra.get('surface', ''),
                 '馬場状態':    ra.get('baba_state', ''),

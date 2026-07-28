@@ -43,40 +43,38 @@ def parse_newspaper(date_str: str):
             race_m = re.search(r'<h[23][^>]*>(.*?)</h[23]>', sec, re.DOTALL)
         race_name = re.sub(r'<[^>]+>', '', race_m.group(1)).strip() if race_m else ''
 
-        # row-r1 の行
+        # AI1位馬の行（印により row-r1 / row-buy / row-maru に分かれる）
         r1_rows = re.findall(
-            r'<tr[^>]*class="[^"]*row-r1[^"]*"[^>]*>(.*?)</tr>', sec, re.DOTALL)
+            r'<tr[^>]*class="[^"]*(?:row-r1|row-buy|row-maru)[^"]*"[^>]*>(.*?)</tr>',
+            sec, re.DOTALL)
         for row in r1_rows:
             cells = re.findall(r'<td[^>]*>(.*?)</td>', row, re.DOTALL)
             clean = [re.sub(r'<[^>]+>', '', c).strip() for c in cells]
 
-            # 着順あり: [着順, AIrank, EV, 馬名, 騎手, odds, prob]
-            if len(clean) >= 7 and clean[1] == '1' and clean[0].lstrip('-').isdigit():
-                jyuni = int(clean[0])
-                ev    = clean[2]
-                horse = re.sub(r'\s+\d+\([+-]?\d+\).*', '', clean[3])
-                horse = re.sub(r'^\d+\.', '', horse).strip()
-                jockey = clean[4]
-                try:
-                    odds = float(clean[5])
-                except Exception:
-                    odds = 0.0
-                picks.append({
-                    'race': race_name, 'horse': horse, 'jockey': jockey,
-                    'odds': odds, 'ev': ev, 'jyuni': jyuni,
-                })
-            # 着順なし（未確定）: [AIrank=1, EV, 馬名, 騎手, odds, prob]
-            elif len(clean) >= 6 and clean[0] == '1' and clean[1].startswith('EV'):
-                horse = re.sub(r'^\d+\.', '', clean[2]).strip()
-                jockey = clean[3]
-                try:
-                    odds = float(clean[4])
-                except Exception:
-                    odds = 0.0
-                picks.append({
-                    'race': race_name, 'horse': horse, 'jockey': jockey,
-                    'odds': odds, 'ev': clean[1], 'jyuni': None,
-                })
+            # 列構成: [着順(結果確定時のみ), AIrank, 印(◎/○/▲/-), 馬名, 騎手, odds, prob]
+            if len(clean) == 7:
+                jyuni_s, ai_rank_s, mark, horse_raw, jockey, odds_s, prob_s = clean
+            elif len(clean) == 6:
+                jyuni_s = ''
+                ai_rank_s, mark, horse_raw, jockey, odds_s, prob_s = clean
+            else:
+                continue
+
+            if ai_rank_s != '1':
+                continue
+
+            horse = re.sub(r'\s+\d+\([+-]?\d+\).*', '', horse_raw)
+            horse = re.sub(r'^\d+\.', '', horse).strip()
+            try:
+                odds = float(odds_s)
+            except Exception:
+                odds = 0.0
+            jyuni = int(jyuni_s) if jyuni_s.lstrip('-').isdigit() else None
+
+            picks.append({
+                'race': race_name, 'horse': horse, 'jockey': jockey,
+                'odds': odds, 'mark': mark, 'jyuni': jyuni,
+            })
     return picks
 
 
@@ -99,27 +97,50 @@ def build_html(date_str: str, picks: list) -> str:
         else:
             return '#c0392b'
 
+    MARK_COLOR = {'◎': '#c0392b', '○': '#e67e22', '▲': '#27ae60', '-': '#aaa'}
+
+    def mark_stats(subset):
+        conf = [p for p in subset if p['jyuni'] is not None]
+        h    = [p for p in conf if p['jyuni'] == 1]
+        n_c2, n_h2 = len(conf), len(h)
+        ret2 = sum(p['odds'] for p in h)
+        roi2 = (ret2 - n_c2) / n_c2 * 100 if n_c2 > 0 else float('nan')
+        return n_c2, n_h2, roi2
+
+    mark_rows_html = ''
+    for mk in ('◎', '○', '▲'):
+        subset = [p for p in picks if p['mark'] == mk]
+        if not subset:
+            continue
+        n_c2, n_h2, roi2 = mark_stats(subset)
+        roi2_s = f'{roi2:+.1f}%' if n_c2 > 0 else '—'
+        roi2_c = roi_color(roi2) if n_c2 > 0 else '#888'
+        mark_rows_html += f'''
+        <tr>
+          <td style="color:{MARK_COLOR[mk]};font-weight:bold;font-size:16px">{mk}</td>
+          <td style="text-align:center">{n_c2}R</td>
+          <td style="text-align:center">{n_h2}R</td>
+          <td style="text-align:center">{n_h2/n_c2*100 if n_c2 else 0:.1f}%</td>
+          <td style="text-align:right;color:{roi2_c};font-weight:bold">{roi2_s}</td>
+        </tr>'''
+
     rows_html = ''
     for p in picks:
         if p['jyuni'] is None:
-            mark = '<span style="color:#888">未確定</span>'
+            result_mark = '<span style="color:#888">未確定</span>'
             bg   = ''
             j_td = '<td style="color:#888">—</td>'
         elif p['jyuni'] == 1:
-            mark = '◎ <b>的中！</b>'
+            result_mark = '◎ <b>的中！</b>'
             bg   = ' style="background:#fff9e6"'
             j_td = f'<td style="font-weight:bold;color:#1a7a1a">1着</td>'
         else:
-            mark = f'{p["jyuni"]}着'
+            result_mark = f'{p["jyuni"]}着'
             bg   = ''
             j_td = f'<td style="color:#555">{p["jyuni"]}着</td>'
 
-        ev_str = p['ev']
-        try:
-            ev_v = float(ev_str.replace('EV', ''))
-            ev_col = '#1a7a1a' if ev_v >= 1.0 else ('#b36000' if ev_v >= 0.7 else '#888')
-        except Exception:
-            ev_col = '#888'
+        mk = p.get('mark', '-')
+        mk_col = MARK_COLOR.get(mk, '#aaa')
 
         race_short = re.sub(r'^.*?(\d+R)', r'\1', p['race']) if p['race'] else '—'
         rows_html += f'''
@@ -128,9 +149,9 @@ def build_html(date_str: str, picks: list) -> str:
           <td style="font-weight:bold">{p["horse"]}</td>
           <td style="color:#555;font-size:13px">{p["jockey"]}</td>
           <td style="text-align:right">{p["odds"]:.1f}倍</td>
-          <td style="text-align:center;color:{ev_col};font-size:13px">{ev_str}</td>
+          <td style="text-align:center;color:{mk_col};font-weight:bold;font-size:15px">{mk}</td>
           {j_td}
-          <td>{mark}</td>
+          <td>{result_mark}</td>
         </tr>'''
 
     roi_c = roi_color(roi) if n_c > 0 else '#888'
@@ -192,10 +213,17 @@ def build_html(date_str: str, picks: list) -> str:
     </div>
   </div>
 
+  <h2 style="font-size:15px;margin:20px 0 8px;color:#333;border-left:4px solid #1a7a9a;padding-left:8px">印別成績</h2>
+  <table>
+    <tr><th>印</th><th>確定R</th><th>的中</th><th>的中率</th><th>回収率</th></tr>
+    {mark_rows_html}
+  </table>
+
+  <h2 style="font-size:15px;margin:20px 0 8px;color:#333;border-left:4px solid #1a7a9a;padding-left:8px">AI1位指名馬 全レース</h2>
   <table>
     <tr>
       <th>レース</th><th>指名馬</th><th>騎手</th><th>オッズ</th>
-      <th>EV</th><th>着順</th><th>結果</th>
+      <th>印</th><th>着順</th><th>結果</th>
     </tr>
     {rows_html}
   </table>
