@@ -46,12 +46,12 @@ BABA_MAP_INV = {0: '良', 1: '稍重', 2: '重', 3: '不良',
                 0.0: '良', 1.0: '稍重', 2.0: '重', 3.0: '不良'}
 SEX_MAP = {0: '牡', 1: '牝', 2: 'セン', 0.0: '牡', 1.0: '牝', 2.0: 'セン'}
 
-V_SHORT = {'東京': '東', '中山': '中', '阪神': '阪', '京都': '京',
-           '中京': '名', '新潟': '新', '函館': '函', '小倉': '小',
-           '札幌': '札', '福島': '福'}
-V_FULL  = {'東京': '東京', '中山': '中山', '阪神': '阪神', '京都': '京都',
-           '中京': '中京', '新潟': '新潟', '函館': '函館', '小倉': '小倉',
-           '札幌': '札幌', '福島': '福島'}
+V_SHORT = {'東': '東', '中': '中', '中京': '名', '京': '京',
+           '阪': '阪', '新': '新', '福': '福', '函': '函',
+           '札': '札', '小': '小'}
+V_FULL  = {'東': '東京', '中': '中山', '中京': '中京', '京': '京都',
+           '阪': '阪神', '新': '新潟', '福': '福島', '函': '函館',
+           '札': '札幌', '小': '小倉'}
 
 
 def get_seg_key(surf, dist_m):
@@ -129,12 +129,15 @@ CODE_TO_VENUE_SHORT = {v: k for k, v in VENUE_LETTER_TO_CODE.items() if k != '�
 
 
 def kaikai_display_venue(kaikai, table=None):
-    """開催文字列 → 表示用会場略称。数値コード表記('3_1')も解決する。"""
+    """開催文字列 → 表示用会場略称。数値コード表記('3_1')も解決する。
+    '中京'/'中'のように短いキーが長いキーの部分文字列になる場合があるため、
+    長いキーから先に照合する。
+    """
     kaikai = str(kaikai)
     table = table or {}
-    hit = next((v for k, v in table.items() if k in kaikai), None)
-    if hit:
-        return hit
+    for k in sorted(table.keys(), key=len, reverse=True):
+        if k in kaikai:
+            return table[k]
     m_num = re.match(r'(\d+)_', kaikai)
     if m_num:
         return CODE_TO_VENUE_SHORT.get(m_num.group(1).zfill(2), kaikai[:2])
