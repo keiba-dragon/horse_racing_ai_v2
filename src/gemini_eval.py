@@ -87,7 +87,9 @@ def _build_prompt(race_ctx: dict, candidates: list) -> str:
     return '\n'.join(lines)
 
 
-def _call_gemini(prompt: str, model: str, api_key: str) -> str:
+def _call_gemini(prompt: str, model: str, api_key: str, retries: int = 3, backoff_sec: float = 3.0) -> str:
+    """レース数が多い日は無料枠のレート制限(429)・一時的な過負荷(503)に当たりやすいため、
+    Discord通知(notify.py)と同様の指数バックオフでリトライする。"""
     import requests
     url = f'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent'
     headers = {'Content-Type': 'application/json', 'X-goog-api-key': api_key}
@@ -98,10 +100,21 @@ def _call_gemini(prompt: str, model: str, api_key: str) -> str:
             'responseMimeType': 'application/json',
         },
     }
-    r = requests.post(url, headers=headers, json=payload, timeout=API_TIMEOUT)
-    r.raise_for_status()
-    data = r.json()
-    return data['candidates'][0]['content']['parts'][0]['text']
+    last_err = None
+    for attempt in range(1, retries + 1):
+        try:
+            r = requests.post(url, headers=headers, json=payload, timeout=API_TIMEOUT)
+            if r.status_code in (429, 503):
+                last_err = f'{r.status_code} {r.text[:200]}'
+            else:
+                r.raise_for_status()
+                data = r.json()
+                return data['candidates'][0]['content']['parts'][0]['text']
+        except Exception as e:
+            last_err = str(e)
+        if attempt < retries:
+            time.sleep(backoff_sec * attempt)
+    raise RuntimeError(f'Gemini API呼び出し失敗（{retries}回リトライ後）: {last_err}')
 
 
 def evaluate_race(race_ctx: dict, candidates: list) -> dict:

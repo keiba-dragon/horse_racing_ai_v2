@@ -1239,6 +1239,7 @@ def make_newspaper(date_str=None):
             }
             try:
                 gemini_result = gemini_eval.evaluate_race(race_ctx, gemini_candidates)
+                time.sleep(1.0)  # 無料枠のレート制限対策（連続呼び出しの間隔を空ける）
                 if gemini_result:
                     try:
                         gemini_eval.log_evaluations(int(tgt_date), race_ctx, gemini_candidates, gemini_result)
