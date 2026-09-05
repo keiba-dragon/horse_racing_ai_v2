@@ -7,7 +7,11 @@ data/raw/master/
 data/raw/cards/
 data/raw/results/
 data/raw/cache/
-data/raw/card_extra.csv
+data/raw/misc/card_extra.csv
+data/raw/_legacy/
+data/processed/backup/
+出馬表形式*.csv
+logs/health_status.json
 data/processed/
 
 # 馬券データ（個人情報）

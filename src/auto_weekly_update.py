@@ -14,6 +14,9 @@ from datetime import datetime
 import pandas as pd
 import numpy as np
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import notify
+
 UM_DATA_DIR    = r'C:\TFJV\UM_DATA'
 MASTER_HORSE   = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                               'data', 'raw', 'master', 'master_horse.csv')
@@ -169,13 +172,20 @@ def update_master_horse():
 
 
 def run_fetch():
-    """fetch.py --incremental を実行してdata/raw/results/に保存。"""
+    """fetch.py --incremental を実行してdata/raw/results/に保存。
+    戻り値: notify.STATUS_OK / STATUS_JVLINK_UNAVAILABLE / STATUS_ERROR
+    （fetch.py はターゲットFrontier未起動時にexit code 2を返す。他の異常は1。）
+    """
     print(f'  fetch.py --incremental を実行中...')
     r = subprocess.run(
         [sys.executable, FETCH_SCRIPT, '--incremental'],
         cwd=BASE_DIR
     )
-    return r.returncode == 0
+    if r.returncode == 0:
+        return notify.STATUS_OK
+    if r.returncode == 2:
+        return notify.STATUS_JVLINK_UNAVAILABLE
+    return notify.STATUS_ERROR
 
 
 def run_fetch_overseas():
@@ -341,8 +351,33 @@ def convert_results():
     return len(df_new)
 
 
+PARQUET_BACKUP_DIR = os.path.join(BASE_DIR, 'data', 'processed', 'backup')
+PARQUET_BACKUP_KEEP = 3
+
+
+def _backup_parquet_if_exists():
+    """上書き前に直近PARQUET_BACKUP_KEEP世代だけバックアップを残す。"""
+    if not os.path.exists(PARQUET_PATH):
+        return
+    os.makedirs(PARQUET_BACKUP_DIR, exist_ok=True)
+    ts = datetime.now().strftime('%Y%m%d_%H%M')
+    dst = os.path.join(PARQUET_BACKUP_DIR, f'all_venues_features_{ts}.parquet')
+    import shutil
+    shutil.copy2(PARQUET_PATH, dst)
+    print(f'  バックアップ: {dst}')
+    # 古い世代を削除
+    backups = sorted(_glob.glob(os.path.join(PARQUET_BACKUP_DIR, 'all_venues_features_*.parquet')))
+    for old in backups[:-PARQUET_BACKUP_KEEP]:
+        try:
+            os.remove(old)
+        except OSError:
+            pass
+
+
 def rebuild_parquet():
-    """01_make_features.py を実行してparquetを再生成する。"""
+    """01_make_features.py を実行してparquetを再生成する。
+    上書き前に直近3世代だけバックアップを保持する。
+    """
     print('  01_make_features.py を実行中（25〜30分）...')
     r = subprocess.run(
         [sys.executable, MAKE_FEATURES],
@@ -354,6 +389,7 @@ def rebuild_parquet():
     csv_path = os.path.join(BASE_DIR, 'data', 'processed', 'all_venues_features.csv')
     if os.path.exists(csv_path):
         import pandas as pd
+        _backup_parquet_if_exists()
         print('  CSV → parquet 変換中...')
         pd.read_csv(csv_path, low_memory=False).to_parquet(PARQUET_PATH, index=False)
         print('  parquet 更新完了')
@@ -361,18 +397,19 @@ def rebuild_parquet():
 
 
 def retrain_model():
-    """clogit再学習 → roi_model.pkl 生成（完全自動化パイプライン）"""
-    print('  save_conditional_logit.py を実行中（30〜60分）...')
-    r = subprocess.run([sys.executable, TRAIN_CLOGIT], cwd=BASE_DIR)
-    if r.returncode != 0:
-        print('  ERROR: clogit学習失敗')
-        return False
-    print('  save_final_model.py を実行中...')
-    r = subprocess.run([sys.executable, TRAIN_FINAL], cwd=BASE_DIR)
-    if r.returncode != 0:
-        print('  ERROR: final_model生成失敗')
-        return False
-    print('  モデル更新完了')
+    """[無効化済み] clogit再学習 → roi_model.pkl 生成。
+
+    このパイプラインは save_conditional_logit.py --dist-split なしのまま
+    save_final_model.py (旧2セグメント・OOS ROI -12.55%のベースライン) を呼ぶため、
+    実行すると本番の5セグメント個別チューニング済みモデル(models/roi_model.pkl)を
+    無警告で古い劣化版に上書きしてしまう。CLAUDE.mdの比較ルール（新モデルは旧モデルと
+    同条件で再評価してから初めて採用する）に反する自動実行のため、無効化する。
+
+    5セグメントモデルの再学習は、引き続き各 save_*_2325.py / save_shiba_*_v*.py を
+    手動で個別実行し、結果を確認してから反映すること。
+    """
+    print('  [SKIP] retrain_model() は安全のため無効化されています。')
+    print('  5セグメントモデルの再学習は手動で save_*_2325.py 等を実行してください。')
     return True
 
 
@@ -395,29 +432,6 @@ class _Tee:
     def flush(self):
         for s in self.streams:
             s.flush()
-
-
-def _notify_discord(content: str):
-    """discord_config.json のwebhookへ送信する（未設定なら黙って諦める）。
-    discord_notify.pyはimport時にsys.stdoutを再ラップするため、
-    このファイル自身のTee済みstdoutと衝突して壊れる（二重ラップでバッファが
-    閉じられる既知の問題）。importせず送信ロジックのみ直接実装する。
-    """
-    try:
-        import json
-        import requests
-        config_path = os.path.join(BASE_DIR, 'config', 'discord_config.json')
-        with open(config_path, encoding='utf-8') as f:
-            cfg = json.load(f)
-        webhook_url = cfg.get('webhook_url', '').strip()
-        if not webhook_url or 'YOUR_WEBHOOK' in webhook_url:
-            print('  [WARN] discord_config.json の webhook_url 未設定。通知スキップ')
-            return
-        r = requests.post(webhook_url, json={'content': content}, timeout=10, verify=False)
-        if r.status_code not in (200, 204):
-            print(f'  [WARN] Discord通知失敗: {r.status_code} {r.text[:200]}')
-    except Exception as e:
-        print(f'  [WARN] Discord通知失敗: {e}')
 
 
 class UpdateFailure(Exception):
@@ -448,8 +462,22 @@ def main():
         # Step 1: JV-Link fetch
         if not args.no_fetch:
             print('\n[1/4] JV-Link から結果を取得...')
-            if not run_fetch():
-                raise UpdateFailure('fetch失敗。ターゲットFrontierが起動しているか確認してください。')
+            fetch_status = run_fetch()
+            if fetch_status == notify.STATUS_JVLINK_UNAVAILABLE:
+                entry = notify.record_health('weekly_update', notify.STATUS_JVLINK_UNAVAILABLE)
+                n_consec = entry['consecutive_jvlink_unavailable']
+                print(f'  [SKIP] ターゲットFrontier未起動のためJV-Link取得をスキップ（{n_consec}週連続）')
+                notify.notify_discord(
+                    f'⚠️ 競馬AI 週次自動更新: JV-Link取得スキップ（ターゲットFrontier未起動、{n_consec}週連続）\n'
+                    f'ログ: {os.path.basename(log_path)}'
+                )
+                print('\n更新データなし（JV-Link未取得のため）。parquet・モデルはそのまま。')
+                sys.stdout, sys.stderr = orig_stdout, orig_stderr
+                log_f.close()
+                return
+            if fetch_status == notify.STATUS_ERROR:
+                notify.record_health('weekly_update', notify.STATUS_ERROR)
+                raise UpdateFailure('fetch失敗（ターゲットFrontier未起動以外の原因）。ログを確認してください。')
             print('\n[1b/4] 海外競走データを取得...')
             run_fetch_overseas()  # 失敗しても続行
         else:
@@ -483,20 +511,24 @@ def main():
                 print('\n[4/5] モデル再学習 スキップ')
 
             print('\n[5/5] 完了。')
-            _notify_discord(f'✅ 競馬AI 週次自動更新 成功\n新規{n:,}行 追加\nログ: {os.path.basename(log_path)}')
+            notify.record_health('weekly_update', notify.STATUS_OK, detail=f'+{n}行')
+            notify.notify_discord(f'✅ 競馬AI 週次自動更新 成功\n新規{n:,}行 追加\nログ: {os.path.basename(log_path)}')
         else:
+            notify.record_health('weekly_update', notify.STATUS_OK, detail='新規データなし')
             print('\n更新データなし。parquet・モデルはそのまま。')
-            _notify_discord('ℹ️ 競馬AI 週次自動更新: 新規データなし（正常終了）')
+            notify.notify_discord('ℹ️ 競馬AI 週次自動更新: 新規データなし（正常終了）')
 
     except UpdateFailure as e:
         print(f'\n[ERROR] {e}')
-        _notify_discord(f'🚨 競馬AI 週次自動更新 失敗\n{e}\nログ: {os.path.basename(log_path)}')
+        notify.record_health('weekly_update', notify.STATUS_ERROR, detail=str(e))
+        notify.notify_discord(f'🚨 競馬AI 週次自動更新 失敗\n{e}\nログ: {os.path.basename(log_path)}')
         sys.stdout, sys.stderr = orig_stdout, orig_stderr
         log_f.close()
         sys.exit(1)
     except Exception as e:
         print(f'\n[ERROR] 予期しない例外: {e}')
-        _notify_discord(f'🚨 競馬AI 週次自動更新 失敗（予期しない例外）\n{e}\nログ: {os.path.basename(log_path)}')
+        notify.record_health('weekly_update', notify.STATUS_ERROR, detail=str(e))
+        notify.notify_discord(f'🚨 競馬AI 週次自動更新 失敗（予期しない例外）\n{e}\nログ: {os.path.basename(log_path)}')
         sys.stdout, sys.stderr = orig_stdout, orig_stderr
         log_f.close()
         sys.exit(1)

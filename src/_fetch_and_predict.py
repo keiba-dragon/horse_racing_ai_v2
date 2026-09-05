@@ -250,7 +250,9 @@ def main():
     csv_cols = ['日付S', '場 R', '馬番', '馬名S', '馬ID', '性別', '斤量', '騎手', '調教師',
                 '馬体重', '馬体重増減', '芝ダ', '距離', 'クラス']
     rows = build_csv_rows(races)
-    csv_path = os.path.join(BASE_DIR, f'出馬表形式{target_date[4:6]}月{int(target_date[6:8])}日_api.csv')
+    daily_dir = os.path.join(BASE_DIR, 'data', 'raw', 'cards', 'daily')
+    os.makedirs(daily_dir, exist_ok=True)
+    csv_path = os.path.join(daily_dir, f'{target_date}_api.csv')
     with open(csv_path, 'w', encoding='cp932', errors='replace', newline='') as f:
         writer = csv.DictWriter(f, fieldnames=csv_cols)
         writer.writeheader()

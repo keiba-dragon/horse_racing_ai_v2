@@ -262,13 +262,37 @@ def fetch_horse_last_race(horse_id: str) -> dict | None:
     return None
 
 
+def _today_feat_paths(base_dir):
+    """予測パイプライン専用の特徴量出力先（マスターparquetとは別ファイル）。
+    06_predict_from_card.py はここにのみ書き込み、マスター
+    data/processed/all_venues_features.parquet は auto_weekly_update.py の
+    rebuild_parquet() だけが書き込む、という分離を維持するため。"""
+    return (
+        os.path.join(base_dir, 'data', 'processed', 'today_card_features.csv'),
+        os.path.join(base_dir, 'data', 'processed', 'today_card_features.parquet'),
+    )
+
+
+def _active_feat_paths(base_dir):
+    """予測時に読むべき特徴量ファイルを選ぶ。
+    today_card_features.parquet（当日再生成分）があればそれを優先し、
+    無ければ（--no-rebuild時等）マスターにフォールバックする。"""
+    today_csv, today_pq = _today_feat_paths(base_dir)
+    if os.path.exists(today_pq):
+        return today_csv, today_pq
+    return (
+        os.path.join(base_dir, 'data', 'processed', 'all_venues_features.csv'),
+        os.path.join(base_dir, 'data', 'processed', 'all_venues_features.parquet'),
+    )
+
+
 def patch_overseas_features(base_dir: str, card_df, date_num: int) -> None:
     """
     run_feature_engineering() 後に呼ぶ。
     前走着差タイムがNaNの今日の馬を特定し、netkeibaスクレイピングで補完してparquetを更新する。
     """
     import time as _t
-    feat_pq = os.path.join(base_dir, 'data', 'processed', 'all_venues_features.parquet')
+    _, feat_pq = _active_feat_paths(base_dir)
     if not os.path.exists(feat_pq):
         return
 
@@ -384,11 +408,12 @@ def run_feature_engineering(base_dir, extra_df):
 
     script = os.path.join(base_dir, 'src', '01_make_features.py')
     print("特徴量生成中（25〜30分かかります）...")
+    csv_path, pq_path = _today_feat_paths(base_dir)
     import os as _os
     _env = _os.environ.copy()
     _env['KEIBAI_BASE_DIR'] = base_dir
     result = subprocess.run(
-        [sys.executable, script],
+        [sys.executable, script, '--out-file', csv_path],
         cwd=base_dir,
         capture_output=True, text=True, encoding='utf-8',
         env=_env
@@ -399,9 +424,7 @@ def run_feature_engineering(base_dir, extra_df):
         lines = [l for l in result.stdout.strip().split('\n') if l]
         for l in lines[-3:]:
             print(l)
-        # Parquet キャッシュを更新
-        csv_path = os.path.join(base_dir, 'data', 'processed', 'all_venues_features.csv')
-        pq_path  = os.path.join(base_dir, 'data', 'processed', 'all_venues_features.parquet')
+        # Parquet キャッシュを更新（マスターではなく today_card_features 側のみ）
         try:
             import pyarrow  # noqa
             print("Parquetキャッシュ更新中...")
@@ -494,9 +517,8 @@ def predict_date(base_dir, target_date_num, card_df=None):
             except Exception:
                 pass
 
-    # ── 特徴量データを読み込む（Parquet優先 / なければCSV）─────────────
-    feat_csv = os.path.join(base_dir, 'data', 'processed', 'all_venues_features.csv')
-    feat_pq  = os.path.join(base_dir, 'data', 'processed', 'all_venues_features.parquet')
+    # ── 特徴量データを読み込む（today_card_features優先 / なければマスター）─
+    feat_csv, feat_pq = _active_feat_paths(base_dir)
     t0 = _time.time()
     if os.path.exists(feat_pq) and os.path.getmtime(feat_pq) >= os.path.getmtime(feat_csv):
         # 必要な列だけ読み込んでメモリ節約

@@ -451,7 +451,10 @@ def main():
     print(f"JVInit: {rc}")
     if rc != 0:
         print("JVInit失敗。ターゲットFrontierが起動しているか確認してください。")
-        sys.exit(1)
+        # exit code 2 = 「ターゲットFrontier未起動」等JV-Link接続不可を明示。
+        # 呼び出し元(auto_weekly_update.py)がこれを「失敗」ではなく
+        # 「スキップ」として区別できるようにするため、他の異常系(1)と分ける。
+        sys.exit(2)
 
     if args.probe:
         from_dt = args.from_date + "000000"

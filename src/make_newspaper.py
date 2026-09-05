@@ -13,6 +13,7 @@ from bs4 import BeautifulSoup
 
 sys.stdout.reconfigure(encoding='utf-8')
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import notify
 
 
 def _decode_html(r) -> str:
@@ -941,6 +942,9 @@ def make_newspaper(date_str=None):
   /* ── 払戻バナー ─── */
   .result-banner { background: #1b5e20; color: #fff; padding: 5px 12px;
                    font-size: 15px; font-weight: bold; }
+  /* ── JV-Link未取得 警告バナー ─── */
+  .jvlink-warn-banner { background: #b71c1c; color: #fff; padding: 8px 14px;
+                        font-size: 13px; font-weight: bold; }
 
   /* ── レース内側タブ ─────────────────────────────── */
   .race-tab-bar { display: flex; flex-wrap: wrap; gap: 4px; padding: 8px 10px 0;
@@ -1288,6 +1292,9 @@ def make_newspaper(date_str=None):
         tab_buttons += f'<button class="tab-btn" onclick="switchTab(\'{tab_id}\', this)">{venue_full}{buy_marker} <span class="cnt">({len(races)}R)</span></button>'
         tab_panes   += f'<div id="pane-{tab_id}" class="tab-pane">{build_venue_pane(vk, races)}</div>'
 
+    jvlink_warn = notify.jvlink_warning_message()
+    jvlink_warn_html = f'<div class="jvlink-warn-banner">{jvlink_warn}</div>' if jvlink_warn else ''
+
     html = f"""<!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -1298,6 +1305,7 @@ def make_newspaper(date_str=None):
 </head>
 <body>
 <div class="app">
+  {jvlink_warn_html}
   <div class="page-title">
     <span>🏇 競馬AI 予想新聞　{date_disp}</span>
     <span class="subtitle">{len(race_data)}レース / {len(result)}頭</span>
