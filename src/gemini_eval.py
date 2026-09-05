@@ -26,7 +26,7 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONFIG_PATH = os.path.join(BASE_DIR, 'config', 'gemini_config.json')
 EVAL_LOG_PATH = os.path.join(BASE_DIR, 'data', 'processed', 'ai_eval_log.csv')
 
-DEFAULT_MODEL = 'gemini-flash-latest'
+DEFAULT_MODEL = 'gemini-3.6-flash'
 MAX_CANDIDATES = 5  # 統計モデル上位何頭までを評価対象にするか（コスト管理）
 API_TIMEOUT = 20
 
@@ -89,10 +89,8 @@ def _build_prompt(race_ctx: dict, candidates: list) -> str:
 
 def _call_gemini(prompt: str, model: str, api_key: str) -> str:
     import requests
-    url = (
-        f'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent'
-        f'?key={api_key}'
-    )
+    url = f'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent'
+    headers = {'Content-Type': 'application/json', 'X-goog-api-key': api_key}
     payload = {
         'contents': [{'parts': [{'text': prompt}]}],
         'generationConfig': {
@@ -100,7 +98,7 @@ def _call_gemini(prompt: str, model: str, api_key: str) -> str:
             'responseMimeType': 'application/json',
         },
     }
-    r = requests.post(url, json=payload, timeout=API_TIMEOUT)
+    r = requests.post(url, headers=headers, json=payload, timeout=API_TIMEOUT)
     r.raise_for_status()
     data = r.json()
     return data['candidates'][0]['content']['parts'][0]['text']
