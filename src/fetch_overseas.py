@@ -236,14 +236,14 @@ def fetch_range(jv, from_date, to_date, skip_dates=None, setup_mode=1):
             print(f"  JVOpen mode=2: rc={rc}")
         if rc < 0:
             print(f"JVOpen(BAGO)失敗 rc={rc}  海外競走データが購読されていない可能性があります。")
-            return {}
+            return {}, 0
 
     buf  = " " * 110000
     size = 110000
 
     race_info = {}   # (kd, venue_cd, race_no) → WE data
     daily     = defaultdict(list)
-    n_we = n_wh = n_skip = 0
+    n_we = n_wh = n_skip = n_wh_skipped_incremental = 0
 
     print(f"読み込み中 {from_date}〜{to_date} ...")
     while True:
@@ -281,6 +281,7 @@ def fetch_range(jv, from_date, to_date, skip_dates=None, setup_mode=1):
             if kd < from_date or kd > to_date:
                 continue
             if skip_dates and kd in skip_dates:
+                n_wh_skipped_incremental += 1
                 continue
 
             key = (kd, wh['venue_cd'], wh['race_no'])
@@ -306,8 +307,9 @@ def fetch_range(jv, from_date, to_date, skip_dates=None, setup_mode=1):
             n_skip += 1
 
     jv.JVClose()
-    print(f"WE: {n_we}件 / WH: {n_wh}件 / その他: {n_skip}件")
-    return daily
+    print(f"WE: {n_we}件 / WH: {n_wh}件 / その他: {n_skip}件"
+          f"（うち増分スキップ: {n_wh_skipped_incremental}件）")
+    return daily, n_wh_skipped_incremental
 
 
 def save_daily(daily):
@@ -361,10 +363,13 @@ def main():
         print(f"既存: {len(skip_dates)}日をスキップ")
 
     setup_mode = 2 if args.full_setup else 1
-    daily = fetch_range(jv, args.from_date, args.to_date, skip_dates, setup_mode)
+    daily, n_wh_skipped_incremental = fetch_range(jv, args.from_date, args.to_date, skip_dates, setup_mode)
 
     if not daily:
-        print("海外競走データが取れませんでした。")
+        if args.incremental and n_wh_skipped_incremental > 0:
+            print("新規データなし（既に最新まで取得済み）。")
+        else:
+            print("海外競走データが取れませんでした。")
         return
 
     save_daily(daily)

@@ -320,7 +320,7 @@ def fetch_range(jv, from_date, to_date, skip_dates=None, setup_mode=1):
 
     race_info = {}   # (kd, venue_cd, race_no) → RA data
     daily     = defaultdict(list)
-    n_se = n_ra = n_skip = 0
+    n_se = n_ra = n_skip = n_se_skipped_incremental = 0
 
     print(f"読み込み中 {from_date}〜{to_date} ...")
     while True:
@@ -362,6 +362,7 @@ def fetch_range(jv, from_date, to_date, skip_dates=None, setup_mode=1):
             if kd < from_date or kd > to_date:
                 continue
             if skip_dates and kd in skip_dates:
+                n_se_skipped_incremental += 1
                 continue
             key  = (kd, se['venue_cd'], se['race_no'])
             ra   = race_info.get(key, {})
@@ -398,7 +399,8 @@ def fetch_range(jv, from_date, to_date, skip_dates=None, setup_mode=1):
             n_skip += 1
 
     jv.JVClose()
-    print(f"SE: {n_se}件 / RA: {n_ra}件 / その他: {n_skip}件")
+    print(f"SE: {n_se}件 / RA: {n_ra}件 / その他: {n_skip}件"
+          f"（うち増分スキップ: {n_se_skipped_incremental}件）")
 
     # 頭数を補完
     for kd, rows in daily.items():
@@ -410,7 +412,7 @@ def fetch_range(jv, from_date, to_date, skip_dates=None, setup_mode=1):
             for row in grp_list:
                 row['頭数'] = tosu
 
-    return daily
+    return daily, n_se_skipped_incremental
 
 
 def save_daily(daily):
@@ -485,9 +487,13 @@ def main():
         print(f"既存: {len(skip_dates)}日をスキップ")
 
     setup_mode = 2 if args.full_setup else 1
-    daily = fetch_range(jv, args.from_date, args.to_date, skip_dates, setup_mode)
+    daily, n_se_skipped_incremental = fetch_range(jv, args.from_date, args.to_date, skip_dates, setup_mode)
 
     if not daily:
+        if args.incremental and n_se_skipped_incremental > 0:
+            # 増分モードで新規データが1件もない＝既に最新まで取得済み。異常ではない。
+            print("新規データなし（既に最新まで取得済み）。")
+            sys.exit(0)
         print("データが取れませんでした。")
         sys.exit(1)
 
