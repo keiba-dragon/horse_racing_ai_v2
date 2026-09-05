@@ -37,6 +37,12 @@ FETCH_OVERSEAS   = os.path.join(BASE_DIR, 'src', 'fetch_overseas.py')
 TRAIN_CLOGIT     = os.path.join(BASE_DIR, 'src', 'save_conditional_logit.py')
 TRAIN_FINAL      = os.path.join(BASE_DIR, 'src', 'save_final_model.py')
 
+# JV-Link (JVDTLab.JVLink) は32bit専用のCOMコンポーネントで、64bit Pythonからは
+# 「クラスが登録されていません」で失敗する（2026-09-06 JV-Link 5.0.0への更新後に確認）。
+# fetch.py / fetch_overseas.py などJV-Linkに直接触れるスクリプトだけ32bit Pythonで実行する。
+PY32_EXE = r'C:\Python312-32\python.exe'
+FETCH_PYTHON = PY32_EXE if os.path.exists(PY32_EXE) else sys.executable
+
 
 def sec_to_jravan(t):
     """走破タイム (小数秒) → clean_race_time が読める整数形式 (1分11秒0 → 1110)"""
@@ -178,7 +184,7 @@ def run_fetch():
     """
     print(f'  fetch.py --incremental を実行中...')
     r = subprocess.run(
-        [sys.executable, FETCH_SCRIPT, '--incremental'],
+        [FETCH_PYTHON, FETCH_SCRIPT, '--incremental'],
         cwd=BASE_DIR
     )
     if r.returncode == 0:
@@ -192,7 +198,7 @@ def run_fetch_overseas():
     """fetch_overseas.py --incremental を実行してdata/raw/overseas/に保存。"""
     print(f'  fetch_overseas.py --incremental を実行中...')
     r = subprocess.run(
-        [sys.executable, FETCH_OVERSEAS, '--incremental'],
+        [FETCH_PYTHON, FETCH_OVERSEAS, '--incremental'],
         cwd=BASE_DIR
     )
     if r.returncode != 0:
