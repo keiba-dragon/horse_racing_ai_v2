@@ -14,6 +14,7 @@ from bs4 import BeautifulSoup
 sys.stdout.reconfigure(encoding='utf-8')
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import notify
+import gemini_eval
 
 
 def _decode_html(r) -> str:
@@ -891,6 +892,13 @@ def make_newspaper(date_str=None):
   .nan-mid { background: #e67e22; color: white; }
   .nan-lo  { background: #f9e79f; color: #555; }
 
+  /* Gemini AI参考評価（シャドウモード） */
+  .gemini-alert { padding: 5px 12px; background: #f3e8ff;
+                  border-top: 1px solid #d8b9ff; font-size: 13px; }
+  .gemini-chip { display: inline-block; margin: 1px 3px; padding: 1px 6px;
+                 border-radius: 3px; background: #ede0ff; color: #3d1a66; }
+  .gemini-note { color: #6a4c93; font-style: italic; }
+
   /* Race Table */
   .table-wrap { overflow-x: auto; }
   table.race-table { border-collapse: collapse; width: 100%; font-size: 16px; table-layout: fixed; }
@@ -1097,6 +1105,7 @@ def make_newspaper(date_str=None):
 
         # 行HTML（シンプル6列 + クリックで詳細展開）
         rows = []
+        gemini_candidates = []
         vk_safe = rd['kaikai'].replace(' ', '_')
         rn_safe = rd['r_num'].replace(' ', '_')
         for hi, (_, r) in enumerate(grp.iterrows()):
@@ -1129,6 +1138,12 @@ def make_newspaper(date_str=None):
             try: rank_i = int(float(sort_rank))
             except: rank_i = None
             ai_rank_s = str(rank_i) if rank_i else '-'
+
+            if rank_i is not None and rank_i <= gemini_eval.MAX_CANDIDATES:
+                gemini_candidates.append({
+                    'horse': horse, 'stat_rank': rank_i,
+                    'prob_pct': prob_s, 'odds': odds_s, 'jockey': jockey,
+                })
 
             if mark == '◎':        row_cls = 'row-buy'
             elif mark == '○':      row_cls = 'row-maru'
@@ -1214,6 +1229,40 @@ def make_newspaper(date_str=None):
                 f'</tr>'
             )
 
+        # ── Gemini AI評価（シャドウモード・参考表示のみ、買い目には反映しない） ──
+        gemini_html = ''
+        if gemini_eval.is_enabled() and gemini_candidates:
+            gemini_candidates.sort(key=lambda c: c['stat_rank'])
+            race_ctx = {
+                'venue': venue_s, 'r_num': rd['r_num'], 'race_name': rd['race_name'],
+                'surface': surf, 'distance_m': dist_str, 'seg_label': seg_lbl,
+            }
+            try:
+                gemini_result = gemini_eval.evaluate_race(race_ctx, gemini_candidates)
+                if gemini_result:
+                    try:
+                        gemini_eval.log_evaluations(int(tgt_date), race_ctx, gemini_candidates, gemini_result)
+                    except Exception as _log_e:
+                        print(f'  [WARN] gemini_eval ログ記録失敗: {_log_e}')
+                    note = gemini_result.get('_note', '')
+                    chips = []
+                    for c in gemini_candidates:
+                        ev = gemini_result.get(c['horse'])
+                        if not ev:
+                            continue
+                        chips.append(
+                            f'<span class="gemini-chip">{c["horse"]} '
+                            f'<b>{ev["score"]:.0f}</b>点 {ev.get("reason", "")}</span>'
+                        )
+                    if chips:
+                        note_html = f'　<span class="gemini-note">{note}</span>' if note else ''
+                        gemini_html = (
+                            f'<div class="gemini-alert">🤖 AI参考評価（買い目には未反映）:　'
+                            f'{"　".join(chips)}{note_html}</div>'
+                        )
+            except Exception as _gem_e:
+                print(f'  [WARN] gemini_eval 実行失敗: {_gem_e}')
+
         venue_key = rd['kaikai']
         if venue_key not in venue_order:
             venue_order.append(venue_key)
@@ -1247,6 +1296,7 @@ def make_newspaper(date_str=None):
     <a class="seg-report-link" href="{acc_report_href}" target="_blank">📊 モデル</a>
   </div>
   {payout_banner}
+  {gemini_html}
   {nan_alert_html}
   <div class="table-wrap">
   <table class="race-table">

@@ -13,6 +13,8 @@ data/processed/backup/
 出馬表形式*.csv
 logs/health_status.json
 data/processed/
+# ai_eval_log.csv は再生成不可能なシャドウ検証記録のため例外的に追跡する
+!data/processed/ai_eval_log.csv
 
 # 馬券データ（個人情報）
 data/tohyo/
@@ -43,6 +45,7 @@ tmp_*.csv
 
 # シークレット（Webhook URL等）
 config/discord_config.json
+config/gemini_config.json
 
 # OS
 Thumbs.db
