@@ -316,6 +316,10 @@ def convert_results():
             'レースNo':  'Ｒ',
             '騎手名':    '騎手',
         })
+        # results_supplement.csv の既存30列スキーマに無い列は落とす
+        # （'レース名'はfetch.pyの出力に含まれるが supplement 側は保持しない列。
+        #  残すと追記のたびに列数がずれてCSVが壊れる: 2026-09-06 発覚）
+        df = df.drop(columns=['レース名'], errors='ignore')
 
         # 日付: YYYYMMDD → YYMMDD 整数
         df['日付'] = date_num
@@ -500,7 +504,9 @@ def main():
         update_master_horse()
 
         # Step 3: parquet 再生成
-        if n > 0:
+        # n==0（新規データなし）でも、parquet自体が存在しない場合は再生成する
+        # （--no-rebuildでの検証実行等でparquetが削除されたまま、というケースの自己修復）
+        if n > 0 or not os.path.exists(PARQUET_PATH):
             print('\n[3/5] parquet 再生成...')
             if args.no_rebuild:
                 delete_parquet()
