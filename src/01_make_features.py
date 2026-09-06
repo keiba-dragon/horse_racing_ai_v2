@@ -242,17 +242,38 @@ def deviation_score_group(series, group_keys, df, train_mask=None):
     """グループ内での偏差値を計算（速い=高いに変換済み）
     train_mask: Trueの行だけで平均・stdを計算し、全行に適用（リークなし）
                 Noneの場合は全行で計算（後方互換）
+
+    2026-09-06: group_keysの先頭（通常は会場）で訓練期間(2013-2020)に
+    サンプルが1件も無い組み合わせが存在する場合（例: JV-Link復旧データの
+    「中京」は歴史的に別表記で記録されており2013-2020データに存在しない）、
+    そのままだとタイム指数が丸ごとNaN化してしまう。会場を除いた残りのキー
+    （surface・距離・馬場）でのフォールバック統計を用意し、主グループに
+    5件未満しかない場合はそちらで代替する。
     """
     result = pd.Series(np.nan, index=df.index)
     ref_df = df[train_mask] if train_mask is not None else df
+
+    fallback_keys = group_keys[1:] if len(group_keys) > 1 else None
+    fallback_stats = {}
+    if fallback_keys:
+        for key, grp_idx in ref_df.groupby(fallback_keys).groups.items():
+            vals = series.loc[grp_idx].dropna()
+            if len(vals) >= 5:
+                fallback_stats[key] = (vals.mean(), vals.std())
+
     stats = {}
     for key, grp_idx in ref_df.groupby(group_keys).groups.items():
         vals = series.loc[grp_idx].dropna()
         if len(vals) >= 5:
             stats[key] = (vals.mean(), vals.std())
+
     for key, grp_idx in df.groupby(group_keys).groups.items():
-        if key in stats:
-            mean, std = stats[key]
+        mean_std = stats.get(key)
+        if mean_std is None and fallback_keys:
+            fb_key = key[1:] if len(key) > 1 else key
+            mean_std = fallback_stats.get(fb_key)
+        if mean_std is not None:
+            mean, std = mean_std
             if std > 0:
                 vals = series.loc[grp_idx]
                 result.loc[grp_idx] = 50 + 10 * (mean - vals) / std
