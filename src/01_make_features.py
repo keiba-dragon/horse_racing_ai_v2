@@ -397,7 +397,9 @@ def main():
                 if '開催' not in extra_supp.columns and '会場コード' in extra_supp.columns and 'Ｒ' in extra_supp.columns:
                     extra_supp = extra_supp.copy()
                     extra_supp['開催'] = extra_supp['会場コード'].astype(str) + '_' + extra_supp['Ｒ'].fillna('').astype(str)
-                common_supp = [c for c in df_race.columns if c in extra_supp.columns]
+                common_supp = [c for c in df_race.columns if c in extra_supp.columns] + (
+                    ['クラス簡易'] if 'クラス簡易' in extra_supp.columns and 'クラス簡易' not in df_race.columns else []
+                )
                 df_race = pd.concat([df_race, extra_supp[common_supp]], ignore_index=True)
                 print(f"  results_supplement.csv から追加: {len(extra_supp):,}行")
 
@@ -967,6 +969,17 @@ def main():
 
     # 7. クラスランク
     df['クラス_rank'] = encode_class(df['レース名'])
+
+    # 7.1. results_supplement由来行（レース名を持たずクラス_rankが常にNaN化していた）を
+    # fetch.pyが実測で確認したRAレコードのクラス簡易区分で補完する。
+    # '1'=新馬 '2'=未勝利。それ以外(1勝〜G1)は区別できないため補完しない
+    # （新馬除外フィルタ クラス_rank!=1.0 の安全性を最優先で確保する。2026-09-06対応）。
+    if 'クラス簡易' in df.columns:
+        _tier = pd.to_numeric(df['クラス簡易'], errors='coerce')
+        _need_fill = df['クラス_rank'].isna()
+        df.loc[_need_fill & (_tier == 1), 'クラス_rank'] = 1.0
+        df.loc[_need_fill & (_tier == 2), 'クラス_rank'] = 2.0
+        df.drop(columns=['クラス簡易'], inplace=True)
 
     # 7.5. 海外レース行を数珠繋ぎチェーン用に挿入
     # overseas_supplement.csv の行を shift 前に追加し、shift 後に除去する。

@@ -365,10 +365,17 @@ def convert_results():
         return 0
 
     df_new = pd.concat(new_frames, ignore_index=True)
-    mode   = 'a' if existing_max > 0 and os.path.exists(SUPPLEMENT_PATH) else 'w'
-    header = (mode == 'w')
-    df_new.to_csv(SUPPLEMENT_PATH, mode=mode, header=header, index=False, encoding='utf-8')
-    print(f'  supplement 更新: +{len(df_new):,}行 (mode={mode})')
+
+    # 単純追記(mode='a')だと、新規データにだけ存在する列（例: クラス簡易）が
+    # 混ざった際に列数がずれてCSVが壊れる（2026-09-06発覚・修復済みの不具合と同種）。
+    # 既存データを読み込んでpandasのconcatで列を正しく揃えてから全体を書き直す。
+    if existing_max > 0 and os.path.exists(SUPPLEMENT_PATH):
+        existing = pd.read_csv(SUPPLEMENT_PATH, encoding='utf-8', low_memory=False)
+        combined = pd.concat([existing, df_new], ignore_index=True)
+    else:
+        combined = df_new
+    combined.to_csv(SUPPLEMENT_PATH, index=False, encoding='utf-8')
+    print(f'  supplement 更新: +{len(df_new):,}行 (全体書き直し, 総行数{len(combined):,})')
     return len(df_new)
 
 

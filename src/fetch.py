@@ -82,13 +82,16 @@ RA_POS = {
     'track_cd':    (566, 568), # トラックコード 2桁
     'distance':    (558, 562), # 距離 4桁
     'baba_state':  (594, 596), # 馬場状態 (DataKubun=1/2のみ有効)
+    'class_tier':  (508, 509), # クラス簡易区分（実測確認済み: '1'=新馬 '2'=未勝利 '3'=それ以上(1勝〜G1、区別不可)）
+                                # 2026-09-06: 中山9/6の7クラス(新馬/未勝利/1勝/2勝/3勝/OP/G2)で実測して確認。
+                                # 1勝〜G1の細分は不明のため、新馬・未勝利の除外判定にのみ使用する。
 }
 
 CSV_FIELDS = [
     '日付', '会場コード', '会場', 'レースNo', 'レース名', '距離', '芝ダ', '馬場状態',
     '頭数', '馬番', '馬名', '着順', '単勝オッズ',
     '斤量', '騎手名', '調教師', '馬体重', '馬体重変化',
-    '走破タイム', '上り3F', '1角', '2角', '3角', '4角',
+    '走破タイム', '上り3F', '1角', '2角', '3角', '4角', 'クラス簡易',
 ]
 
 
@@ -120,6 +123,7 @@ def parse_ra(rec):
         shusso      = rec[p['shusso_tosu'][0]:p['shusso_tosu'][1]].strip()
         baba        = rec[p['baba_state'][0]:p['baba_state'][1]].strip()
         kyoso_meisho = rec[p['kyoso_meisho'][0]:p['kyoso_meisho'][1]].strip()
+        class_tier  = rec[p['class_tier'][0]:p['class_tier'][1]].strip()
 
         if not kaisai_date.isdigit() or len(kaisai_date) != 8:
             return None
@@ -136,6 +140,7 @@ def parse_ra(rec):
             'shusso_tosu': shusso,
             'baba_state':  baba,
             'kyoso_meisho': kyoso_meisho,
+            'class_tier':  class_tier,
         }
     except Exception:
         return None
@@ -377,6 +382,7 @@ def fetch_range(jv, from_date, to_date, skip_dates=None, setup_mode=1):
                 '距離':        ra.get('distance', ''),
                 '芝ダ':        ra.get('surface', ''),
                 '馬場状態':    ra.get('baba_state', ''),
+                'クラス簡易':  ra.get('class_tier', ''),
                 '頭数':        '',  # 後でレースごとに集計
                 '馬番':        se['umaban'],
                 '馬名':        se['horse_name'],
