@@ -308,6 +308,17 @@ def convert_results():
         if df.empty:
             continue
 
+        # JV-Linkは結果確定に数日のタイムラグがあり、直近の日付は「着順」が
+        # 未確定（0埋め）の予定段階レコードのまま返ってくることがある
+        # （2026-09-06発覚: レース未実施のカードと同じ開催コードで混在し、
+        #  netkeiba由来のcard_extra.csvを上書きして開催・レース名が壊れた）。
+        # ほぼ全頭が着順0＝未確定とみなし、確定するまで取り込みを見送る。
+        if '着順' in df.columns:
+            _cj = pd.to_numeric(df['着順'], errors='coerce')
+            if len(df) > 0 and (_cj == 0).mean() >= 0.9:
+                print(f'  {stem}: 着順が未確定（{(_cj==0).sum()}/{len(df)}頭が0）→ 今回は取り込みを見送り')
+                continue
+
         # ── 列名マッピング ──
         df = df.rename(columns={
             '馬名':      '馬名S',

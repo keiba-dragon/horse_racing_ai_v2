@@ -480,11 +480,31 @@ def main():
         return
 
     # 増分モード: 既存ファイルをスキップ
+    # ただしJV-Linkは結果確定に数日のタイムラグがあり、直近の日付は
+    # 着順が未確定（0埋め）の予定段階レコードのまま保存されていることがある。
+    # そのようなファイルはスキップ対象から外し、結果が確定するまで毎回再取得する
+    # （2026-09-06発覚: 未確定データがresults_supplement.csvに混入し、
+    #  netkeiba由来のカードデータを壊す原因になった）。
     skip_dates = set()
+    n_pending = 0
     if args.incremental:
         existing = _glob.glob(os.path.join(OUT_DIR, '????????.csv'))
-        skip_dates = {os.path.basename(f).replace('.csv', '') for f in existing}
-        print(f"既存: {len(skip_dates)}日をスキップ")
+        for f in existing:
+            stem = os.path.basename(f).replace('.csv', '')
+            try:
+                with open(f, encoding='utf-8') as _f:
+                    _reader = csv.DictReader(_f)
+                    _chakujun = [row.get('着順', '') for row in _reader]
+                _n = len(_chakujun)
+                _n_zero = sum(1 for c in _chakujun if str(c).strip() in ('0', '00'))
+                if _n > 0 and _n_zero / _n >= 0.9:
+                    n_pending += 1
+                    continue
+            except Exception:
+                pass
+            skip_dates.add(stem)
+        print(f"既存: {len(skip_dates)}日をスキップ" +
+              (f"（未確定{n_pending}日は再取得対象）" if n_pending else ""))
 
     setup_mode = 2 if args.full_setup else 1
     daily, n_se_skipped_incremental = fetch_range(jv, args.from_date, args.to_date, skip_dates, setup_mode)
