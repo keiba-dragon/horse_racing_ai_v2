@@ -82,16 +82,46 @@ RA_POS = {
     'track_cd':    (566, 568), # トラックコード 2桁
     'distance':    (558, 562), # 距離 4桁
     'baba_state':  (594, 596), # 馬場状態 (DataKubun=1/2のみ有効)
-    'class_tier':  (508, 509), # クラス簡易区分（実測確認済み: '1'=新馬 '2'=未勝利 '3'=それ以上(1勝〜G1、区別不可)）
-                                # 2026-09-06: 中山9/6の7クラス(新馬/未勝利/1勝/2勝/3勝/OP/G2)で実測して確認。
-                                # 1勝〜G1の細分は不明のため、新馬・未勝利の除外判定にのみ使用する。
+    # 2026-09-06: 実データ36レース(新馬/未勝利/1-3勝/OP/G2)をJV-Linkから直接取得し、
+    # バイト単位で照合して実測確定した位置（公式仕様書の記載バイト数と実際のJVRead返却
+    # バッファの間に約110バイトのズレがあったため、推測値ではなく全件一致するまで実測した）。
+    # 検証: 36レース中 grade_code=36/36一致、jyoken_saiwakanen=36/36一致。
+    'grade_code':      (505, 506), # グレードコード 1バイト <コード表2003> A=G1 B=G2 C=G3 D=重賞(グレード無) E=特別 F/G/H=障害G1-3 半角スペース=一般
+    'jyoken_saiwakanen':(525, 528), # 競走条件コード 最若年条件 3バイト <コード表2007>
+                                     # 701=新馬 702=未出走 703=未勝利 005=1勝クラス 010=2勝クラス 016=3勝クラス 999=オープン
 }
+
+# クラス_rank（01_make_features.pyのencode_class()と同じ1-9スケール）への変換テーブル
+JYOKEN_TO_CLASS_RANK = {
+    '701': 1,  # 新馬
+    '703': 2,  # 未勝利
+    '702': 2,  # 未出走（未勝利相当として扱う）
+    '005': 3,  # 1勝クラス
+    '010': 4,  # 2勝クラス
+    '016': 5,  # 3勝クラス
+    '999': 6,  # オープン
+}
+GRADE_TO_CLASS_RANK = {
+    'C': 7, 'H': 7,  # G3 / J-G3
+    'B': 8, 'G': 8,  # G2 / J-G2
+    'A': 9, 'F': 9,  # G1 / J-G1
+}
+
+
+def compute_class_rank(jyoken_code: str, grade_code: str):
+    """JV-Dataの公式条件コード・グレードコードからクラス_rankを算出する。
+    グレード表記があれば最優先（G1-3は条件コードが999=オープンになるため）。"""
+    g = (grade_code or '').strip()
+    if g in GRADE_TO_CLASS_RANK:
+        return GRADE_TO_CLASS_RANK[g]
+    j = (jyoken_code or '').strip()
+    return JYOKEN_TO_CLASS_RANK.get(j, float('nan'))
 
 CSV_FIELDS = [
     '日付', '会場コード', '会場', 'レースNo', 'レース名', '距離', '芝ダ', '馬場状態',
     '頭数', '馬番', '馬名', '着順', '単勝オッズ',
     '斤量', '騎手名', '調教師', '馬体重', '馬体重変化',
-    '走破タイム', '上り3F', '1角', '2角', '3角', '4角', 'クラス簡易',
+    '走破タイム', '上り3F', '1角', '2角', '3角', '4角', 'クラス_rank_raw',
 ]
 
 
@@ -111,7 +141,7 @@ def track_to_surface(code_str):
 
 def parse_ra(rec):
     try:
-        if len(rec) < 600:
+        if len(rec) < 640:
             return None
         p = RA_POS
         kaisai_date = rec[p['kaisai_year'][0]:p['kaisai_year'][1]] \
@@ -123,7 +153,9 @@ def parse_ra(rec):
         shusso      = rec[p['shusso_tosu'][0]:p['shusso_tosu'][1]].strip()
         baba        = rec[p['baba_state'][0]:p['baba_state'][1]].strip()
         kyoso_meisho = rec[p['kyoso_meisho'][0]:p['kyoso_meisho'][1]].strip()
-        class_tier  = rec[p['class_tier'][0]:p['class_tier'][1]].strip()
+        grade_code  = rec[p['grade_code'][0]:p['grade_code'][1]].strip()
+        jyoken_code = rec[p['jyoken_saiwakanen'][0]:p['jyoken_saiwakanen'][1]].strip()
+        class_rank  = compute_class_rank(jyoken_code, grade_code)
 
         if not kaisai_date.isdigit() or len(kaisai_date) != 8:
             return None
@@ -140,7 +172,7 @@ def parse_ra(rec):
             'shusso_tosu': shusso,
             'baba_state':  baba,
             'kyoso_meisho': kyoso_meisho,
-            'class_tier':  class_tier,
+            'class_rank':  class_rank,
         }
     except Exception:
         return None
@@ -382,7 +414,7 @@ def fetch_range(jv, from_date, to_date, skip_dates=None, setup_mode=1):
                 '距離':        ra.get('distance', ''),
                 '芝ダ':        ra.get('surface', ''),
                 '馬場状態':    ra.get('baba_state', ''),
-                'クラス簡易':  ra.get('class_tier', ''),
+                'クラス_rank_raw': ra.get('class_rank', ''),
                 '頭数':        '',  # 後でレースごとに集計
                 '馬番':        se['umaban'],
                 '馬名':        se['horse_name'],
