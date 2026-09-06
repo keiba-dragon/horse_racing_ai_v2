@@ -522,7 +522,7 @@ def predict_date(base_dir, target_date_num, card_df=None):
     t0 = _time.time()
     if os.path.exists(feat_pq) and os.path.getmtime(feat_pq) >= os.path.getmtime(feat_csv):
         # 必要な列だけ読み込んでメモリ節約
-        _essential = ['馬名S', '日付', '距離', '開催', '芝・ダ', 'クラス_rank',
+        _essential = ['馬名S', '日付', '距離', '開催', 'Ｒ', 'レース名', '芝・ダ', 'クラス_rank',
                       '単勝オッズ', '馬体重', '馬体重増減', '前距離', '間隔', '性別_num',
                       # N走前シフト補正のために必要な基底列
                       '着順_num', '頭数', '斤量', '4角', '前走着差タイム',
@@ -944,18 +944,21 @@ def predict_date(base_dir, target_date_num, card_df=None):
 
     # ── レース別に予測 ──────────────────────────────────
     race_keys = ['開催']
-    if 'Ｒ' in day.columns:
+    _has_r = 'Ｒ' in day.columns
+    if _has_r:
         day['Ｒ'] = pd.to_numeric(day['Ｒ'], errors='coerce')
         race_keys.append('Ｒ')
-    if 'レース名' in day.columns and day['レース名'].notna().any():
+    _has_race_name = 'レース名' in day.columns and day['レース名'].notna().any()
+    if _has_race_name:
         race_keys.append('レース名')
     races = day.groupby(race_keys, sort=True, dropna=False).groups
 
     all_rows = []
     for group_key, idx in races.items():
+        group_key = group_key if isinstance(group_key, tuple) else (group_key,)
         kaikai    = group_key[0]
-        race_name = group_key[-1] if 'レース名' in day.columns else str(group_key)
-        r_num     = group_key[1] if 'Ｒ' in day.columns else ''
+        race_name = group_key[-1] if _has_race_name else ''
+        r_num     = group_key[1] if _has_r else ''
         sub       = day.loc[idx].copy()
         sub_key   = sub['sub_key'].iloc[0]
         cur_key   = sub['cur_key'].iloc[0]
