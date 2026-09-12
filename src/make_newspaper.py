@@ -6,7 +6,7 @@ make_newspaper.py v2 — 競馬AI 詳細新聞生成
   - 買い目サマリーを冒頭に大きく表示
   - 各レース: 特徴量ヒートマップ（レース内パーセンタイル色分け）+ NaN一覧
 """
-import os, sys, re, pickle, argparse, time, urllib.request
+import os, sys, re, pickle, argparse, time, urllib.request, subprocess
 import numpy as np
 import pandas as pd
 from bs4 import BeautifulSoup
@@ -1418,6 +1418,7 @@ function toggleDetail(id) {{
     print(f'HTML出力: {out_path}')
 
     _update_newspaper_index(out_dir)
+    _push_newspaper_to_github(out_path, out_dir, fname_date)
 
     gdrive = r'G:\マイドライブ\競馬AI\予想レポート'
     if os.path.isdir(gdrive):
@@ -1499,6 +1500,37 @@ def _update_newspaper_index(out_dir: str):
     with open(idx_path, 'w', encoding='utf-8') as f:
         f.write(idx_html)
     print(f'新聞インデックス更新: {idx_path}')
+
+
+def _push_newspaper_to_github(out_path: str, out_dir: str, fname_date: str):
+    """新聞HTML・新聞一覧をGitHub Pages公開用リポジトリへコミット・プッシュする。
+    2026-09-12発覚: ローカル生成だけで満足してコミットし忘れる/プッシュし忘れると
+    公開ページ(newspapers.html)が何ヶ月も古いまま気づかれない事故が実際に起きたため、
+    新聞生成のたびに自動で反映するようにした（手動フローに依存しない）。
+    ネットワーク不通などでプッシュに失敗しても新聞生成自体は失敗させない。
+    """
+    idx_path = os.path.join(out_dir, 'newspapers.html')
+    try:
+        rel_paths = [os.path.relpath(out_path, BASE_DIR), os.path.relpath(idx_path, BASE_DIR)]
+        subprocess.run(['git', 'add', *rel_paths], cwd=BASE_DIR, check=True,
+                        capture_output=True, text=True)
+        diff = subprocess.run(['git', 'diff', '--cached', '--quiet'], cwd=BASE_DIR)
+        if diff.returncode == 0:
+            print('GitHub Pages: 変更なし（コミット省略）')
+            return
+        subprocess.run(
+            ['git', 'commit', '-m', f'新聞自動更新: {fname_date}\n\nCo-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>'],
+            cwd=BASE_DIR, check=True, capture_output=True, text=True)
+        push = subprocess.run(['git', 'push', 'origin', 'main'], cwd=BASE_DIR,
+                               capture_output=True, text=True)
+        if push.returncode == 0:
+            print(f'GitHub Pages反映: newspaper_{fname_date}.html + newspapers.html をpush済み')
+        else:
+            print(f'[WARN] GitHub push失敗（後で手動push要）: {push.stderr.strip()[:300]}')
+    except subprocess.CalledProcessError as e:
+        print(f'[WARN] GitHub Pagesへの反映に失敗（新聞生成自体は成功）: {e.stderr.strip()[:300] if e.stderr else e}')
+    except Exception as e:
+        print(f'[WARN] GitHub Pagesへの反映で予期しないエラー: {e}')
 
 
 if __name__ == '__main__':
