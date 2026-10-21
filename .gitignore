@@ -12,9 +12,11 @@ data/raw/_legacy/
 data/processed/backup/
 出馬表形式*.csv
 logs/health_status.json
-data/processed/
+data/processed/*
 # ai_eval_log.csv は再生成不可能なシャドウ検証記録のため例外的に追跡する
 !data/processed/ai_eval_log.csv
+# prediction_log.csv は「どのモデルで予想したか」の記録のため追跡する
+!data/processed/prediction_log.csv
 
 # 馬券データ（個人情報）
 data/tohyo/

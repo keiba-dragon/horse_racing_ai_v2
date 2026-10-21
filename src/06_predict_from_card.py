@@ -503,6 +503,15 @@ def predict_date(base_dir, target_date_num, card_df=None):
             except Exception:
                 pass
 
+    # ── 予想に使うモデルの版を記録（失敗しても予想は止めない）──────────────
+    try:
+        import sys as _sys_mr
+        _sys_mr.path.insert(0, os.path.join(base_dir, 'src'))
+        import model_registry as _mr
+        _mr.log_run('06_predict_from_card', target_date_num, ['roi_model', 'hitrate_model'])
+    except Exception:
+        pass
+
     # ── placing model (final_model_placing.pkl) 読み込み ──────────────────
     _placing_pkg  = None
     _placing_path = os.path.join(base_dir, 'models', 'final_model_placing.pkl')

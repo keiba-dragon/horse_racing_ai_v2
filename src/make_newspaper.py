@@ -15,6 +15,7 @@ sys.stdout.reconfigure(encoding='utf-8')
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import notify
 import gemini_eval
+import model_registry
 
 
 def _decode_html(r) -> str:
@@ -616,6 +617,7 @@ def make_newspaper(date_str=None):
     model_path = os.path.join(BASE_DIR, 'models', 'hitrate_model.pkl')
     acc_model  = pickle.load(open(model_path, 'rb'))
     seg_feats  = {k: v['feat_cols'] for k, v in acc_model.items()}
+    model_footer = model_registry.footer_text(['hitrate_model'])
 
     # 印のz-score閾値
     # ◎: z<1.2 (混戦でモデルが優勢) 全OOS +37.8%
@@ -1374,6 +1376,7 @@ def make_newspaper(date_str=None):
   <div class="footer">
     ◎z&lt;1.2(混戦穴) ○z&lt;1.5(やや混戦) ▲z&gt;=1.5(人気) | accuracy_model clogit + isotonic
     <br>生成日時: {generated_at}
+    <br>{model_footer}
   </div>
 </div>
 
@@ -1416,6 +1419,7 @@ function toggleDetail(id) {{
     with open(out_path, 'w', encoding='utf-8') as f:
         f.write(html)
     print(f'HTML出力: {out_path}')
+    model_registry.log_run('make_newspaper', fname_date, ['hitrate_model'])
 
     _update_newspaper_index(out_dir)
     _push_newspaper_to_github(out_path, out_dir, fname_date)
