@@ -21,8 +21,12 @@ data/processed/*
 # 馬券データ（個人情報）
 data/tohyo/
 
-# 学習済みモデル（再学習可能）
-models/
+# 学習済みモデル: 本番2ファイルと版のコピー(models/versions/*.pkl)だけ追跡する。それ以外は再学習可能なので除外
+models/*
+!models/hitrate_model.pkl
+!models/roi_model.pkl
+!models/versions/
+models/versions/*/
 
 # 予測出力
 d_core/output/

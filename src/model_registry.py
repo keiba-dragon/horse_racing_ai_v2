@@ -6,6 +6,9 @@ model_registry.py - 「どの予想を、どのモデルで、いつ出したか
                            未保存のバージョンは models/versions/ にコピーする
 - footer_text(names)     : 新聞フッター用の「使用モデル」文字列
 - write_doc()            : MODELS.md の自動生成部分（現行ファイル一覧）を更新する
+- release(name, note)    : 新しい版を確定する（版コピー保存 + 更新履歴に1行追記）
+                           モデルを更新・保存したら必ず実行する:
+                           python src/model_registry.py --release hitrate_model "変更内容と検証成績"
 
 呼び出し側（予想・新聞の生成）を止めないよう、log_run / footer_text は
 失敗しても例外を投げない。
@@ -119,8 +122,46 @@ def write_doc():
         f.write(text)
 
 
+def release(name, note):
+    """モデルを更新したときに実行する。版コピーを保存し、MODELS.md の更新履歴へ追記する。
+    同じハッシュが履歴に既にあれば何もしない（二重登録の防止）。"""
+    d = describe(name)
+    if d is None:
+        print(f'{name}.pkl がありません')
+        return False
+    _save_version(d)
+    text = open(DOC_PATH, encoding='utf-8').read() if os.path.exists(DOC_PATH) else ''
+    if f"`{d['sha']}`" in text.split(AUTO_END)[-1]:
+        print(f"登録済み: {name} {d['sha']}")
+        return False
+    row = f"| {d['mtime'][:10]} | {name} | `{d['sha']}` | {note} |"
+    marker = '## 更新履歴（手書き）'
+    if marker not in text:
+        text = (text.rstrip() + f'\n\n{marker}\n\n'
+                '| 日付 | モデル | ハッシュ | 内容・検証時の成績 |\n|---|---|---|---|\n')
+    # 更新履歴の表の最後の行の直後に挿入する（後ろの節を壊さない）
+    lines = text.split('\n')
+    start = next(i for i, ln in enumerate(lines) if ln.startswith(marker))
+    last = start
+    for i in range(start + 1, len(lines)):
+        if lines[i].startswith('|'):
+            last = i
+        elif lines[i].startswith('## '):
+            break
+    lines.insert(last + 1, row)
+    text = '\n'.join(lines)
+    with open(DOC_PATH, 'w', encoding='utf-8') as f:
+        f.write(text)
+    write_doc()
+    print(f"登録: {name} {d['sha']} ({d['mtime']})")
+    return True
+
+
 if __name__ == '__main__':
-    if '--write-doc' in sys.argv:
+    if '--release' in sys.argv:
+        i = sys.argv.index('--release')
+        release(sys.argv[i + 1], sys.argv[i + 2] if len(sys.argv) > i + 2 else '')
+    elif '--write-doc' in sys.argv:
         write_doc()
         print(f'更新: {DOC_PATH}')
     else:
