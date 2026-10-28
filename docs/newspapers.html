@@ -21,6 +21,20 @@
     li:first-child a { color:#1565c0; font-size:1.05rem; }
     .badge { display:inline-block; background:#1565c0; color:#fff;
               border-radius:12px; font-size:.72rem; padding:2px 8px; margin-left:8px; }
+    li a { display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; }
+    .chips { display:flex; gap:4px; flex-wrap:wrap; }
+    .chip { font-size:.68rem; font-weight:600; padding:2px 7px; border-radius:10px;
+             background:#e8eaf6; color:#3949ab; white-space:nowrap; }
+    .chip.ok { background:#e8f5e9; color:#2e7d32; }
+    .chip.late { background:#fff3e0; color:#e65100; }
+    .tl { background:#fff; border-radius:8px; padding:14px 18px; margin-bottom:22px;
+           box-shadow:0 2px 6px rgba(0,0,0,.08); }
+    .tl h2 { font-size:1rem; margin:0 0 8px; color:#1a1a2e; }
+    .tl table { border-collapse:collapse; width:100%; font-size:.82rem; }
+    .tl td { padding:4px 6px; border-bottom:1px solid #eee; vertical-align:top; }
+    .tl td:first-child { white-space:nowrap; font-weight:600; color:#1565c0; }
+    .tl td:nth-child(2) { white-space:nowrap; color:#666; }
+    .tl .note { font-size:.74rem; color:#777; margin:8px 0 0; line-height:1.5; }
   </style>
 </head>
 <body>
@@ -31,98 +45,99 @@
 </nav>
 <div class="container">
   <h1>予想新聞 一覧</h1>
+  <div class="tl"><h2>モデル・印ルールの切替履歴</h2><table><tr><td>6/13〜</td><td>モデル</td><td>新聞を的中率モデル(旧accuracy_model)に切替（6/14に一本化）</td></tr><tr><td>6/21〜</td><td>買い目</td><td>買い目を「的中率モデル×ROIモデルの両方が1位の馬」だけに絞る</td></tr><tr><td>6/23〜</td><td>印ルール</td><td>z-score印(◎○▲)を導入。買い目=◎○（オッズ不使用）← 現行の印ルール</td></tr><tr><td>8/15〜</td><td>モデル</td><td>hitrate_model の特徴量を拡張（8/15版・現行モデル）</td></tr><tr><td>9/5〜</td><td>参考表示</td><td>Gemini参考評価を表示開始（買い目には未反映）</td></tr><tr><td>10/21〜</td><td>記録</td><td>新聞の最後に使用モデルの版(ハッシュ)を表示・予想ごとに記録開始</td></tr></table><p class="note">2026年1〜7月の新聞は、7/29にまとめて作り直したもの（その時点のモデルで再生成）。当時レースの前に出した予想そのものではない。</p><p class="note">「当日公開」＝その日のうちにGitHubへ載せた新聞、「後日公開」＝日をまたいで載せた新聞（後日作成・作り直しの可能性が高い）。9/12より前は手動で公開していたため、公開日と作成日は一致しないことがある。成績を集計するときは、レース前に公開された版だけを使う。</p></div>
   <ul>
-    <li><a href="newspaper_20261025.html">2026年10月25日（日）</a></li>
-    <li><a href="newspaper_20261024.html">2026年10月24日（土）</a></li>
-    <li><a href="newspaper_20261018.html">2026年10月18日（日）</a></li>
-    <li><a href="newspaper_20261017.html">2026年10月17日（土）</a></li>
-    <li><a href="newspaper_20261012.html">2026年10月12日（月）</a></li>
-    <li><a href="newspaper_20261011.html">2026年10月11日（日）</a></li>
-    <li><a href="newspaper_20261010.html">2026年10月10日（土）</a></li>
-    <li><a href="newspaper_20261004.html">2026年10月4日（日）</a></li>
-    <li><a href="newspaper_20261003.html">2026年10月3日（土）</a></li>
-    <li><a href="newspaper_20260927.html">2026年9月27日（日）</a></li>
-    <li><a href="newspaper_20260926.html">2026年9月26日（土）</a></li>
-    <li><a href="newspaper_20260922.html">2026年9月22日（火）</a></li>
-    <li><a href="newspaper_20260921.html">2026年9月21日（月）</a></li>
-    <li><a href="newspaper_20260920.html">2026年9月20日（日）</a></li>
-    <li><a href="newspaper_20260919.html">2026年9月19日（土）</a></li>
-    <li><a href="newspaper_20260913.html">2026年9月13日（日）</a></li>
-    <li><a href="newspaper_20260912.html">2026年9月12日（土）</a></li>
-    <li><a href="newspaper_20260906.html">2026年9月6日（日）</a></li>
-    <li><a href="newspaper_20260905.html">2026年9月5日（土）</a></li>
-    <li><a href="newspaper_20260830.html">2026年8月30日（日）</a></li>
-    <li><a href="newspaper_20260829.html">2026年8月29日（土）</a></li>
-    <li><a href="newspaper_20260823.html">2026年8月23日（日）</a></li>
-    <li><a href="newspaper_20260822.html">2026年8月22日（土）</a></li>
-    <li><a href="newspaper_20260816.html">2026年8月16日（日）</a></li>
-    <li><a href="newspaper_20260815.html">2026年8月15日（土）</a></li>
-    <li><a href="newspaper_20260809.html">2026年8月9日（日）</a></li>
-    <li><a href="newspaper_20260808.html">2026年8月8日（土）</a></li>
-    <li><a href="newspaper_20260802.html">2026年8月2日（日）</a></li>
-    <li><a href="newspaper_20260801.html">2026年8月1日（土）</a></li>
-    <li><a href="newspaper_20260726.html">2026年7月26日（日）</a></li>
-    <li><a href="newspaper_20260725.html">2026年7月25日（土）</a></li>
-    <li><a href="newspaper_20260719.html">2026年7月19日（日）</a></li>
-    <li><a href="newspaper_20260718.html">2026年7月18日（土）</a></li>
-    <li><a href="newspaper_20260712.html">2026年7月12日（日）</a></li>
-    <li><a href="newspaper_20260711.html">2026年7月11日（土）</a></li>
-    <li><a href="newspaper_20260705.html">2026年7月5日（日）</a></li>
-    <li><a href="newspaper_20260704.html">2026年7月4日（土）</a></li>
-    <li><a href="newspaper_20260628.html">2026年6月28日（日）</a></li>
-    <li><a href="newspaper_20260627.html">2026年6月27日（土）</a></li>
-    <li><a href="newspaper_20260621.html">2026年6月21日（日）</a></li>
-    <li><a href="newspaper_20260620.html">2026年6月20日（土）</a></li>
-    <li><a href="newspaper_20260614.html">2026年6月14日（日）</a></li>
-    <li><a href="newspaper_20260613.html">2026年6月13日（土）</a></li>
-    <li><a href="newspaper_20260607.html">2026年6月7日（日）</a></li>
-    <li><a href="newspaper_20260606.html">2026年6月6日（土）</a></li>
-    <li><a href="newspaper_20260531.html">2026年5月31日（日）</a></li>
-    <li><a href="newspaper_20260530.html">2026年5月30日（土）</a></li>
-    <li><a href="newspaper_20260524.html">2026年5月24日（日）</a></li>
-    <li><a href="newspaper_20260523.html">2026年5月23日（土）</a></li>
-    <li><a href="newspaper_20260517.html">2026年5月17日（日）</a></li>
-    <li><a href="newspaper_20260516.html">2026年5月16日（土）</a></li>
-    <li><a href="newspaper_20260510.html">2026年5月10日（日）</a></li>
-    <li><a href="newspaper_20260509.html">2026年5月9日（土）</a></li>
-    <li><a href="newspaper_20260503.html">2026年5月3日（日）</a></li>
-    <li><a href="newspaper_20260502.html">2026年5月2日（土）</a></li>
-    <li><a href="newspaper_20260426.html">2026年4月26日（日）</a></li>
-    <li><a href="newspaper_20260425.html">2026年4月25日（土）</a></li>
-    <li><a href="newspaper_20260419.html">2026年4月19日（日）</a></li>
-    <li><a href="newspaper_20260418.html">2026年4月18日（土）</a></li>
-    <li><a href="newspaper_20260412.html">2026年4月12日（日）</a></li>
-    <li><a href="newspaper_20260411.html">2026年4月11日（土）</a></li>
-    <li><a href="newspaper_20260405.html">2026年4月5日（日）</a></li>
-    <li><a href="newspaper_20260404.html">2026年4月4日（土）</a></li>
-    <li><a href="newspaper_20260329.html">2026年3月29日（日）</a></li>
-    <li><a href="newspaper_20260328.html">2026年3月28日（土）</a></li>
-    <li><a href="newspaper_20260322.html">2026年3月22日（日）</a></li>
-    <li><a href="newspaper_20260321.html">2026年3月21日（土）</a></li>
-    <li><a href="newspaper_20260315.html">2026年3月15日（日）</a></li>
-    <li><a href="newspaper_20260314.html">2026年3月14日（土）</a></li>
-    <li><a href="newspaper_20260308.html">2026年3月8日（日）</a></li>
-    <li><a href="newspaper_20260307.html">2026年3月7日（土）</a></li>
-    <li><a href="newspaper_20260301.html">2026年3月1日（日）</a></li>
-    <li><a href="newspaper_20260228.html">2026年2月28日（土）</a></li>
-    <li><a href="newspaper_20260222.html">2026年2月22日（日）</a></li>
-    <li><a href="newspaper_20260221.html">2026年2月21日（土）</a></li>
-    <li><a href="newspaper_20260215.html">2026年2月15日（日）</a></li>
-    <li><a href="newspaper_20260214.html">2026年2月14日（土）</a></li>
-    <li><a href="newspaper_20260210.html">2026年2月10日（火）</a></li>
-    <li><a href="newspaper_20260208.html">2026年2月8日（日）</a></li>
-    <li><a href="newspaper_20260207.html">2026年2月7日（土）</a></li>
-    <li><a href="newspaper_20260201.html">2026年2月1日（日）</a></li>
-    <li><a href="newspaper_20260131.html">2026年1月31日（土）</a></li>
-    <li><a href="newspaper_20260125.html">2026年1月25日（日）</a></li>
-    <li><a href="newspaper_20260124.html">2026年1月24日（土）</a></li>
-    <li><a href="newspaper_20260118.html">2026年1月18日（日）</a></li>
-    <li><a href="newspaper_20260117.html">2026年1月17日（土）</a></li>
-    <li><a href="newspaper_20260112.html">2026年1月12日（月）</a></li>
-    <li><a href="newspaper_20260111.html">2026年1月11日（日）</a></li>
-    <li><a href="newspaper_20260110.html">2026年1月10日（土）</a></li>
-    <li><a href="newspaper_20260105.html">2026年1月5日（月）</a></li>
-    <li><a href="newspaper_20260104.html">2026年1月4日（日）</a></li>
+    <li><a href="newspaper_20261025.html"><span class="d">2026年10月25日（日）</span><span class="chips"><span class="chip">8/15版</span><span class="chip">z印</span><span class="chip ok">前日以前に公開</span></span></a></li>
+    <li><a href="newspaper_20261024.html"><span class="d">2026年10月24日（土）</span><span class="chips"><span class="chip">8/15版</span><span class="chip">z印</span><span class="chip ok">前日以前に公開</span></span></a></li>
+    <li><a href="newspaper_20261018.html"><span class="d">2026年10月18日（日）</span><span class="chips"><span class="chip">8/15版</span><span class="chip">z印</span><span class="chip ok">当日公開</span></span></a></li>
+    <li><a href="newspaper_20261017.html"><span class="d">2026年10月17日（土）</span><span class="chips"><span class="chip">8/15版</span><span class="chip">z印</span><span class="chip ok">当日公開</span></span></a></li>
+    <li><a href="newspaper_20261012.html"><span class="d">2026年10月12日（月）</span><span class="chips"><span class="chip">8/15版</span><span class="chip">z印</span><span class="chip late">後日公開</span></span></a></li>
+    <li><a href="newspaper_20261011.html"><span class="d">2026年10月11日（日）</span><span class="chips"><span class="chip">8/15版</span><span class="chip">z印</span><span class="chip ok">前日以前に公開</span></span></a></li>
+    <li><a href="newspaper_20261010.html"><span class="d">2026年10月10日（土）</span><span class="chips"><span class="chip">8/15版</span><span class="chip">z印</span><span class="chip ok">前日以前に公開</span></span></a></li>
+    <li><a href="newspaper_20261004.html"><span class="d">2026年10月4日（日）</span><span class="chips"><span class="chip">8/15版</span><span class="chip">z印</span><span class="chip ok">前日以前に公開</span></span></a></li>
+    <li><a href="newspaper_20261003.html"><span class="d">2026年10月3日（土）</span><span class="chips"><span class="chip">8/15版</span><span class="chip">z印</span><span class="chip ok">前日以前に公開</span></span></a></li>
+    <li><a href="newspaper_20260927.html"><span class="d">2026年9月27日（日）</span><span class="chips"><span class="chip">8/15版</span><span class="chip">z印</span><span class="chip ok">前日以前に公開</span></span></a></li>
+    <li><a href="newspaper_20260926.html"><span class="d">2026年9月26日（土）</span><span class="chips"><span class="chip">8/15版</span><span class="chip">z印</span><span class="chip ok">前日以前に公開</span></span></a></li>
+    <li><a href="newspaper_20260922.html"><span class="d">2026年9月22日（火）</span><span class="chips"><span class="chip">8/15版</span><span class="chip">z印</span><span class="chip late">後日公開</span></span></a></li>
+    <li><a href="newspaper_20260921.html"><span class="d">2026年9月21日（月）</span><span class="chips"><span class="chip">8/15版</span><span class="chip">z印</span><span class="chip late">後日公開</span></span></a></li>
+    <li><a href="newspaper_20260920.html"><span class="d">2026年9月20日（日）</span><span class="chips"><span class="chip">8/15版</span><span class="chip">z印</span><span class="chip ok">当日公開</span></span></a></li>
+    <li><a href="newspaper_20260919.html"><span class="d">2026年9月19日（土）</span><span class="chips"><span class="chip">8/15版</span><span class="chip">z印</span><span class="chip late">後日公開</span></span></a></li>
+    <li><a href="newspaper_20260913.html"><span class="d">2026年9月13日（日）</span><span class="chips"><span class="chip">8/15版</span><span class="chip">z印</span><span class="chip ok">前日以前に公開</span></span></a></li>
+    <li><a href="newspaper_20260912.html"><span class="d">2026年9月12日（土）</span><span class="chips"><span class="chip">8/15版</span><span class="chip">z印</span><span class="chip ok">当日公開</span></span></a></li>
+    <li><a href="newspaper_20260906.html"><span class="d">2026年9月6日（日）</span><span class="chips"><span class="chip">8/15版</span><span class="chip">z印</span><span class="chip ok">当日公開</span></span></a></li>
+    <li><a href="newspaper_20260905.html"><span class="d">2026年9月5日（土）</span><span class="chips"><span class="chip">8/15版</span><span class="chip">z印</span><span class="chip late">後日公開</span></span></a></li>
+    <li><a href="newspaper_20260830.html"><span class="d">2026年8月30日（日）</span><span class="chips"><span class="chip">8/15版</span><span class="chip">z印</span><span class="chip late">後日公開</span></span></a></li>
+    <li><a href="newspaper_20260829.html"><span class="d">2026年8月29日（土）</span><span class="chips"><span class="chip">8/15版</span><span class="chip">z印</span><span class="chip late">後日公開</span></span></a></li>
+    <li><a href="newspaper_20260823.html"><span class="d">2026年8月23日（日）</span><span class="chips"><span class="chip">8/15版</span><span class="chip">z印</span><span class="chip late">後日公開</span></span></a></li>
+    <li><a href="newspaper_20260822.html"><span class="d">2026年8月22日（土）</span><span class="chips"><span class="chip">8/15版</span><span class="chip">z印</span><span class="chip late">後日公開</span></span></a></li>
+    <li><a href="newspaper_20260816.html"><span class="d">2026年8月16日（日）</span><span class="chips"><span class="chip">8/15版</span><span class="chip">z印</span><span class="chip ok">前日以前に公開</span></span></a></li>
+    <li><a href="newspaper_20260815.html"><span class="d">2026年8月15日（土）</span><span class="chips"><span class="chip">8/15版</span><span class="chip">z印</span><span class="chip ok">当日公開</span></span></a></li>
+    <li><a href="newspaper_20260809.html"><span class="d">2026年8月9日（日）</span><span class="chips"><span class="chip">旧版</span><span class="chip">z印</span><span class="chip late">後日公開</span></span></a></li>
+    <li><a href="newspaper_20260808.html"><span class="d">2026年8月8日（土）</span><span class="chips"><span class="chip">旧版</span><span class="chip">z印</span><span class="chip late">後日公開</span></span></a></li>
+    <li><a href="newspaper_20260802.html"><span class="d">2026年8月2日（日）</span><span class="chips"><span class="chip">旧版</span><span class="chip">z印</span><span class="chip late">後日公開</span></span></a></li>
+    <li><a href="newspaper_20260801.html"><span class="d">2026年8月1日（土）</span><span class="chips"><span class="chip">旧版</span><span class="chip">z印</span><span class="chip late">後日公開</span></span></a></li>
+    <li><a href="newspaper_20260726.html"><span class="d">2026年7月26日（日）</span><span class="chips"><span class="chip">旧版</span><span class="chip">z印</span><span class="chip late">後日公開</span></span></a></li>
+    <li><a href="newspaper_20260725.html"><span class="d">2026年7月25日（土）</span><span class="chips"><span class="chip">旧版</span><span class="chip">z印</span><span class="chip late">後日公開</span></span></a></li>
+    <li><a href="newspaper_20260719.html"><span class="d">2026年7月19日（日）</span><span class="chips"><span class="chip">旧版</span><span class="chip">z印</span><span class="chip late">後日公開</span></span></a></li>
+    <li><a href="newspaper_20260718.html"><span class="d">2026年7月18日（土）</span><span class="chips"><span class="chip">旧版</span><span class="chip">z印</span><span class="chip late">後日公開</span></span></a></li>
+    <li><a href="newspaper_20260712.html"><span class="d">2026年7月12日（日）</span><span class="chips"><span class="chip">旧版</span><span class="chip">z印</span><span class="chip late">後日公開</span></span></a></li>
+    <li><a href="newspaper_20260711.html"><span class="d">2026年7月11日（土）</span><span class="chips"><span class="chip">旧版</span><span class="chip">z印</span><span class="chip late">後日公開</span></span></a></li>
+    <li><a href="newspaper_20260705.html"><span class="d">2026年7月5日（日）</span><span class="chips"><span class="chip">旧版</span><span class="chip">z印</span><span class="chip ok">当日公開</span></span></a></li>
+    <li><a href="newspaper_20260704.html"><span class="d">2026年7月4日（土）</span><span class="chips"><span class="chip">旧版</span><span class="chip">z印</span><span class="chip late">後日公開</span></span></a></li>
+    <li><a href="newspaper_20260628.html"><span class="d">2026年6月28日（日）</span><span class="chips"><span class="chip">旧版</span><span class="chip">z印</span><span class="chip ok">当日公開</span></span></a></li>
+    <li><a href="newspaper_20260627.html"><span class="d">2026年6月27日（土）</span><span class="chips"><span class="chip">旧版</span><span class="chip">z印</span><span class="chip late">後日公開</span></span></a></li>
+    <li><a href="newspaper_20260621.html"><span class="d">2026年6月21日（日）</span><span class="chips"><span class="chip">旧版</span><span class="chip">旧ルール</span><span class="chip ok">当日公開</span></span></a></li>
+    <li><a href="newspaper_20260620.html"><span class="d">2026年6月20日（土）</span><span class="chips"><span class="chip">旧版</span><span class="chip">旧ルール</span><span class="chip ok">当日公開</span></span></a></li>
+    <li><a href="newspaper_20260614.html"><span class="d">2026年6月14日（日）</span><span class="chips"><span class="chip">旧版</span><span class="chip">旧ルール</span><span class="chip ok">当日公開</span></span></a></li>
+    <li><a href="newspaper_20260613.html"><span class="d">2026年6月13日（土）</span><span class="chips"><span class="chip">旧版</span><span class="chip">旧ルール</span><span class="chip ok">当日公開</span></span></a></li>
+    <li><a href="newspaper_20260607.html"><span class="d">2026年6月7日（日）</span><span class="chips"><span class="chip">旧方式</span><span class="chip">旧方式</span><span class="chip late">後日公開</span></span></a></li>
+    <li><a href="newspaper_20260606.html"><span class="d">2026年6月6日（土）</span><span class="chips"><span class="chip">旧方式</span><span class="chip">旧方式</span><span class="chip late">後日公開</span></span></a></li>
+    <li><a href="newspaper_20260531.html"><span class="d">2026年5月31日（日）</span><span class="chips"><span class="chip">旧方式</span><span class="chip">旧方式</span><span class="chip ok">当日公開</span></span></a></li>
+    <li><a href="newspaper_20260530.html"><span class="d">2026年5月30日（土）</span><span class="chips"><span class="chip">旧方式</span><span class="chip">旧方式</span><span class="chip ok">当日公開</span></span></a></li>
+    <li><a href="newspaper_20260524.html"><span class="d">2026年5月24日（日）</span><span class="chips"><span class="chip">旧方式</span><span class="chip">旧方式</span><span class="chip ok">当日公開</span></span></a></li>
+    <li><a href="newspaper_20260523.html"><span class="d">2026年5月23日（土）</span><span class="chips"><span class="chip">旧方式</span><span class="chip">旧方式</span><span class="chip ok">当日公開</span></span></a></li>
+    <li><a href="newspaper_20260517.html"><span class="d">2026年5月17日（日）</span><span class="chips"><span class="chip">旧方式</span><span class="chip">旧方式</span><span class="chip late">後日公開</span></span></a></li>
+    <li><a href="newspaper_20260516.html"><span class="d">2026年5月16日（土）</span><span class="chips"><span class="chip">旧方式</span><span class="chip">旧方式</span><span class="chip late">後日公開</span></span></a></li>
+    <li><a href="newspaper_20260510.html"><span class="d">2026年5月10日（日）</span><span class="chips"><span class="chip">旧方式</span><span class="chip">旧方式</span><span class="chip late">後日公開</span></span></a></li>
+    <li><a href="newspaper_20260509.html"><span class="d">2026年5月9日（土）</span><span class="chips"><span class="chip">旧方式</span><span class="chip">旧方式</span><span class="chip late">後日公開</span></span></a></li>
+    <li><a href="newspaper_20260503.html"><span class="d">2026年5月3日（日）</span><span class="chips"><span class="chip">旧方式</span><span class="chip">旧方式</span><span class="chip late">後日公開</span></span></a></li>
+    <li><a href="newspaper_20260502.html"><span class="d">2026年5月2日（土）</span><span class="chips"><span class="chip">旧方式</span><span class="chip">旧方式</span><span class="chip late">後日公開</span></span></a></li>
+    <li><a href="newspaper_20260426.html"><span class="d">2026年4月26日（日）</span><span class="chips"><span class="chip">旧方式</span><span class="chip">旧方式</span><span class="chip late">後日公開</span></span></a></li>
+    <li><a href="newspaper_20260425.html"><span class="d">2026年4月25日（土）</span><span class="chips"><span class="chip">旧方式</span><span class="chip">旧方式</span><span class="chip late">後日公開</span></span></a></li>
+    <li><a href="newspaper_20260419.html"><span class="d">2026年4月19日（日）</span><span class="chips"><span class="chip">旧方式</span><span class="chip">旧方式</span><span class="chip late">後日公開</span></span></a></li>
+    <li><a href="newspaper_20260418.html"><span class="d">2026年4月18日（土）</span><span class="chips"><span class="chip">旧方式</span><span class="chip">旧方式</span><span class="chip late">後日公開</span></span></a></li>
+    <li><a href="newspaper_20260412.html"><span class="d">2026年4月12日（日）</span><span class="chips"><span class="chip">旧方式</span><span class="chip">旧方式</span><span class="chip late">後日公開</span></span></a></li>
+    <li><a href="newspaper_20260411.html"><span class="d">2026年4月11日（土）</span><span class="chips"><span class="chip">旧方式</span><span class="chip">旧方式</span><span class="chip late">後日公開</span></span></a></li>
+    <li><a href="newspaper_20260405.html"><span class="d">2026年4月5日（日）</span><span class="chips"><span class="chip">旧方式</span><span class="chip">旧方式</span><span class="chip late">後日公開</span></span></a></li>
+    <li><a href="newspaper_20260404.html"><span class="d">2026年4月4日（土）</span><span class="chips"><span class="chip">旧方式</span><span class="chip">旧方式</span><span class="chip late">後日公開</span></span></a></li>
+    <li><a href="newspaper_20260329.html"><span class="d">2026年3月29日（日）</span><span class="chips"><span class="chip">旧方式</span><span class="chip">旧方式</span><span class="chip late">後日公開</span></span></a></li>
+    <li><a href="newspaper_20260328.html"><span class="d">2026年3月28日（土）</span><span class="chips"><span class="chip">旧方式</span><span class="chip">旧方式</span><span class="chip late">後日公開</span></span></a></li>
+    <li><a href="newspaper_20260322.html"><span class="d">2026年3月22日（日）</span><span class="chips"><span class="chip">旧方式</span><span class="chip">旧方式</span><span class="chip late">後日公開</span></span></a></li>
+    <li><a href="newspaper_20260321.html"><span class="d">2026年3月21日（土）</span><span class="chips"><span class="chip">旧方式</span><span class="chip">旧方式</span><span class="chip late">後日公開</span></span></a></li>
+    <li><a href="newspaper_20260315.html"><span class="d">2026年3月15日（日）</span><span class="chips"><span class="chip">旧方式</span><span class="chip">旧方式</span><span class="chip late">後日公開</span></span></a></li>
+    <li><a href="newspaper_20260314.html"><span class="d">2026年3月14日（土）</span><span class="chips"><span class="chip">旧方式</span><span class="chip">旧方式</span><span class="chip late">後日公開</span></span></a></li>
+    <li><a href="newspaper_20260308.html"><span class="d">2026年3月8日（日）</span><span class="chips"><span class="chip">旧方式</span><span class="chip">旧方式</span><span class="chip late">後日公開</span></span></a></li>
+    <li><a href="newspaper_20260307.html"><span class="d">2026年3月7日（土）</span><span class="chips"><span class="chip">旧方式</span><span class="chip">旧方式</span><span class="chip late">後日公開</span></span></a></li>
+    <li><a href="newspaper_20260301.html"><span class="d">2026年3月1日（日）</span><span class="chips"><span class="chip">旧方式</span><span class="chip">旧方式</span><span class="chip late">後日公開</span></span></a></li>
+    <li><a href="newspaper_20260228.html"><span class="d">2026年2月28日（土）</span><span class="chips"><span class="chip">旧方式</span><span class="chip">旧方式</span><span class="chip late">後日公開</span></span></a></li>
+    <li><a href="newspaper_20260222.html"><span class="d">2026年2月22日（日）</span><span class="chips"><span class="chip">旧方式</span><span class="chip">旧方式</span><span class="chip late">後日公開</span></span></a></li>
+    <li><a href="newspaper_20260221.html"><span class="d">2026年2月21日（土）</span><span class="chips"><span class="chip">旧方式</span><span class="chip">旧方式</span><span class="chip late">後日公開</span></span></a></li>
+    <li><a href="newspaper_20260215.html"><span class="d">2026年2月15日（日）</span><span class="chips"><span class="chip">旧方式</span><span class="chip">旧方式</span><span class="chip late">後日公開</span></span></a></li>
+    <li><a href="newspaper_20260214.html"><span class="d">2026年2月14日（土）</span><span class="chips"><span class="chip">旧方式</span><span class="chip">旧方式</span><span class="chip late">後日公開</span></span></a></li>
+    <li><a href="newspaper_20260210.html"><span class="d">2026年2月10日（火）</span><span class="chips"><span class="chip">旧方式</span><span class="chip">旧方式</span><span class="chip late">後日公開</span></span></a></li>
+    <li><a href="newspaper_20260208.html"><span class="d">2026年2月8日（日）</span><span class="chips"><span class="chip">旧方式</span><span class="chip">旧方式</span><span class="chip late">後日公開</span></span></a></li>
+    <li><a href="newspaper_20260207.html"><span class="d">2026年2月7日（土）</span><span class="chips"><span class="chip">旧方式</span><span class="chip">旧方式</span><span class="chip late">後日公開</span></span></a></li>
+    <li><a href="newspaper_20260201.html"><span class="d">2026年2月1日（日）</span><span class="chips"><span class="chip">旧方式</span><span class="chip">旧方式</span><span class="chip late">後日公開</span></span></a></li>
+    <li><a href="newspaper_20260131.html"><span class="d">2026年1月31日（土）</span><span class="chips"><span class="chip">旧方式</span><span class="chip">旧方式</span><span class="chip late">後日公開</span></span></a></li>
+    <li><a href="newspaper_20260125.html"><span class="d">2026年1月25日（日）</span><span class="chips"><span class="chip">旧方式</span><span class="chip">旧方式</span><span class="chip late">後日公開</span></span></a></li>
+    <li><a href="newspaper_20260124.html"><span class="d">2026年1月24日（土）</span><span class="chips"><span class="chip">旧方式</span><span class="chip">旧方式</span><span class="chip late">後日公開</span></span></a></li>
+    <li><a href="newspaper_20260118.html"><span class="d">2026年1月18日（日）</span><span class="chips"><span class="chip">旧方式</span><span class="chip">旧方式</span><span class="chip late">後日公開</span></span></a></li>
+    <li><a href="newspaper_20260117.html"><span class="d">2026年1月17日（土）</span><span class="chips"><span class="chip">旧方式</span><span class="chip">旧方式</span><span class="chip late">後日公開</span></span></a></li>
+    <li><a href="newspaper_20260112.html"><span class="d">2026年1月12日（月）</span><span class="chips"><span class="chip">旧方式</span><span class="chip">旧方式</span><span class="chip late">後日公開</span></span></a></li>
+    <li><a href="newspaper_20260111.html"><span class="d">2026年1月11日（日）</span><span class="chips"><span class="chip">旧方式</span><span class="chip">旧方式</span><span class="chip late">後日公開</span></span></a></li>
+    <li><a href="newspaper_20260110.html"><span class="d">2026年1月10日（土）</span><span class="chips"><span class="chip">旧方式</span><span class="chip">旧方式</span><span class="chip late">後日公開</span></span></a></li>
+    <li><a href="newspaper_20260105.html"><span class="d">2026年1月5日（月）</span><span class="chips"><span class="chip">旧方式</span><span class="chip">旧方式</span><span class="chip late">後日公開</span></span></a></li>
+    <li><a href="newspaper_20260104.html"><span class="d">2026年1月4日（日）</span><span class="chips"><span class="chip">旧方式</span><span class="chip">旧方式</span><span class="chip late">後日公開</span></span></a></li>
   </ul>
 </div>
 </body>

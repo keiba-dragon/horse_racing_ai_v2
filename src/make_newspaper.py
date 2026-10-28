@@ -1455,10 +1455,20 @@ def _update_newspaper_index(out_dir: str):
             label = ds
         rows.append((ds, label, fname))
 
+    import model_timeline as _mt
+    _fc = _mt.first_commit_dates(BASE_DIR)
+
+    def _chips(ds, fname):
+        made, css = _mt.made_label(ds, _fc.get(fname))
+        return (f'<span class="chip">{_mt.model_label(ds)}</span>'
+                f'<span class="chip">{_mt.rule_label(ds)}</span>'
+                f'<span class="chip {css}">{made}</span>')
+
     items_html = '\n'.join(
-        f'    <li><a href="{fname}">{label}</a></li>'
+        f'    <li><a href="{fname}"><span class="d">{label}</span><span class="chips">{_chips(ds, fname)}</span></a></li>'
         for ds, label, fname in rows
     )
+    timeline_block = _mt.timeline_html()
 
     idx_html = f"""<!DOCTYPE html>
 <html lang="ja">
@@ -1483,6 +1493,20 @@ def _update_newspaper_index(out_dir: str):
     li:first-child a {{ color:#1565c0; font-size:1.05rem; }}
     .badge {{ display:inline-block; background:#1565c0; color:#fff;
               border-radius:12px; font-size:.72rem; padding:2px 8px; margin-left:8px; }}
+    li a {{ display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; }}
+    .chips {{ display:flex; gap:4px; flex-wrap:wrap; }}
+    .chip {{ font-size:.68rem; font-weight:600; padding:2px 7px; border-radius:10px;
+             background:#e8eaf6; color:#3949ab; white-space:nowrap; }}
+    .chip.ok {{ background:#e8f5e9; color:#2e7d32; }}
+    .chip.late {{ background:#fff3e0; color:#e65100; }}
+    .tl {{ background:#fff; border-radius:8px; padding:14px 18px; margin-bottom:22px;
+           box-shadow:0 2px 6px rgba(0,0,0,.08); }}
+    .tl h2 {{ font-size:1rem; margin:0 0 8px; color:#1a1a2e; }}
+    .tl table {{ border-collapse:collapse; width:100%; font-size:.82rem; }}
+    .tl td {{ padding:4px 6px; border-bottom:1px solid #eee; vertical-align:top; }}
+    .tl td:first-child {{ white-space:nowrap; font-weight:600; color:#1565c0; }}
+    .tl td:nth-child(2) {{ white-space:nowrap; color:#666; }}
+    .tl .note {{ font-size:.74rem; color:#777; margin:8px 0 0; line-height:1.5; }}
   </style>
 </head>
 <body>
@@ -1493,6 +1517,7 @@ def _update_newspaper_index(out_dir: str):
 </nav>
 <div class="container">
   <h1>予想新聞 一覧</h1>
+  {timeline_block}
   <ul>
 {items_html}
   </ul>
