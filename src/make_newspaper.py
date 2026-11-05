@@ -622,7 +622,7 @@ def make_newspaper(date_str=None):
     # 印のz-score閾値
     # ◎: z<1.2 (混戦でモデルが優勢) 全OOS +37.8%
     # ○: 1.2<=z<1.5                 全OOS  +7.1%
-    # ▲: z>=1.5 (モデルが強く確信=人気馬) 全OOS -4.5% → 買わない
+    # ▲: z>=1.5 (モデルが強く確信=人気馬) 全OOS -4.5% だが、10/31-11/1の実績が良く(42%的中)11/5に買い目へ追加
     Z_MARU   = 1.2
     Z_SANKAKU = 1.5
 
@@ -1013,7 +1013,7 @@ def make_newspaper(date_str=None):
             odds_s = f'{odds_num1:.1f}倍' if pd.notna(odds_num1) else '未発表'
             ev1 = acc_prob1 * odds_num1 if pd.notna(acc_prob1) and pd.notna(odds_num1) else np.nan
             mark1 = r.get('_mark', '')
-            c_buy  = (sort_rank1 == 1) and (mark1 in ('◎', '○'))
+            c_buy  = (sort_rank1 == 1) and (mark1 in ('◎', '○', '▲'))
             jockey = str(ci.get('騎手', r.get('dc_騎手', r.get('騎手', '')))).strip()
             prob_disp = f'{acc_prob1:.1%}' if pd.notna(acc_prob1) else ''
             ev_s = f'EV {ev1:.2f}' if pd.notna(ev1) else ''
@@ -1022,7 +1022,7 @@ def make_newspaper(date_str=None):
             race_lbl = f'{venue_full} {rd["r_num"]}R　{chip}'
 
             if c_buy:
-                badge_color = '#c0392b' if mark1 == '◎' else '#e67e22'
+                badge_color = {'◎': '#c0392b', '○': '#e67e22'}.get(mark1, '#27ae60')
                 buy_cards.append(f'''
 <div class="buy-card confirmed">
   <div class="card-race">{race_lbl}</div>
@@ -1032,7 +1032,7 @@ def make_newspaper(date_str=None):
 </div>''')
 
     buy_html = '<div class="buy-section">'
-    buy_html += '<div class="section-title buy">◎○ 本日の買い目　<small style="font-weight:normal;font-size:12px">◎混戦穴(z&lt;1.2) ○やや混戦(z&lt;1.5)</small></div>'
+    buy_html += '<div class="section-title buy">◎○▲ 本日の買い目　<small style="font-weight:normal;font-size:12px">◎混戦穴(z&lt;1.2) ○やや混戦(z&lt;1.5) ▲人気(z&gt;=1.5)</small></div>'
     if buy_cards:
         buy_html += f'<div class="buy-grid">{"".join(buy_cards)}</div>'
     else:
@@ -1133,7 +1133,7 @@ def make_newspaper(date_str=None):
             odds_s  = f'{odds_num:.1f}' if pd.notna(odds_num) else '-'
             ev = c_calib * odds_num if pd.notna(c_calib) and pd.notna(odds_num) else np.nan
             mark = r.get('_mark', '')
-            c_buy = (sort_rank == 1) and (mark in ('◎', '○'))
+            c_buy = (sort_rank == 1) and (mark in ('◎', '○', '▲'))
             jockey  = str(ci.get('騎手', r.get('dc_騎手', r.get('騎手', '')))).strip()[:5]
             prob_s  = f'{c_calib:.1%}' if pd.notna(c_calib) else '-'
 
@@ -1159,7 +1159,7 @@ def make_newspaper(date_str=None):
             elif mark == '○':
                 buy_td = '<td class="td-buy" style="color:#e67e22;font-weight:bold">○</td>'
             elif mark == '▲':
-                buy_td = '<td class="td-watch" style="color:#27ae60;font-weight:bold">▲</td>'
+                buy_td = '<td class="td-buy" style="color:#27ae60;font-weight:bold">▲</td>'
             else:
                 buy_td = '<td class="td-none">-</td>'
 
