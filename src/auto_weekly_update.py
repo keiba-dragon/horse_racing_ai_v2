@@ -236,7 +236,18 @@ def convert_overseas():
         date_num = (year - 2000) * 10000 + mmdd
 
         if date_num <= existing_max:
-            continue
+            # 既存日付でも、取り込み済みが未確定スタブ（着順0埋め）のままで、
+            # 生データ側が確定していれば置き換える（2026-10-04発覚: 9/5・9/6が9/6夜の
+            # 未確定スタブのまま約1ヶ月残り、前走特徴量が丸ごと欠損していた）。
+            try:
+                _pk = pd.read_csv(fp, encoding='utf-8', usecols=['着順'])
+                _new_conf = int(pd.to_numeric(_pk['着順'], errors='coerce').gt(0).sum())
+            except Exception:
+                continue
+            if _new_conf <= existing_conf.get(date_num, 0):
+                continue
+            replace_dates.add(date_num)
+            print(f'  {stem}: 既存の確定{existing_conf.get(date_num, 0)}件 → {_new_conf}件に増えたため置き換え')
 
         try:
             df = pd.read_csv(fp, encoding='utf-8', low_memory=False)
@@ -276,14 +287,19 @@ def convert_overseas():
 def convert_results():
     """data/raw/results/YYYYMMDD.csv → results_supplement.csv に変換・追記。"""
     existing_max = 0
+    existing_conf = {}   # 日付(YYMMDD) -> supplement内の「着順>0（確定）」行数
     if os.path.exists(SUPPLEMENT_PATH):
         try:
-            df_ex = pd.read_csv(SUPPLEMENT_PATH, usecols=['日付'], low_memory=False)
-            v = pd.to_numeric(df_ex['日付'], errors='coerce').max()
+            df_ex = pd.read_csv(SUPPLEMENT_PATH, usecols=['日付', '着順'], low_memory=False)
+            _d = pd.to_numeric(df_ex['日付'], errors='coerce')
+            v = _d.max()
             if pd.notna(v):
                 existing_max = int(v)
+            _c = pd.to_numeric(df_ex['着順'], errors='coerce')
+            existing_conf = _c.gt(0).groupby(_d).sum().astype(int).to_dict()
         except Exception:
             pass
+    replace_dates = set()   # 既存日付だが、より確定した結果で置き換える日付
     if existing_max:
         print(f'  既存supplement 最終日付: {existing_max}')
 
@@ -298,7 +314,18 @@ def convert_results():
         date_num = (year - 2000) * 10000 + mmdd           # 260510
 
         if date_num <= existing_max:
-            continue
+            # 既存日付でも、取り込み済みが未確定スタブ（着順0埋め）のままで、
+            # 生データ側が確定していれば置き換える（2026-10-04発覚: 9/5・9/6が9/6夜の
+            # 未確定スタブのまま約1ヶ月残り、前走特徴量が丸ごと欠損していた）。
+            try:
+                _pk = pd.read_csv(fp, encoding='utf-8', usecols=['着順'])
+                _new_conf = int(pd.to_numeric(_pk['着順'], errors='coerce').gt(0).sum())
+            except Exception:
+                continue
+            if _new_conf <= existing_conf.get(date_num, 0):
+                continue
+            replace_dates.add(date_num)
+            print(f'  {stem}: 既存の確定{existing_conf.get(date_num, 0)}件 → {_new_conf}件に増えたため置き換え')
 
         try:
             df = pd.read_csv(fp, encoding='utf-8', low_memory=False)
@@ -371,6 +398,8 @@ def convert_results():
     # 既存データを読み込んでpandasのconcatで列を正しく揃えてから全体を書き直す。
     if existing_max > 0 and os.path.exists(SUPPLEMENT_PATH):
         existing = pd.read_csv(SUPPLEMENT_PATH, encoding='utf-8', low_memory=False)
+        if replace_dates:
+            existing = existing[~pd.to_numeric(existing['日付'], errors='coerce').isin(replace_dates)]
         combined = pd.concat([existing, df_new], ignore_index=True)
     else:
         combined = df_new
@@ -471,6 +500,9 @@ def main():
     ap.add_argument('--no-fetch',   action='store_true', help='fetchをスキップ（変換・再生成のみ）')
     ap.add_argument('--no-rebuild', action='store_true', help='parquet再生成をスキップ（削除のみ）')
     ap.add_argument('--no-train',   action='store_true', help='モデル再学習をスキップ')
+    ap.add_argument('--retry',      action='store_true',
+                    help='火〜木の取り直し用。新規データなし・JV-Link未起動はDiscord通知/健全性記録をしない'
+                         '（月曜の本実行が主、確定待ちの日を取り込むための追加実行）')
     args = ap.parse_args()
 
     log_dir = os.path.join(BASE_DIR, 'logs')
@@ -491,6 +523,11 @@ def main():
         if not args.no_fetch:
             print('\n[1/4] JV-Link から結果を取得...')
             fetch_status = run_fetch()
+            if fetch_status == notify.STATUS_JVLINK_UNAVAILABLE and args.retry:
+                print('  [SKIP] ターゲットFrontier未起動（取り直しモードのため通知なし）')
+                sys.stdout, sys.stderr = orig_stdout, orig_stderr
+                log_f.close()
+                return
             if fetch_status == notify.STATUS_JVLINK_UNAVAILABLE:
                 entry = notify.record_health('weekly_update', notify.STATUS_JVLINK_UNAVAILABLE)
                 n_consec = entry['consecutive_jvlink_unavailable']

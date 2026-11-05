@@ -70,6 +70,10 @@ TASKS = [
 # 月曜 週次更新タスク（別スクリプト・別定義）
 UPDATE_TASKS = [
     {'name': 'KeibAI-Update-Mon', 'desc': '競馬AI 週次自動更新（月曜 JV-Link結果取得）', 'day': 'MON', 'time': '06:00'},
+    # JV-Linkの成績確定は月曜朝には間に合わないため、火〜木に未確定日を取り直す（2026-11-05追加）
+    {'name': 'KeibAI-Update-Tue', 'desc': '競馬AI 結果取り直し（火曜・確定待ちの日を取り込む）', 'day': 'TUE', 'time': '06:00', 'args': '--retry'},
+    {'name': 'KeibAI-Update-Wed', 'desc': '競馬AI 結果取り直し（水曜・確定待ちの日を取り込む）', 'day': 'WED', 'time': '06:00', 'args': '--retry'},
+    {'name': 'KeibAI-Update-Thu', 'desc': '競馬AI 結果取り直し（木曜・確定待ちの日を取り込む）', 'day': 'THU', 'time': '06:00', 'args': '--retry'},
 ]
 
 # Discord通知デーモン用タスク（別スクリプト・別定義）
@@ -136,7 +140,7 @@ Write-Output "OK: {t['name']}"
         ps = f"""
 $a = New-ScheduledTaskAction `
     -Execute '{py_path}' `
-    -Argument '"{upd_scr}"' `
+    -Argument '"{upd_scr}" {t.get("args", "")}' `
     -WorkingDirectory '{base_path}'
 $t = New-ScheduledTaskTrigger -Weekly -DaysOfWeek {day_full} -At '{t["time"]}'
 $s = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Hours 2) -StartWhenAvailable

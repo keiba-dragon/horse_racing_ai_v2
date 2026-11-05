@@ -145,6 +145,12 @@ def main():
 
         print(f'対象日付: {dates}')
 
+        if args.mode == 'predict':
+            # 新聞作成前に、直近の開催日の結果が取り込み済みか確認（未確定なら取り直し→警告）
+            print('\n--- 結果の鮮度チェック ---', flush=True)
+            import results_freshness
+            results_freshness.ensure_results(notify=_notify_discord)
+
         results = {}
         for d in dates:
             if args.mode == 'predict':
