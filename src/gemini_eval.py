@@ -101,6 +101,14 @@ def backend_label() -> str:
 
 _course_cache = None
 
+# 特徴量名の読み方（ローカルLLMが値の良し悪しを取り違えないための最小限の注釈）
+FEATURE_GUIDE = (
+    "特徴量の読み方: 勝率・複勝率・タイム指数は高いほど良い。平均着順・上り3F（秒）は小さいほど良い。"
+    "クラス差は+なら格上挑戦。間隔は前走からの日数。"
+    "括弧内はモデル内での寄与で、+は評価を押し上げ、-は押し下げている。"
+    "寄与の符号は他の特徴量との兼ね合いで直感と逆になることがあるので、良し悪しは値そのもので判断すること。"
+)
+
 
 def _course_note(race_ctx: dict) -> str:
     """data/course_characteristics.json から該当コースの特徴を引く。なければ空文字。"""
@@ -144,10 +152,17 @@ def _build_prompt(race_ctx: dict, candidates: list, include_features: bool = Fal
         if include_features and c.get('features'):
             lines.append(f"    根拠となる特徴量（値, モデル寄与 +は加点/-は減点）: {c['features']}")
     if include_features:
+        lines.append(FEATURE_GUIDE)
         lines.append(
-            "理由には統計順位や確率をそのまま繰り返さず、特徴量やコース特性から読み取れる"
-            "強み・弱みを書くこと。"
+            "各候補馬について0-100の評価スコア(高いほど推奨)と理由をJSONで返してください。"
+            "理由は30字程度で、統計順位・予測確率・オッズは書かず、特徴量の具体的な値を1つ以上引用して"
+            "「強み」と、あれば「不安点」を書くこと（例: 「上がり3F平均34.2で末脚上位、前走大敗が不安」）。"
+            "候補馬どうしで同じ言い回しを繰り返さないこと。"
+            '出力形式: {"evaluations": [{"horse": "馬名", "score": 数値, "reason": "30字程度の理由"}], '
+            '"note": "レース全体の展望(40字程度。コース特性に触れてよい)"} '
+            "JSON以外の文字列は出力しないこと。"
         )
+        return '\n'.join(lines)
     lines.append(
         "各候補馬について0-100の評価スコア(高いほど推奨)と一言理由をJSONで返してください。"
         '出力形式: {"evaluations": [{"horse": "馬名", "score": 数値, "reason": "20字程度の理由"}], '
