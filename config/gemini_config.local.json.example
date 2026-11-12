@@ -1,0 +1,7 @@
+{
+  "backend": "local",
+  "model": "gemma4:e4b",
+  "local_url": "http://localhost:11434/v1/chat/completions",
+  "include_features": true,
+  "enabled": true
+}
