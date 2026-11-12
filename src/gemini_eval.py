@@ -104,9 +104,8 @@ _course_cache = None
 # 特徴量名の読み方（ローカルLLMが値の良し悪しを取り違えないための最小限の注釈）
 FEATURE_GUIDE = (
     "特徴量の読み方: 勝率・複勝率・タイム指数は高いほど良い。平均着順・上り3F（秒）は小さいほど良い。"
-    "クラス差は+なら格上挑戦。間隔は前走からの日数。"
-    "括弧内はモデル内での寄与で、+は評価を押し上げ、-は押し下げている。"
-    "寄与の符号は他の特徴量との兼ね合いで直感と逆になることがあるので、良し悪しは値そのもので判断すること。"
+    "クラス差は+なら格上挑戦、-なら格下相手。間隔は前走からの日数。馬番は小さいほど内枠。"
+    "良し悪しは必ず値そのものと上記の向きで判断し、値の大小を取り違えないこと。"
 )
 
 
@@ -150,7 +149,7 @@ def _build_prompt(race_ctx: dict, candidates: list, include_features: bool = Fal
             f"単勝オッズ{c.get('odds', '?')}, 騎手{c.get('jockey', '?')})"
         )
         if include_features and c.get('features'):
-            lines.append(f"    根拠となる特徴量（値, モデル寄与 +は加点/-は減点）: {c['features']}")
+            lines.append(f"    モデルが重視した特徴量: {c['features']}")
     if include_features:
         lines.append(FEATURE_GUIDE)
         lines.append(
