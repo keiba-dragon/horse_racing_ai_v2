@@ -12,11 +12,22 @@ CLAUDE.md/メモリの「roi_model提案禁止」方針と同様、既存の的�
 失敗時は例外を投げず None を返す（新聞生成を絶対に止めない）。
 
 設定ファイル: config/gemini_config.json （config/gemini_config.json.example参照）
+  Gemini API:
   {
     "api_key": "...",
     "model": "gemini-flash-latest",
     "enabled": true
   }
+  ローカルLLM（Ollama等のOpenAI互換API。APIキー不要・無料・レート制限なし）:
+  {
+    "backend": "local",
+    "model": "gemma4:e4b",
+    "local_url": "http://localhost:11434/v1/chat/completions",
+    "include_features": true,
+    "enabled": true
+  }
+  include_features: 候補馬ごとの寄与上位の特徴量とコース特性をプロンプトに含める
+                    （localでは既定true、geminiでは既定false＝既存シャドウ検証の入力を変えない）
 """
 import os
 import json
@@ -27,6 +38,14 @@ CONFIG_PATH = os.path.join(BASE_DIR, 'config', 'gemini_config.json')
 EVAL_LOG_PATH = os.path.join(BASE_DIR, 'data', 'processed', 'ai_eval_log.csv')
 
 DEFAULT_MODEL = 'gemini-3.6-flash'
+DEFAULT_LOCAL_MODEL = 'gemma4:e4b'
+DEFAULT_LOCAL_URL = 'http://localhost:11434/v1/chat/completions'
+LOCAL_TIMEOUT = 180  # CPU推論は1レース数十秒かかる
+COURSE_PATH = os.path.join(BASE_DIR, 'data', 'course_characteristics.json')
+VENUE_SHORT_TO_FULL = {
+    '東': '東京', '中': '中山', '中京': '中京', '京': '京都', '阪': '阪神',
+    '新': '新潟', '福': '福島', '函': '函館', '札': '札幌', '小': '小倉',
+}
 MAX_CANDIDATES = 5  # 統計モデル上位何頭までを評価対象にするか（コスト管理）
 API_TIMEOUT = 20
 
@@ -47,12 +66,21 @@ def load_config() -> dict:
     except Exception:
         _config_cache = {'enabled': False}
         return _config_cache
-    api_key = str(cfg.get('api_key', '')).strip()
-    if not api_key or 'YOUR_API_KEY' in api_key:
-        cfg['enabled'] = False
-    else:
+    backend = str(cfg.get('backend', 'gemini')).strip().lower()
+    cfg['backend'] = backend
+    if backend == 'local':
         cfg.setdefault('enabled', True)
-    cfg.setdefault('model', DEFAULT_MODEL)
+        cfg.setdefault('model', DEFAULT_LOCAL_MODEL)
+        cfg.setdefault('local_url', DEFAULT_LOCAL_URL)
+        cfg.setdefault('include_features', True)
+    else:
+        api_key = str(cfg.get('api_key', '')).strip()
+        if not api_key or 'YOUR_API_KEY' in api_key:
+            cfg['enabled'] = False
+        else:
+            cfg.setdefault('enabled', True)
+        cfg.setdefault('model', DEFAULT_MODEL)
+        cfg.setdefault('include_features', False)
     _config_cache = cfg
     return _config_cache
 
@@ -61,7 +89,45 @@ def is_enabled() -> bool:
     return bool(load_config().get('enabled'))
 
 
-def _build_prompt(race_ctx: dict, candidates: list) -> str:
+def wants_features() -> bool:
+    """候補馬に特徴量(features)を付けるべきか。make_newspaper側で参照する。"""
+    return bool(load_config().get('include_features'))
+
+
+def backend_label() -> str:
+    cfg = load_config()
+    return f"{cfg.get('backend', 'gemini')}:{cfg.get('model', '')}"
+
+
+_course_cache = None
+
+# 特徴量名の読み方（ローカルLLMが値の良し悪しを取り違えないための最小限の注釈）
+FEATURE_GUIDE = (
+    "特徴量の読み方: 勝率・複勝率・タイム指数は高いほど良い。平均着順・上り3F（秒）は小さいほど良い。"
+    "クラス差は+なら格上挑戦、-なら格下相手。間隔は前走からの日数。馬番は小さいほど内枠。"
+    "良し悪しは必ず値そのものと上記の向きで判断し、値の大小を取り違えないこと。"
+)
+
+
+def _course_note(race_ctx: dict) -> str:
+    """data/course_characteristics.json から該当コースの特徴を引く。なければ空文字。"""
+    global _course_cache
+    if _course_cache is None:
+        try:
+            with open(COURSE_PATH, encoding='utf-8') as f:
+                _course_cache = json.load(f)
+        except Exception:
+            _course_cache = {}
+    venue = str(race_ctx.get('venue', '')).strip()
+    venue = VENUE_SHORT_TO_FULL.get(venue, venue)
+    dist = ''.join(ch for ch in str(race_ctx.get('distance_m', '')) if ch.isdigit())
+    info = _course_cache.get(f"{venue}_{race_ctx.get('surface', '')}_{dist}")
+    if not isinstance(info, dict):
+        return ''
+    return ' / '.join(f'{k}: {v}' for k, v in info.items() if k in ('特徴', '脚質', '枠'))
+
+
+def _build_prompt(race_ctx: dict, candidates: list, include_features: bool = False) -> str:
     lines = []
     lines.append(
         f"あなたは日本の競馬（JRA）の分析アシスタントです。"
@@ -72,12 +138,30 @@ def _build_prompt(race_ctx: dict, candidates: list) -> str:
         f"{race_ctx.get('race_name', '')} "
         f"[{race_ctx.get('surface', '?')}{race_ctx.get('distance_m', '?')} / {race_ctx.get('seg_label', '?')}]"
     )
+    if include_features:
+        note = _course_note(race_ctx)
+        if note:
+            lines.append(f"コース特性: {note}")
     lines.append("統計モデル（的中率最適化）上位候補:")
     for c in candidates:
         lines.append(
             f"- {c['horse']} (統計順位{c['stat_rank']}位, 統計予測確率{c.get('prob_pct', '?')}, "
             f"単勝オッズ{c.get('odds', '?')}, 騎手{c.get('jockey', '?')})"
         )
+        if include_features and c.get('features'):
+            lines.append(f"    モデルが重視した特徴量: {c['features']}")
+    if include_features:
+        lines.append(FEATURE_GUIDE)
+        lines.append(
+            "各候補馬について0-100の評価スコア(高いほど推奨)と理由をJSONで返してください。"
+            "理由は30字程度で、統計順位・予測確率・オッズは書かず、特徴量の具体的な値を1つ以上引用して"
+            "「強み」と、あれば「不安点」を書くこと（例: 「上がり3F平均34.2で末脚上位、前走大敗が不安」）。"
+            "候補馬どうしで同じ言い回しを繰り返さないこと。"
+            '出力形式: {"evaluations": [{"horse": "馬名", "score": 数値, "reason": "30字程度の理由"}], '
+            '"note": "レース全体の展望(40字程度。コース特性に触れてよい)"} '
+            "JSON以外の文字列は出力しないこと。"
+        )
+        return '\n'.join(lines)
     lines.append(
         "各候補馬について0-100の評価スコア(高いほど推奨)と一言理由をJSONで返してください。"
         '出力形式: {"evaluations": [{"horse": "馬名", "score": 数値, "reason": "20字程度の理由"}], '
@@ -117,6 +201,36 @@ def _call_gemini(prompt: str, model: str, api_key: str, retries: int = 3, backof
     raise RuntimeError(f'Gemini API呼び出し失敗（{retries}回リトライ後）: {last_err}')
 
 
+def _call_local(prompt: str, model: str, url: str, retries: int = 2) -> str:
+    """Ollama / llama.cpp server などOpenAI互換の /v1/chat/completions を呼ぶ。"""
+    import requests
+    payload = {
+        'model': model,
+        'messages': [{'role': 'user', 'content': prompt}],
+        'temperature': 0.2,
+        'max_tokens': 800,
+        'response_format': {'type': 'json_object'},
+    }
+    last_err = None
+    for attempt in range(1, retries + 1):
+        try:
+            r = requests.post(url, json=payload, timeout=LOCAL_TIMEOUT)
+            r.raise_for_status()
+            return r.json()['choices'][0]['message']['content']
+        except Exception as e:
+            last_err = str(e)
+    raise RuntimeError(f'ローカルLLM呼び出し失敗（{retries}回）: {last_err}')
+
+
+def _parse_json(text: str) -> dict:
+    """```json ... ``` で囲まれて返ってきても読めるようにする。"""
+    t = text.strip()
+    if t.startswith('```'):
+        t = t.split('\n', 1)[1] if '\n' in t else t
+        t = t.rsplit('```', 1)[0]
+    return json.loads(t)
+
+
 def evaluate_race(race_ctx: dict, candidates: list) -> dict:
     """race_ctx: {venue, r_num, race_name, surface, distance_m, seg_label}
     candidates: [{horse, stat_rank, prob_pct, odds, jockey}, ...] (MAX_CANDIDATES件まで自動で絞る)
@@ -131,11 +245,14 @@ def evaluate_race(race_ctx: dict, candidates: list) -> dict:
         return {}
 
     candidates = candidates[:MAX_CANDIDATES]
-    prompt = _build_prompt(race_ctx, candidates)
+    prompt = _build_prompt(race_ctx, candidates, include_features=bool(cfg.get('include_features')))
 
     try:
-        text = _call_gemini(prompt, cfg.get('model', DEFAULT_MODEL), cfg['api_key'])
-        parsed = json.loads(text)
+        if cfg.get('backend') == 'local':
+            text = _call_local(prompt, cfg['model'], cfg['local_url'])
+        else:
+            text = _call_gemini(prompt, cfg.get('model', DEFAULT_MODEL), cfg['api_key'])
+        parsed = _parse_json(text)
     except Exception as e:
         print(f'  [WARN] gemini_eval: API呼び出し/解析失敗: {e}')
         return {}
@@ -180,6 +297,7 @@ def log_evaluations(date_num: int, race_ctx: dict, candidates: list, evaluations
             'オッズ': c.get('odds'),
             'AI評価スコア': ev['score'],
             'AI理由': ev.get('reason', ''),
+            'AIバックエンド': backend_label(),
             '記録日時': time.strftime('%Y-%m-%d %H:%M:%S'),
         })
     if not rows:

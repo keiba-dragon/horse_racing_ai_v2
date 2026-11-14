@@ -1157,10 +1157,25 @@ def make_newspaper(date_str=None):
             ai_rank_s = str(rank_i) if rank_i else '-'
 
             if rank_i is not None and rank_i <= gemini_eval.MAX_CANDIDATES:
-                gemini_candidates.append({
+                cand = {
                     'horse': horse, 'stat_rank': rank_i,
                     'prob_pct': prob_s, 'odds': odds_s, 'jockey': jockey,
-                })
+                }
+                if gemini_eval.wants_features():
+                    # 寄与の絶対値が大きい特徴量上位4つ（値が取れるもののみ）を寸評の根拠として渡す。
+                    # 寄与の符号は多重共線性で直感と逆になりLLMが値の良し悪しを読み違えるため、値のみ渡す
+                    _cd = r.get('_contrib_dict') or {}
+                    if isinstance(_cd, dict):
+                        _items = []
+                        for f in display_feats:
+                            _c = _cd.get(f, np.nan)
+                            _v = fmt_val(f, r.get(f))
+                            if _v is None or pd.isna(_c):
+                                continue
+                            _items.append((abs(_c), f'{f}={_v}'))
+                        _items.sort(reverse=True)
+                        cand['features'] = ', '.join(s for _, s in _items[:4])
+                gemini_candidates.append(cand)
 
             if mark == '◎':        row_cls = 'row-buy'
             elif mark == '○':      row_cls = 'row-maru'
