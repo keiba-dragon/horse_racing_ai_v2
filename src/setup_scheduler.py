@@ -58,6 +58,21 @@ TASKS = [
         'time':  '10:00',
         'args':  '--mode watch --once',
     },
+    # 15時の更新では最終2R(11R・12R)の結果が間に合わないため、夜に確定版へ更新する（2026-11-16追加）
+    {
+        'name':  'KeibAI-Watch-Sat-Eve',
+        'desc':  '競馬AI 土曜 夜の確定版更新（全レース結果）',
+        'day':   'SAT',
+        'time':  '18:30',
+        'args':  '--mode watch --once',
+    },
+    {
+        'name':  'KeibAI-Watch-Sun-Eve',
+        'desc':  '競馬AI 日曜 夜の確定版更新（全レース結果）',
+        'day':   'SUN',
+        'time':  '18:30',
+        'args':  '--mode watch --once',
+    },
     {
         'name':  'KeibAI-Watch-Sun-PM',
         'desc':  '競馬AI 日曜 午後オッズスナップショット',
