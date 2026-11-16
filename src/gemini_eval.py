@@ -210,11 +210,17 @@ def _call_local(prompt: str, model: str, url: str, retries: int = 2) -> str:
         'temperature': 0.2,
         'max_tokens': 800,
         'response_format': {'type': 'json_object'},
+        # Gemma 4 は既定で「考える」モードが入り、遅くなる上に max_tokens を食うので切る
+        'reasoning_effort': 'none',
     }
     last_err = None
     for attempt in range(1, retries + 1):
         try:
             r = requests.post(url, json=payload, timeout=LOCAL_TIMEOUT)
+            if r.status_code == 400 and 'reasoning_effort' in payload:
+                # 古いサーバーが reasoning_effort を受け付けない場合は外して再送
+                payload.pop('reasoning_effort')
+                r = requests.post(url, json=payload, timeout=LOCAL_TIMEOUT)
             r.raise_for_status()
             return r.json()['choices'][0]['message']['content']
         except Exception as e:
@@ -228,7 +234,14 @@ def _parse_json(text: str) -> dict:
     if t.startswith('```'):
         t = t.split('\n', 1)[1] if '\n' in t else t
         t = t.rsplit('```', 1)[0]
-    return json.loads(t)
+    try:
+        return json.loads(t)
+    except json.JSONDecodeError:
+        # 考え事の文章などが前後に混ざった場合は、最初の { から最後の } までを読む
+        i, j = t.find('{'), t.rfind('}')
+        if i < 0 or j <= i:
+            raise
+        return json.loads(t[i:j + 1])
 
 
 def evaluate_race(race_ctx: dict, candidates: list) -> dict:
