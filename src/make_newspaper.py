@@ -1436,6 +1436,12 @@ function toggleDetail(id) {{
         f.write(html)
     print(f'HTML出力: {out_path}')
     model_registry.log_run('make_newspaper', fname_date, ['hitrate_model'])
+    # レース前の予想を台帳に固定（結果欄が出たレースは書き換えない。成績集計は台帳から行う）
+    try:
+        import pick_ledger
+        pick_ledger.update_from_html(html, fname_date, source='live')
+    except Exception as e:
+        print(f'[警告] 予想台帳の更新に失敗: {e}')
 
     _update_newspaper_index(out_dir)
     _push_newspaper_to_github(out_path, out_dir, fname_date)
@@ -1557,8 +1563,12 @@ def _push_newspaper_to_github(out_path: str, out_dir: str, fname_date: str):
     idx_path = os.path.join(out_dir, 'newspapers.html')
     try:
         rel_paths = [os.path.relpath(out_path, BASE_DIR), os.path.relpath(idx_path, BASE_DIR)]
+        ledger_path = os.path.join(BASE_DIR, 'data', 'processed', 'pick_ledger.csv')
         subprocess.run(['git', 'add', *rel_paths], cwd=BASE_DIR, check=True,
                         capture_output=True, text=True)
+        if os.path.exists(ledger_path):  # data/processed/ は.gitignore対象なので -f で追加
+            subprocess.run(['git', 'add', '-f', os.path.relpath(ledger_path, BASE_DIR)], cwd=BASE_DIR,
+                           check=True, capture_output=True, text=True)
         diff = subprocess.run(['git', 'diff', '--cached', '--quiet'], cwd=BASE_DIR)
         if diff.returncode == 0:
             print('GitHub Pages: 変更なし（コミット省略）')
