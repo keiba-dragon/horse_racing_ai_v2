@@ -2123,6 +2123,41 @@ def apply_odds_to_card(card_df, odds_dict):
     return card_df
 
 
+def freeze_started_races(result, cache_path, post_path, target_date):
+    """発走済みのレースは、前回キャッシュの予想をそのまま使う（レース後の再計算で印が変わるのを防ぐ）。
+
+    2026-11-16発覚: 15時・夜の更新が終わったレースまで再計算し、レース後の版で印が変わっていた
+    (11/15 福島9Rは朝▲→15時○、○にした馬が勝っていた)。発走時刻を過ぎたレースは前回の行に差し替える。
+    当日(今日の日付)のときだけ働く。過去日の作り直しは従来どおり全レース再計算。
+    """
+    try:
+        if str(target_date) != datetime.now().strftime('%y%m%d'):
+            return result
+        if not (os.path.exists(cache_path) and os.path.exists(post_path)):
+            return result
+        with open(cache_path, 'rb') as f:
+            old = pickle.load(f).get('result')
+        with open(post_path, encoding='utf-8') as f:
+            post = json.load(f)
+        if old is None or not {'会場', 'Ｒ'} <= set(old.columns) or not {'会場', 'Ｒ'} <= set(result.columns):
+            return result
+        now_hm = datetime.now().strftime('%H:%M')
+        started = {k for k, t in post.items() if t.zfill(5) <= now_hm}
+        key = lambda df: df['会場'].astype(str) + df['Ｒ'].astype(int).astype(str)
+        old_started = old[key(old).isin(started)]
+        frozen_keys = set(key(old_started))
+        if not frozen_keys:
+            return result
+        new_keep = result[~key(result).isin(frozen_keys)]
+        out = pd.concat([old_started, new_keep], ignore_index=True)
+        out = out.reindex(columns=result.columns)
+        print(f"  発走済み{len(frozen_keys)}レースは前回の予想を固定（レース後の再計算を反映しない）")
+        return out
+    except Exception as e:
+        print(f"  [WARN] 発走済みレースの固定に失敗（全レース再計算のまま）: {e}")
+        return result
+
+
 def main():
     parser = argparse.ArgumentParser(description='出馬表形式CSVから予測を実行')
     parser.add_argument('card_file', help='出馬表形式CSVのパス（例: data/raw/出馬表形式3月15日.csv）')
@@ -2131,6 +2166,7 @@ def main():
     parser.add_argument('--no-html', action='store_true', help='HTML出力をスキップ')
     parser.add_argument('--html-only', action='store_true', help='キャッシュから予測結果を読み込んでHTMLのみ生成')
     parser.add_argument('--html-dir', default=r'G:\マイドライブ\競馬AI\予想レポート', help='HTML保存先フォルダ')
+    parser.add_argument('--no-freeze', action='store_true', help='当日でも発走済みレースを再計算する（既定は前回の予想を固定）')
     parser.add_argument('--no-results', action='store_true', help='data/raw/results/の結果ファイル自動読み込みをスキップ')
     args = parser.parse_args()
 
@@ -2223,6 +2259,8 @@ def main():
 
         # キャッシュ保存（予測pkl + オッズjson を分離保存）
         if result is not None:
+            if not args.no_freeze:
+                result = freeze_started_races(result, cache_path, os.path.join(cache_dir, base_name + '.post.json'), target_date)
             existing_predicted_at = ''
             if os.path.exists(cache_path):
                 try:

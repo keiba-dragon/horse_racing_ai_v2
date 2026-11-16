@@ -96,8 +96,11 @@ def parse_shutuba(race_id: str) -> dict | None:
     # ── RaceData01 から距離・芝ダ・馬場状態 ────────────────────
     rd1 = soup.find('div', class_='RaceData01')
     surface, distance_m, baba = 'ダ', 0, '良'
+    post_time = ''
     if rd1:
         text = rd1.get_text()
+        _pm = re.search(r'(\d{1,2}:\d{2})\s*発走', text)
+        post_time = _pm.group(1) if _pm else ''
         m = re.search(r'([芝ダ障])(\d+)m', text)
         if m:
             surface     = m.group(1)
@@ -187,6 +190,7 @@ def parse_shutuba(race_id: str) -> dict | None:
         'distance_m': distance_m,
         'baba':       baba,
         'class_str':  class_str,
+        'post_time':  post_time,
         'horses':     rows_data,
     }
 
@@ -267,6 +271,14 @@ def main():
     # ── 3. CSV保存 ──────────────────────────────────────────────
     csv_cols = ['日付S', '場 R', '馬番', '馬名S', '馬ID', '性別', '斤量', '騎手', '調教師',
                 '馬体重', '馬体重増減', '芝ダ', '距離', 'クラス']
+    # 発走時刻を保存（06_predict_from_card.py が、発走済みレースの予想を前回のまま固定するのに使う）
+    try:
+        _pt = {f"{r['venue']}{r['r_num']}": r['post_time'] for r in races if r.get('post_time')}
+        os.makedirs(CACHE_DIR, exist_ok=True)
+        with open(os.path.join(CACHE_DIR, f'{target_date}_api.post.json'), 'w', encoding='utf-8') as _f:
+            json.dump(_pt, _f, ensure_ascii=False)
+    except Exception as _e:
+        print(f'[WARN] 発走時刻の保存に失敗: {_e}')
     rows = build_csv_rows(races)
     daily_dir = os.path.join(BASE_DIR, 'data', 'raw', 'cards', 'daily')
     os.makedirs(daily_dir, exist_ok=True)
