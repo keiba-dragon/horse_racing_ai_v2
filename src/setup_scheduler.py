@@ -37,6 +37,14 @@ TASKS = [
         'time':  '21:00',
         'args':  '--mode predict',
     },
+    # 日曜の枠順(馬番)は金曜夜にはまだ出ていない。確定後の土曜夕方に日曜分を作る（2026-11-16追加）
+    {
+        'name':  'KeibAI-Predict-Sun-Sat',
+        'desc':  '競馬AI 日曜分の予測（土曜夕方・枠順確定後）',
+        'day':   'SAT',
+        'time':  '17:30',
+        'args':  '--mode predict --sun-only',
+    },
     {
         'name':  'KeibAI-Watch-Sat-AM',
         'desc':  '競馬AI 土曜 午前オッズスナップショット',

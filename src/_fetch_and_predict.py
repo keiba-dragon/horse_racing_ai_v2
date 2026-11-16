@@ -18,6 +18,9 @@ from bs4 import BeautifulSoup
 BASE_DIR  = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CACHE_DIR = os.path.join(BASE_DIR, 'data', 'raw', 'cache')
 
+UNCONFIRMED = 'UNCONFIRMED'  # parse_shutuba の戻り値: 枠順(馬番)が未確定のレース
+EXIT_UNCONFIRMED = 3        # 全レースが枠順未確定のときの終了コード（失敗ではなく「まだ早い」）
+
 VENUE_CODE_TO_SHORT = {
     '05': '東', '06': '中', '07': '中京', '08': '京', '09': '阪',
     '04': '新', '03': '福', '02': '函', '01': '札', '10': '小',
@@ -168,6 +171,12 @@ def parse_shutuba(race_id: str) -> dict | None:
                 '馬体重増減': delta,
             })
 
+    if not rows_data:
+        # 枠順(馬番)が未確定のページ。以前は馬番を1から順に振り、斤量・騎手・馬IDが空のまま予測していたため、
+        # 金曜夜の日曜分が当日朝と別物になっていた(2026-11-16発覚: 日曜の本命が48%入れ替わる)。偽の馬番は作らない。
+        print(f'  [枠順未確定] {race_id}', file=sys.stderr)
+        return UNCONFIRMED
+
     return {
         'race_id':    race_id,
         'date_s':     date_s,
@@ -178,7 +187,7 @@ def parse_shutuba(race_id: str) -> dict | None:
         'distance_m': distance_m,
         'baba':       baba,
         'class_str':  class_str,
-        'horses':     rows_data if rows_data else [{'馬番': i+1, '馬名S': h, '馬ID': '', '性別': '', '斤量': None, '騎手': '', '馬体重': None, '馬体重増減': None} for i, h in enumerate(horse_names)],
+        'horses':     rows_data,
     }
 
 
@@ -226,13 +235,17 @@ def main():
 
     # ── 2. 各レースの出馬表を取得 ──────────────────────────────
     races = []
+    n_unconfirmed = 0
     for i, rid in enumerate(race_ids):
         venue_code = rid[4:6]
         r_num_disp = int(rid[10:12])
         venue_short = VENUE_CODE_TO_SHORT.get(venue_code, venue_code)
         print(f'  [{i+1}/{len(race_ids)}] {venue_short}R{r_num_disp} ({rid})...', end=' ', flush=True)
         race = parse_shutuba(rid)
-        if race:
+        if race == UNCONFIRMED:
+            print('枠順未確定')
+            n_unconfirmed += 1
+        elif race:
             n = len(race['horses'])
             print(f'{n}頭')
             races.append(race)
@@ -241,8 +254,13 @@ def main():
         time.sleep(0.5)
 
     if not races:
+        if n_unconfirmed:
+            print(f'枠順(馬番)が未確定のため、予測を見送ります（{n_unconfirmed}レース）。確定後に再実行してください。')
+            sys.exit(EXIT_UNCONFIRMED)
         print('ERROR: 出馬表取得失敗')
         sys.exit(1)
+    if n_unconfirmed:
+        print(f'[WARN] 枠順未確定の{n_unconfirmed}レースは除外して続行します')
 
     print(f'\n{len(races)}レース / 合計{sum(len(r["horses"]) for r in races)}頭 取得完了')
 

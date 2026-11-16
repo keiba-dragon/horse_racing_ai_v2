@@ -76,18 +76,29 @@ def get_watch_dates(base_date=None):
     return [base.strftime('%Y%m%d')]
 
 
-def run_step(args, label):
+EXIT_UNCONFIRMED = 3  # _fetch_and_predict.py: 全レースが枠順(馬番)未確定のときの終了コード
+
+
+def run_step_rc(args, label):
     print(f'\n--- {label} ---', flush=True)
     r = subprocess.run([PY] + args, cwd=BASE_DIR)
-    ok = r.returncode == 0
-    print(f'  {"OK" if ok else f"FAILED (code={r.returncode})"}')
-    return ok
+    rc = r.returncode
+    print(f'  {"OK" if rc == 0 else ("枠順未確定のため見送り" if rc == EXIT_UNCONFIRMED else f"FAILED (code={rc})")}')
+    return rc
+
+
+def run_step(args, label):
+    return run_step_rc(args, label) == 0
 
 
 def run_predict(date_str):
     """出馬表取得→予測→新聞生成を1日分実行する。"""
-    ok1 = run_step([FETCH_PREDICT, '--date', date_str], f'{date_str} 出馬表取得+予測')
-    if not ok1:
+    rc = run_step_rc([FETCH_PREDICT, '--date', date_str], f'{date_str} 出馬表取得+予測')
+    if rc == EXIT_UNCONFIRMED:
+        # 枠順(馬番)が未確定。偽の馬番で予測・公開しない（金曜夜の日曜分が当日朝と別物になる原因だった）
+        print(f'  {date_str}: 枠順確定後に作成します（新聞は作りません）')
+        return True
+    if rc != 0:
         return False
     ok2 = run_step([MAKE_NEWSPAPER, '--date', date_str], f'{date_str} 新聞生成')
     return ok2
@@ -106,8 +117,11 @@ def _has_cache_for_date(date_str):
 def run_watch(date_str):
     """当日の新聞をオッズ・結果で更新する（カード未取得なら先に取得する）。"""
     if not _has_cache_for_date(date_str):
-        ok = run_step([FETCH_PREDICT, '--date', date_str], f'{date_str} 出馬表取得+予測（初回）')
-        if not ok:
+        rc = run_step_rc([FETCH_PREDICT, '--date', date_str], f'{date_str} 出馬表取得+予測（初回）')
+        if rc == EXIT_UNCONFIRMED:
+            print(f'  {date_str}: 枠順未確定のため新聞更新を見送り')
+            return True
+        if rc != 0:
             return False
     ok_news = run_step([MAKE_NEWSPAPER, '--date', date_str], f'{date_str} 新聞更新')
     if ok_news:
@@ -120,6 +134,7 @@ def main():
     ap.add_argument('--mode', choices=['predict', 'watch'], required=True)
     ap.add_argument('--once', action='store_true', help='(watchモード) 1回のみ実行して終了')
     ap.add_argument('--date', help='対象日付を明示指定 YYYYMMDD（省略時は曜日から自動判定）')
+    ap.add_argument('--sun-only', action='store_true', help='(predictモード) 直近の日曜だけ作る。土曜夕方に、枠順確定後の日曜分を作る用')
     args = ap.parse_args()
 
     log_dir = os.path.join(BASE_DIR, 'logs')
@@ -138,6 +153,8 @@ def main():
 
         if args.date:
             dates = [args.date]
+        elif args.mode == 'predict' and args.sun_only:
+            dates = get_predict_dates()[1:]
         elif args.mode == 'predict':
             dates = get_predict_dates()
         else:
